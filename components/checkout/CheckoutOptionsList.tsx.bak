@@ -1,0 +1,49 @@
+'use client'
+
+import type { CheckoutMode, CheckoutOption } from '@/lib/config/checkout-options'
+import { CheckoutOptionRow } from './CheckoutOptionRow'
+
+interface CheckoutOptionsListProps {
+  options: CheckoutOption[]
+  mode: CheckoutMode
+  values: Record<string, boolean>
+  onChange: (id: string, value: boolean) => void
+  disabled?: boolean
+}
+
+export function CheckoutOptionsList({ options, mode, values, onChange, disabled = false }: CheckoutOptionsListProps) {
+  const visible = options.filter((o) => !o.availableModes || o.availableModes.includes(mode))
+
+  if (visible.length === 0) return null
+
+  return (
+    <div className="mb-4">
+      <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Extras</p>
+      <div className="space-y-2">
+        {visible.map((option) => {
+          const checked = values[option.id] ?? option.defaultEnabled ?? false
+          let priceLabel: string | undefined
+          if (option.priceAdjustment) {
+            if (option.priceAdjustment.type === 'fixed' && option.priceAdjustment.value !== 0) {
+              priceLabel = `+${option.priceAdjustment.value}`
+            } else if (option.priceAdjustment.type === 'percentage' && option.priceAdjustment.value !== 0) {
+              priceLabel = `+${option.priceAdjustment.value}%`
+            }
+          }
+          return (
+            <CheckoutOptionRow
+              key={option.id}
+              label={option.label}
+              description={option.description}
+              badge={option.badge}
+              priceLabel={priceLabel}
+              checked={checked}
+              onChange={(v) => onChange(option.id, v)}
+              disabled={disabled}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}

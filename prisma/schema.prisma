@@ -1,0 +1,209 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  BOOSTER
+  CUSTOMER
+}
+
+enum BoosterVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BoosterAvailabilityStatus {
+  AVAILABLE
+  BUSY
+  UNAVAILABLE
+}
+
+model User {
+  id            String           @id @default(cuid())
+  name          String?
+  email         String          @unique
+  emailVerified DateTime?        @map("emailVerified")
+  image         String?
+  passwordHash  String?          @map("passwordHash")
+  role          UserRole?        @default(CUSTOMER)
+  createdAt     DateTime         @default(now()) @map("createdAt")
+  updatedAt     DateTime         @updatedAt @map("updatedAt")
+
+accounts        Account[]
+  sessions        Session[]
+  customerProfile CustomerProfile?
+  boosterProfile  BoosterProfile?
+  reviewedBoosterProfiles BoosterProfile[] @relation("ReviewerBoosterProfiles")
+  orders          Order[]
+  boosterAssignments OrderBoosterAssignment[] @relation("boosterAssignments")
+  assignedAssignments OrderBoosterAssignment[] @relation("assignedAssignments")
+
+  @@map("user")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("userId")
+  type              String
+  provider          String
+  providerAccountId String  @map("providerAccountId")
+  refresh_token     String? @map("refresh_token")
+  access_token      String? @map("access_token")
+  expires_at        Int?    @map("expires_at")
+  token_type        String? @map("token_type")
+  scope             String?
+  id_token          String? @map("id_token")
+  session_state     String? @map("session_state")
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("account")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("sessionToken")
+  userId       String   @map("userId")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model VerificationToken {
+  identifier String   @map("identifier")
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationToken")
+}
+
+model CustomerProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("userId")
+  phoneNumber       String?
+  country           String?
+  preferredLanguage String?
+  timezone          String?
+  createdAt         DateTime @default(now()) @map("createdAt")
+  updatedAt         DateTime @updatedAt @map("updatedAt")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customerProfile")
+}
+
+model BoosterProfile {
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique @map("userId")
+  biography          String?
+  experienceYears    Int?
+  languages          String[]                  @default([])
+  specializations    Json?
+  applicationData    Json?
+  verificationStatus BoosterVerificationStatus @default(PENDING)
+  availabilityStatus BoosterAvailabilityStatus @default(UNAVAILABLE)
+  rejectionReason    String?
+  reviewedAt         DateTime?                 @map("reviewedAt")
+  reviewerId         String?                   @map("reviewerId")
+  approvedAt         DateTime?                 @map("approvedAt")
+  welcomeModalSeen   Boolean                   @default(false) @map("welcomeModalSeen")
+  createdAt          DateTime                  @default(now()) @map("createdAt")
+  updatedAt          DateTime                  @updatedAt @map("updatedAt")
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewer           User?                     @relation(fields: [reviewerId], references: [id], name: "ReviewerBoosterProfiles")
+
+  @@map("boosterProfile")
+}
+
+enum OrderStatus {
+  PENDING
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  DECLINED
+  CANCELLED
+  RELEASED
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  userId         String        @map("userId")
+  gameSlug       String        @map("gameSlug")
+  serviceSlug    String        @map("serviceSlug")
+  configuration  Json
+  selectedMode   String?       @map("selectedMode")
+  selectedOptions String[]     @default([]) @map("selectedOptions")
+  championsRoles  Json?        @map("championsRoles")
+  price          Decimal?      @db.Decimal(10, 2)
+  currency       String?
+  status         OrderStatus   @default(PENDING)
+  createdAt      DateTime      @default(now()) @map("createdAt")
+  updatedAt      DateTime      @updatedAt @map("updatedAt")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events         OrderEvent[]
+  assignments    OrderBoosterAssignment[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("order")
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String   @map("orderId")
+  type      String
+  message   String?
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("createdAt")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("orderEvent")
+}
+
+model OrderBoosterAssignment {
+  id            String           @id @default(cuid())
+  orderId       String           @map("orderId")
+  boosterId     String           @map("boosterId")
+  assignedById  String           @map("assignedById")
+  status        AssignmentStatus @default(ASSIGNED)
+  activeOrderId String?          @map("activeOrderId")
+  assignedAt    DateTime         @default(now()) @map("assignedAt")
+  acceptedAt    DateTime?        @map("acceptedAt")
+  startedAt     DateTime?        @map("startedAt")
+  endedAt       DateTime?        @map("endedAt")
+  endReason     String?          @map("endReason")
+  createdAt     DateTime         @default(now()) @map("createdAt")
+  updatedAt     DateTime         @updatedAt @map("updatedAt")
+
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  booster        User           @relation(fields: [boosterId], references: [id], onDelete: Cascade, name: "boosterAssignments")
+  assignedBy     User           @relation(fields: [assignedById], references: [id], onDelete: Cascade, name: "assignedAssignments")
+
+  @@unique([activeOrderId])
+  @@index([orderId])
+  @@index([boosterId])
+  @@index([status])
+  @@map("orderBoosterAssignment")
+}
