@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect, getRoleHomePath } from "@/lib/dashboard/role-routing";
 import prisma from "@/lib/prisma";
-import { cn } from "@/lib/utils";
 import { $Enums } from "@/app/generated/prisma/client";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/orders/statuses";
 import { CustomerStats } from "@/components/dashboard/customer/CustomerStats";
