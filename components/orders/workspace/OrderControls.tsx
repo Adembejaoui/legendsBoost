@@ -1,0 +1,423 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, LogOut, Pause, Play } from "lucide-react";
+import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "./ConfirmDialog";
+
+type Dialog = "pause" | "complete" | "abandon" | "cancel-request" | "not-confirmed" | null;
+
+const btn =
+  "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+const primary = "bg-[var(--g-accent)] font-semibold text-[#0A0E14] hover:bg-[var(--g-hover)]";
+
+async function post(url: string, body?: unknown) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok)
+    throw new Error(
+      (data as { error?: string }).error || "Something went wrong. Try again.",
+    );
+  return data as Record<string, unknown>;
+}
+
+/**
+ * Order-management controls for the workspace header.
+ *
+ *  - Customer: Pause / Resume only (in-progress orders with a booster).
+ *    Customers cannot cancel; cancellations go through support / admin.
+ *  - Booster:  Start (claimed order), then Complete / Abandon. Both disabled while the customer has the
+ *    order paused. Claiming happens in the marketplace.
+ *
+ * Visibility follows the server-computed access flags; every API call is
+ * re-authorised and re-validated server-side.
+ */
+export function OrderControls({ data }: { data: WorkspaceDTO }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [notConfirmed, setNotConfirmed] = useState<{ message: string; reason: string; current: string | null; target: string | null } | null>(null);
+  const { access, order, viewer, assignment } = data;
+  const paused = order.status === "PAUSED";
+
+  function open(d: Dialog) {
+    setError(null);
+    setReason("");
+    setDialog(d);
+  }
+
+  /** fn may return true to keep a dialog it opened itself. */
+  async function run(kind: string, fn: () => Promise<void | boolean>) {
+    setBusy(kind);
+    setError(null);
+    try {
+      const keepDialog = await fn();
+      if (keepDialog !== true) setDialog(null);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Something went wrong. Try again.";
+      if (dialog) setError(message);
+      else
+        toast({
+          title: "Action failed",
+          description: message,
+          type: "destructive",
+        });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const pause = () =>
+    run("pause", async () => {
+      const r = await post(`/api/orders/${order.id}/pause`);
+      toast({
+        type: "warning",
+        title: "Order paused",
+        description:
+          r.changed === false
+            ? "The order was already paused."
+            : "Your booster has been told to stop playing.",
+      });
+      router.refresh();
+    });
+
+  const resume = () =>
+    run("resume", async () => {
+      const r = await post(`/api/orders/${order.id}/resume`);
+      toast({
+        type: "success",
+        title: "Order resumed",
+        description:
+          r.changed === false
+            ? "The order was already in progress."
+            : "Your booster can continue boosting.",
+      });
+      router.refresh();
+    });
+
+  const complete = () =>
+    run("complete", async () => {
+      const res = await fetch(`/api/booster/orders/${order.id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Admins complete without the Riot check (after reviewing it).
+        body: JSON.stringify({ assignmentId: viewer.role === "admin" ? data.adminCompletion?.assignmentId : assignment?.id }),
+      });
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (res.status === 409 && (body.code === "TARGET_NOT_REACHED" || body.code === "CANNOT_VERIFY")) {
+        // Riot did not confirm the target: keep working; an admin will contact the booster.
+        setNotConfirmed({
+          message: String(body.error ?? ""),
+          reason: String(body.reason ?? ""),
+          current: (body.current as string | null) ?? null,
+          target: (body.target as string | null) ?? null,
+        });
+        setDialog("not-confirmed");
+        return true;
+      }
+      if (!res.ok) throw new Error((body.error as string) || "Something went wrong. Try again.");
+      toast({
+        type: "success",
+        title: "Order completed",
+        description: "The order has been marked as complete.",
+      });
+      router.refresh();
+    });
+
+  const start = () =>
+    run("start", async () => {
+      await post(`/api/booster/orders/${order.id}/start`);
+      toast({ type: "success", title: "Order started", description: "The customer has been told you started." });
+      router.refresh();
+    });
+
+  // Set by the server only while the free window is still open (the server decides the strike anyway).
+  const inGrace = !!data.releaseGraceUntil;
+  const abandon = () =>
+    run("abandon", async () => {
+      await post(`/api/booster/orders/${order.id}/abandon`, {
+        assignmentId: assignment?.id,
+        reason: reason.trim() || (inGrace ? "Released within the free window" : reason),
+      });
+      toast({
+        type: "warning",
+        title: "Order abandoned",
+        description:
+          "It has been sent to our team for review. You no longer have access to it.",
+      });
+      router.push("/dashboard/booster/claimed-orders");
+    });
+
+
+  const isBoosterWorking =
+    viewer.role === "booster" && access.canManageAssignment && assignment;
+  const controls: React.ReactNode[] = [];
+
+  if (viewer.role === "customer") {
+    if (access.canPauseOrder) {
+      controls.push(
+        <button
+          key="pause"
+          type="button"
+          className={cn(
+            btn,
+            "border border-amber-400/40 text-amber-200 hover:bg-amber-400/10",
+          )}
+          onClick={() => open("pause")}
+          disabled={busy !== null}
+        >
+          <Pause className="size-4" /> Pause order
+        </button>,
+      );
+    }
+    if (access.canResumeOrder) {
+      controls.push(
+        <button
+          key="resume"
+          type="button"
+          className={cn(btn, primary)}
+          onClick={() => void resume()}
+          disabled={busy !== null}
+        >
+          <Play className="size-4" />{" "}
+          {busy === "resume" ? "Resuming…" : "Resume order"}
+        </button>,
+      );
+    }
+    if (data.cancellation.canRequest) {
+      controls.push(
+        <button
+          key="cancel-request"
+          type="button"
+          className={cn(btn, "border border-white/10 text-zinc-300 hover:bg-white/[0.06]")}
+          onClick={() => open("cancel-request")}
+          disabled={busy !== null}
+        >
+          Request cancellation
+        </button>,
+      );
+    }
+  }
+
+  if (viewer.role === "admin" && data.adminCompletion) {
+    controls.push(
+      <button key="admin-complete" type="button" className={cn(btn, primary)} onClick={() => open("complete")} disabled={busy !== null}>
+        <CheckCircle2 className="size-4" /> Complete order (admin)
+      </button>,
+    );
+  }
+
+  if (isBoosterWorking && access.canStartOrder) {
+    controls.push(
+      <button key="start" type="button" className={cn(btn, primary)} onClick={() => void start()} disabled={busy !== null}>
+        <Play className="size-4" /> {busy === "start" ? "Starting…" : "Start order"}
+      </button>,
+      <button
+        key="abandon"
+        type="button"
+        className={cn(btn, "border border-rose-500/30 text-rose-300 hover:bg-rose-500/10")}
+        onClick={() => open("abandon")}
+        disabled={!access.canAbandonOrder || busy !== null}
+      >
+        <LogOut className="size-4" /> Release
+      </button>,
+    );
+  } else if (isBoosterWorking) {
+    const pausedHint = paused
+      ? "Paused by the customer. Wait until the order is resumed."
+      : undefined;
+    controls.push(
+      <button
+        key="complete"
+        type="button"
+        className={cn(btn, primary)}
+        onClick={() => open("complete")}
+        disabled={!access.canCompleteOrder || busy !== null}
+        title={pausedHint}
+      >
+        <CheckCircle2 className="size-4" /> Complete
+      </button>,
+      <button
+        key="abandon"
+        type="button"
+        className={cn(
+          btn,
+          "border border-rose-500/30 text-rose-300 hover:bg-rose-500/10",
+        )}
+        onClick={() => open("abandon")}
+        disabled={!access.canAbandonOrder || busy !== null}
+        title={pausedHint}
+      >
+        <LogOut className="size-4" /> Abandon
+      </button>,
+    );
+  }
+
+  if (controls.length === 0) return null;
+
+  return (
+    <>
+      <div
+        role="group"
+        aria-label="Order actions"
+        className="flex flex-wrap items-center gap-2"
+      >
+        {controls}
+      </div>
+
+      {notConfirmed && (
+        <ConfirmDialog
+          open={dialog === "not-confirmed"}
+          title="The order is not complete yet"
+          confirmLabel="I understand"
+          tone="amber"
+          onConfirm={() => {
+            setDialog(null);
+            setNotConfirmed(null);
+          }}
+          onClose={() => {
+            setDialog(null);
+            setNotConfirmed(null);
+          }}
+        >
+          <p>{notConfirmed.message}</p>
+          {notConfirmed.reason ? <p className="mt-2 text-xs text-zinc-400">{notConfirmed.reason}</p> : null}
+        </ConfirmDialog>
+      )}
+
+      {access.canPauseOrder && (
+        <ConfirmDialog
+          open={dialog === "pause"}
+          title="Pause this order?"
+          confirmLabel="Pause order"
+          busyLabel="Pausing…"
+          tone="amber"
+          busy={busy === "pause"}
+          error={error}
+          onConfirm={() => void pause()}
+          onClose={() => setDialog(null)}
+        >
+          <p>
+            Your booster is notified immediately and must stop playing on your
+            account until you resume.
+          </p>
+          <p>
+            The order stays assigned to your booster. Nothing is refunded or
+            charged, and progress is kept.
+          </p>
+        </ConfirmDialog>
+      )}
+
+      {data.cancellation.canRequest && (
+        <ConfirmDialog
+          open={dialog === "cancel-request"}
+          title="Request a cancellation?"
+          confirmLabel="Send request"
+          busyLabel="Sending…"
+          cancelLabel="Keep my order"
+          tone="danger"
+          busy={busy === "cancel-request"}
+          error={error}
+          onConfirm={() =>
+            void run("cancel-request", async () => {
+              await post(`/api/orders/${order.id}/cancellation-request`, { reason: reason.trim() });
+              toast({ type: "success", title: "Request sent", description: "Our team will review it and get back to you." });
+              router.refresh();
+            })
+          }
+          onClose={() => setDialog(null)}
+        >
+          <p>
+            Our team reviews every request. If it is approved, the order is cancelled and you are refunded for the
+            part that was not done yet. You can also simply pause the order instead.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-xs text-zinc-400">Why do you want to cancel? (required)</span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+              minLength={10}
+              maxLength={1000}
+              rows={3}
+              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-rose-400/50"
+            />
+          </label>
+        </ConfirmDialog>
+      )}
+
+      {(isBoosterWorking || data.adminCompletion) && (
+        <>
+          <ConfirmDialog
+            open={dialog === "complete"}
+            title="Mark this order as complete?"
+            confirmLabel="Complete order"
+            busyLabel="Completing…"
+            cancelLabel="Keep working"
+            busy={busy === "complete"}
+            error={error}
+            onConfirm={() => void complete()}
+            onClose={() => setDialog(null)}
+          >
+            <p>
+              Only do this once the boost is finished. The customer and our team
+              are notified.
+            </p>
+          </ConfirmDialog>
+
+          <ConfirmDialog
+            open={dialog === "abandon"}
+            title={inGrace ? "Release this order?" : "Abandon this order?"}
+            confirmLabel={inGrace ? "Release order" : "Abandon order"}
+            busyLabel={inGrace ? "Releasing…" : "Abandoning…"}
+            cancelLabel="Keep the order"
+            tone="danger"
+            busy={busy === "abandon"}
+            confirmDisabled={!inGrace && reason.trim().length < 3}
+            error={error}
+            onConfirm={() => void abandon()}
+            onClose={() => setDialog(null)}
+          >
+            {inGrace ? (
+              <p>
+                Free release until {new Date(data.releaseGraceUntil!).toLocaleTimeString()}: no strike, and the order goes
+                straight back to the pool.
+              </p>
+            ) : (
+              <p>
+                The order is taken from you and reviewed by an admin before
+                another booster can take it. You receive a strike. This cannot be undone.
+              </p>
+            )}
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">
+                {inGrace ? "Reason (optional)" : "Reason (required)"}
+              </span>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                required
+                minLength={3}
+                maxLength={500}
+                rows={3}
+                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-rose-400/50"
+              />
+            </label>
+          </ConfirmDialog>
+        </>
+      )}
+
+    </>
+  );
+}

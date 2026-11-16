@@ -17,8 +17,10 @@ const globalForPrisma = global as unknown as {
  */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  idleTimeoutMillis: 2000,
-  max: 2,
+  idleTimeoutMillis: Number(process.env.DATABASE_POOL_IDLE_MS) || 2000,
+  // 2 suits serverless (many small instances behind the Supabase pooler).
+  // On an always-on server (Railway, VPS) set DATABASE_POOL_MAX=10.
+  max: Number(process.env.DATABASE_POOL_MAX) || 2,
   connectionTimeoutMillis: 5000,
 });
 

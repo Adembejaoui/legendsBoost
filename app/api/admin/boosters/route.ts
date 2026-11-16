@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
-    const validStatuses = ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"];
+    const validStatuses = ["PENDING", "UNDER_REVIEW", "NEEDS_INFO", "REJECTED", "TRIAL", "APPROVED", "ON_BREAK", "SUSPENDED", "TERMINATED"];
 
     const where: Prisma.UserWhereInput = {
       OR: [

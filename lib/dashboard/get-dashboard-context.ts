@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import prisma from "@/lib/prisma";
+import { sessionVersionOf } from "@/lib/auth/session-version";
 import { UserRole } from "@/lib/auth/permissions";
 
 export type DashboardUser = {
@@ -11,6 +12,8 @@ export type DashboardUser = {
   image: string | null;
   role: UserRole;
   createdAt: Date;
+  /** False until the email address is confirmed (Google sign-ins are confirmed). */
+  emailVerified: boolean;
 };
 
 export type CustomerProfileSelection = {
@@ -27,6 +30,11 @@ export type BoosterProfileSelection = {
   verificationStatus: string;
   availabilityStatus: string;
   rejectionReason: string | null;
+  reviewNote: string | null;
+  trialOrdersRemaining: number | null;
+  kycStatus: string;
+  displayName: string | null;
+  maxConcurrentOrders: number | null;
   welcomeModalSeen: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -61,7 +69,7 @@ export const getDashboardContext = cache(
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: session.user.id, deletedAt: null, sessionVersion: sessionVersionOf(session) },
       select: {
         id: true,
         email: true,
@@ -69,6 +77,7 @@ export const getDashboardContext = cache(
         image: true,
         role: true,
         createdAt: true,
+        emailVerified: true,
         ...(options.includeCustomerProfile
           ? {
               customerProfile: {
@@ -91,6 +100,11 @@ export const getDashboardContext = cache(
                   verificationStatus: true,
                   availabilityStatus: true,
                   rejectionReason: true,
+                  reviewNote: true,
+                  trialOrdersRemaining: true,
+                  kycStatus: true,
+                  displayName: true,
+                  maxConcurrentOrders: true,
                   welcomeModalSeen: true,
                   createdAt: true,
                   updatedAt: true,
@@ -113,6 +127,7 @@ export const getDashboardContext = cache(
         image: user.image,
         role: (user.role ?? "CUSTOMER") as UserRole,
         createdAt: user.createdAt,
+        emailVerified: Boolean(user.emailVerified),
       },
       customerProfile: options.includeCustomerProfile ? (user.customerProfile ?? null) : null,
       boosterProfile: options.includeBoosterProfile ? (user.boosterProfile ?? null) : null,

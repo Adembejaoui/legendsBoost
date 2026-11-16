@@ -64,3 +64,5 @@ prisma/schema.prisma.tmp
 
 # Misc
 *.sst
+# local database backups (personal data)
+backups/

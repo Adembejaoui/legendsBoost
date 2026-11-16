@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/guards";
 import prisma from "@/lib/prisma";
+import { hasBoosterAccess } from "@/lib/boosters/status";
+import { DISPLAY_NAME_PATTERN } from "@/lib/pool/preferred";
 
 export async function PATCH(req: Request) {
   try {
@@ -13,7 +15,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { biography, experienceYears, languages, availabilityStatus } = body;
+    const { biography, experienceYears, languages, availabilityStatus, displayName } = body;
 
     const boosterProfile = await prisma.boosterProfile.findUnique({
       where: { userId: user.id },
@@ -23,11 +25,23 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Booster profile not found" }, { status: 404 });
     }
 
-    if (boosterProfile.verificationStatus !== "APPROVED") {
+    if (!hasBoosterAccess(boosterProfile.verificationStatus)) {
       return NextResponse.json({ error: "Only approved boosters can update profile" }, { status: 403 });
     }
 
     const updateData: any = {};
+    if (displayName !== undefined) {
+      // Public name customers see when choosing a booster. Never the real name.
+      const name = typeof displayName === "string" ? displayName.trim() : "";
+      if (name === "") updateData.displayName = null;
+      else if (!DISPLAY_NAME_PATTERN.test(name)) {
+        return NextResponse.json({ error: "Display name: 3 to 20 letters, numbers, dots, dashes or underscores." }, { status: 400 });
+      } else {
+        const taken = await prisma.boosterProfile.findFirst({ where: { displayName: { equals: name, mode: "insensitive" }, NOT: { userId: user.id } }, select: { id: true } });
+        if (taken) return NextResponse.json({ error: "This display name is already used." }, { status: 409 });
+        updateData.displayName = name;
+      }
+    }
     if (biography !== undefined) updateData.biography = biography;
     if (experienceYears !== undefined) updateData.experienceYears = Number(experienceYears);
     if (languages !== undefined) updateData.languages = languages;

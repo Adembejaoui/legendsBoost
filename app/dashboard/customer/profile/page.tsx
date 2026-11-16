@@ -4,6 +4,8 @@ import { devLogRedirect, getRoleHomePath } from "@/lib/dashboard/role-routing";
 import prisma from "@/lib/prisma";
 import { PersonalInformationForm } from "@/components/dashboard/profile/PersonalInformationForm";
 import { AccountInformationCard } from "@/components/dashboard/profile/AccountInformationCard";
+import { DeleteAccountCard } from "@/components/account/DeleteAccountCard";
+import { ChangePasswordCard } from "@/components/account/ChangePasswordCard";
 
 export default async function CustomerProfilePage() {
   const ctx = await getDashboardContext({ includeCustomerProfile: true });
@@ -81,6 +83,8 @@ export default async function CustomerProfilePage() {
         providers={initial.providers}
         hasPassword={initial.hasPassword}
       />
+      <ChangePasswordCard />
+      <DeleteAccountCard />
     </div>
   );
 }

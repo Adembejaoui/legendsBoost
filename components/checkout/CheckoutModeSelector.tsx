@@ -7,9 +7,11 @@ interface CheckoutModeSelectorProps {
   modes: { id: CheckoutMode; label: string; enabled: boolean }[]
   value: CheckoutMode
   onChange: (mode: CheckoutMode) => void
+  /** Real surcharge per mode ("+40%"); empty for an included mode. */
+  tags?: Record<string, string>
 }
 
-export function CheckoutModeSelector({ modes, value, onChange }: CheckoutModeSelectorProps) {
+export function CheckoutModeSelector({ modes, value, onChange, tags }: CheckoutModeSelectorProps) {
   if (!modes || modes.length === 0) return null
 
   return (
@@ -31,6 +33,7 @@ export function CheckoutModeSelector({ modes, value, onChange }: CheckoutModeSel
                 )}
               >
                 {mode.label}
+                {tags?.[mode.id] ? <span className="ml-1.5 text-[11px] text-violet-300">{tags[mode.id]}</span> : null}
               </button>
             )
           })}

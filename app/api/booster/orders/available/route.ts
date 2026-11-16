@@ -1,33 +1,19 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/guards";
-import { getAvailableOrders, verifyBoosterEligibility } from "@/lib/assignments/service";
-import prisma from "@/lib/prisma";
+import { getPoolForBooster, poolErrorStatus } from "@/lib/pool/service";
+import { verifyBoosterEligibility } from "@/lib/assignments/service";
 
+/** The pool for the signed-in booster (filtered by their permissions; payout only, never the customer price). */
 export async function GET(req: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "BOOSTER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
-    const user = await getSessionUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (user.role !== "BOOSTER") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     await verifyBoosterEligibility(user.id);
-
-    const { searchParams } = new URL(req.url);
-    const gameSlug = searchParams.get("game") || undefined;
-
-    const orders = await getAvailableOrders({ gameSlug });
-
-    return NextResponse.json({ orders });
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Booster")) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
-    }
-    return NextResponse.json(
-      { error: "Failed to fetch available orders" },
-      { status: 500 }
-    );
+    const gameSlug = new URL(req.url).searchParams.get("game") || undefined;
+    return NextResponse.json(await getPoolForBooster(user.id, { gameSlug }));
+  } catch (e) {
+    const r = poolErrorStatus(e);
+    return NextResponse.json({ error: r.status === 500 ? "Failed to fetch available orders" : r.error }, { status: r.status });
   }
 }

@@ -29,15 +29,17 @@ export type AssignmentStatus =
 /**
  * Valid status transitions for a single assignment lifecycle.
  *
- * Claiming an order now moves the assignment straight to IN_PROGRESS: there is
- * no separate accept/start step. Paused assignments stay active (they keep
+ * Taking an order creates an ASSIGNED assignment (order CLAIMED); the
+ * booster starts it (ASSIGNED -> IN_PROGRESS, order CLAIMED -> IN_PROGRESS). Paused assignments stay active (they keep
  * their activeOrderId) and must not be claimable by another booster.
  */
 export const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]> =
   {
-    ASSIGNED: ["ACCEPTED", "DECLINED", "CANCELLED", "RELEASED"],
+    ASSIGNED: ["IN_PROGRESS", "ACCEPTED", "DECLINED", "CANCELLED", "RELEASED"],
     ACCEPTED: ["IN_PROGRESS", "CANCELLED", "RELEASED"],
     IN_PROGRESS: ["PAUSED", "COMPLETED", "CANCELLED", "RELEASED"],
+    // Paused by the customer: only the customer's resume (or an admin
+    // action) moves it on. Never COMPLETED directly.
     PAUSED: ["IN_PROGRESS", "CANCELLED"],
     COMPLETED: [],
     DECLINED: [],
@@ -48,14 +50,22 @@ export const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]
 /**
  * Order status progression triggered by assignment events.
  *
- * Target statuses: PENDING, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED.
+ * Target statuses: PENDING, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED, DRAFT.
+ *
+ * DRAFT is entered when the assigned booster abandons the order. It is NOT
+ * claimable; only an admin may move DRAFT -> PENDING (republish) or cancel it.
  */
 export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
-  PENDING: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["PAUSED", "COMPLETED", "CANCELLED"],
-  PAUSED: ["IN_PROGRESS", "CANCELLED"],
+  // Only a verified payment confirmation may move AWAITING_PAYMENT -> PENDING
+  // (not implemented in Phase 1: there is no code path that does it).
+  AWAITING_PAYMENT: ["PENDING", "CANCELLED"],
+  PENDING: ["CLAIMED", "CANCELLED"],
+  CLAIMED: ["IN_PROGRESS", "CANCELLED", "DRAFT", "PENDING"],
+  IN_PROGRESS: ["PAUSED", "COMPLETED", "CANCELLED", "DRAFT"],
+  PAUSED: ["IN_PROGRESS", "CANCELLED", "DRAFT"],
   COMPLETED: [],
   CANCELLED: [],
+  DRAFT: ["PENDING", "CANCELLED"],
 };
 
 export function isAssignmentActive(status: AssignmentStatus): boolean {
@@ -172,9 +182,62 @@ export class OrderAlreadyClaimedError extends Error {
   }
 }
 
+/**
+ * Boosters may not cancel a customer's order. They abandon it instead, which
+ * returns it to DRAFT for admin review.
+ */
+export class BoosterCancellationForbiddenError extends Error {
+  constructor() {
+    super(
+      "Boosters cannot cancel customer orders. Abandon the order instead; it will be returned for admin review."
+    );
+    this.name = "BoosterCancellationForbiddenError";
+  }
+}
+
 export class OrderNotClaimableError extends Error {
   constructor(reason: string) {
     super(`Order is not claimable: ${reason}`);
     this.name = "OrderNotClaimableError";
+  }
+}
+
+/** The caller is not the customer who owns the order. */
+export class NotOrderOwnerError extends Error {
+  constructor() {
+    super("Only the customer who placed this order can do that.");
+    this.name = "NotOrderOwnerError";
+  }
+}
+
+/**
+ * The requested action is not valid for the order's current state (e.g.
+ * completing or abandoning a paused order, pausing a completed one), or the
+ * state changed concurrently. Mapped to HTTP 409.
+ */
+/**
+ * Booster pressed Complete but Riot does not confirm the target (or cannot
+ * check it). The order stays in progress; admins were notified.
+ */
+export class CompletionNotConfirmedError extends Error {
+  constructor(
+    public readonly result: "not_reached" | "cannot_verify",
+    public readonly reason: string,
+    public readonly current: string | null,
+    public readonly target: string | null
+  ) {
+    super(
+      result === "not_reached"
+        ? "The target rank is not reached yet. Keep playing until it is; an admin has been notified and will contact you soon."
+        : "We could not confirm the result automatically. An admin has been notified and will contact you soon."
+    );
+    this.name = "CompletionNotConfirmedError";
+  }
+}
+
+export class OrderStateConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OrderStateConflictError";
   }
 }

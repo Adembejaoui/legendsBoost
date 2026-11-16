@@ -1,0 +1,231 @@
+"use client";
+
+import { ArrowDown, ArrowUp, ChevronsRight, TrendingUp } from "lucide-react";
+import type { WorkspaceDTO, WorkspaceRankDTO } from "@/lib/orders/workspace-types";
+import { cn } from "@/lib/utils";
+import { GameArt, Pill } from "./Panel";
+
+const SOURCE_LABEL: Record<WorkspaceRankDTO["source"], { text: string; tone: "green" | "neutral" }> = {
+  riot: { text: "Riot data", tone: "green" },
+  order: { text: "From order", tone: "neutral" },
+};
+
+function tierName(rank: WorkspaceRankDTO) {
+  const t = rank.tier.charAt(0) + rank.tier.slice(1).toLowerCase();
+  return rank.division ? `${t} ${rank.division}` : t;
+}
+
+/** Emblem size follows the viewport HEIGHT so the page never needs to scroll. */
+const EMBLEM =
+  "size-14 [@media(min-height:780px)]:size-[4.5rem] [@media(min-height:900px)]:size-24 [@media(min-height:1040px)]:size-28";
+
+function RankBlock({
+  heading,
+  rank,
+  emptyTitle,
+  emptyText,
+  accent,
+  showLp = true,
+}: {
+  heading: string;
+  rank: WorkspaceRankDTO | null;
+  emptyTitle: string;
+  emptyText: string;
+  accent: "current" | "target";
+  showLp?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col items-center text-center">
+      <p
+        className={cn(
+          "text-[10px] font-semibold uppercase tracking-[0.18em]",
+          accent === "target" ? "text-[var(--g-light)]" : "text-zinc-400"
+        )}
+      >
+        {heading}
+      </p>
+      <div className="relative my-1.5 grid place-items-center">
+        <div
+          aria-hidden
+          className={cn(
+            "absolute inset-[-30%] rounded-full blur-md",
+            accent === "target"
+              ? "bg-[radial-gradient(circle,rgba(var(--g-rgb),0.35),transparent_65%)]"
+              : "bg-[radial-gradient(circle,rgba(var(--g-rgb2),0.22),transparent_65%)]"
+          )}
+        />
+        {rank ? (
+          <GameArt
+            src={rank.iconSrc}
+            alt={`${tierName(rank)} emblem`}
+            fallback={rank.tier}
+            className={cn("relative object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]", EMBLEM)}
+          />
+        ) : (
+          <span className={cn("relative grid place-items-center rounded-full border border-dashed border-white/15 text-lg text-zinc-600", EMBLEM)}>
+            ?
+          </span>
+        )}
+      </div>
+      {rank ? (
+        <>
+          <p className="max-w-full truncate text-sm font-bold leading-tight text-white sm:text-base">{tierName(rank)}</p>
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+            {showLp && !rank.lpAssumed && <span className="text-xs tabular-nums text-zinc-300">{rank.lp} LP</span>}
+            <Pill tone={SOURCE_LABEL[rank.source].tone} className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">
+              {SOURCE_LABEL[rank.source].text}
+              {rank.at && rank.source === "riot" ? ` · ${new Date(rank.at).toLocaleDateString()}` : ""}
+            </Pill>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-medium text-zinc-300">{emptyTitle}</p>
+          <p className="mt-0.5 max-w-[22ch] text-[11px] leading-snug text-zinc-500">{emptyText}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The hero of the workspace: current rank -> progress -> target rank. */
+export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; className?: string }) {
+  const { ranks, progress, riot, order } = data;
+  const pct = progress.percent;
+  const unsupported = ranks.tracking === "unsupported";
+
+  // Current rank: Riot only. When there is none yet we say why, honestly.
+  let currentEmptyTitle = "Not available yet";
+  let currentEmptyText = "Shown after the first Riot sync.";
+  if (unsupported) {
+    currentEmptyTitle = "Not tracked automatically";
+    currentEmptyText = `Live ranks aren't available for ${order.gameName}. Your booster keeps you updated in chat.`;
+  } else if (!riot.account) {
+    currentEmptyText = "Add the Riot ID to track the current rank.";
+  } else if (!riot.capabilities.dataAccess) {
+    currentEmptyText = "Waiting for the official Riot integration.";
+  } else if (riot.account.lastSyncError) {
+    currentEmptyText = "The last Riot sync failed. Try syncing again.";
+  }
+
+  let caption: string;
+  if (unsupported) {
+    caption = ranks.start ? "Ordered progression" : "Target rank";
+  } else {
+    switch (progress.status) {
+      case "complete":
+        caption = "Target reached";
+        break;
+      case "in_progress":
+        caption = progress.lpRemaining !== null && progress.kind === "rank" ? `${progress.lpRemaining} LP to go` : "In progress";
+        break;
+      case "indeterminate":
+        caption = "Grandmaster/Challenger cut-offs vary by region";
+        break;
+      case "invalid":
+        caption = "Target is not above the starting rank";
+        break;
+      default:
+        caption = ranks.current ? "Not enough data to measure progress" : "Waiting for Riot rank data";
+    }
+  }
+
+  const showBar = progress.kind !== "none" && !unsupported;
+  const value =
+    progress.kind === "wins" && progress.wins
+      ? `${progress.wins.attributed}/${progress.wins.ordered ?? "?"}`
+      : pct !== null
+        ? `${pct}%`
+        : null;
+  const done = progress.status === "complete";
+
+  return (
+    <section
+      aria-label="Rank progression"
+      className={cn(
+        "relative flex shrink-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#10121a]",
+        className
+      )}
+    >
+      {/* Game-coloured glows. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_85%_0%,rgba(var(--g-rgb),0.20),transparent_55%),radial-gradient(ellipse_at_10%_100%,rgba(var(--g-rgb2),0.10),transparent_55%)]"
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--g-accent)]/60 to-transparent" />
+
+      <header className="relative flex shrink-0 items-center justify-between gap-2 px-4 pt-3">
+        <h2 className="flex items-center gap-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+          <TrendingUp className="size-3.5 text-[var(--g-accent)]" />
+          Rank progression
+        </h2>
+        {ranks.start && progress.kind === "rank" && !unsupported && (
+          <span className="truncate text-[11px] text-zinc-500">
+            Started at {ranks.start.label} ({ranks.start.source === "riot" ? "Riot" : "declared"})
+          </span>
+        )}
+      </header>
+
+      <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-2 px-3 pb-4 pt-2 sm:gap-4 sm:px-5">
+        <RankBlock
+          heading={unsupported ? "Starting rank" : "Current rank"}
+          rank={unsupported ? ranks.start : ranks.current}
+          emptyTitle={currentEmptyTitle}
+          emptyText={currentEmptyText}
+          accent="current"
+        />
+
+        <div className="flex min-w-0 flex-col items-center gap-1.5">
+          {showBar && value ? (
+            <p className={cn("text-3xl font-black tabular-nums leading-none sm:text-4xl", done ? "text-emerald-300" : "text-white")}>{value}</p>
+          ) : (
+            <ChevronsRight aria-hidden className="size-7 text-[var(--g-accent)]" />
+          )}
+          {showBar && (
+            <div
+              className="relative h-2.5 w-full overflow-hidden rounded-full bg-white/[0.07] ring-1 ring-inset ring-white/[0.04]"
+              role="progressbar"
+              aria-label="Order progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct ?? undefined}
+              aria-valuetext={pct !== null ? `${pct}%` : caption}
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-700",
+                  done
+                    ? "bg-emerald-400"
+                    : "bg-[linear-gradient(90deg,rgba(var(--g-rgb),0.55),var(--g-accent),var(--g-light))] shadow-[0_0_12px_rgba(var(--g-rgb),0.6)]",
+                  pct === null && "w-0"
+                )}
+                style={pct !== null ? { width: `${Math.max(pct, 2)}%` } : undefined}
+              />
+            </div>
+          )}
+          <p className="text-center text-[11px] leading-snug text-zinc-400 sm:text-xs">{caption}</p>
+          <div className="flex flex-wrap justify-center gap-1">
+            {progress.lpDelta !== null && progress.lpDelta !== 0 && (
+              <Pill tone={progress.lpDelta > 0 ? "green" : "red"} className="px-1.5 py-0 text-[10px]">
+                {progress.lpDelta > 0 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}
+                {progress.lpDelta > 0 ? "+" : ""}
+                {progress.lpDelta} LP
+              </Pill>
+            )}
+            {progress.demoted && <Pill tone="red" className="px-1.5 py-0 text-[10px]">Below start</Pill>}
+            {progress.stale && <Pill tone="amber" className="px-1.5 py-0 text-[10px]">Data over 24h old</Pill>}
+          </div>
+        </div>
+
+        <RankBlock
+          heading="Target rank"
+          rank={ranks.target}
+          emptyTitle="No target rank"
+          emptyText="This service has no rank target."
+          accent="target"
+          showLp={false}
+        />
+      </div>
+    </section>
+  );
+}

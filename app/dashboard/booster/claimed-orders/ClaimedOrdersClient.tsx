@@ -22,6 +22,7 @@ interface Assignment {
 
 const TABS = [
   { id: "all", label: "All", status: null },
+  { id: "to-start", label: "To start", status: "ASSIGNED" },
   { id: "in-progress", label: "In progress", status: "IN_PROGRESS" },
   { id: "paused", label: "Paused", status: "PAUSED" },
   { id: "completed", label: "Completed", status: "COMPLETED" },
@@ -29,6 +30,7 @@ const TABS = [
 ] as const;
 
 const STATUS_STYLES: Record<string, { label: string; text: string; bg: string; dot: string }> = {
+  ASSIGNED: { label: "To start", text: "text-violet-300", bg: "bg-violet-300/10", dot: "bg-violet-300" },
   IN_PROGRESS: { label: "In progress", text: "text-[#C8AA6E]", bg: "bg-[#C8AA6E]/10", dot: "bg-[#C8AA6E]" },
   PAUSED: { label: "Paused", text: "text-amber-300", bg: "bg-amber-300/10", dot: "bg-amber-300" },
   COMPLETED: { label: "Completed", text: "text-emerald-400", bg: "bg-emerald-400/10", dot: "bg-emerald-400" },
@@ -136,7 +138,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
           <div className="font-mono">#{order.id.slice(-8).toUpperCase()}</div>
         </div>
         <Link
-          href={`/dashboard/booster/orders/${order.id}`}
+          href={`/dashboard/${order.id}`}
           className={cn(
             "rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C8AA6E]/40",
             isActive

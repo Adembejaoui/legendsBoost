@@ -16,6 +16,12 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatusValue, OrderStatusConfig> = 
     color: "pending",
     icon: () => null,
   },
+  [$Enums.OrderStatus.CLAIMED]: {
+    label: "Booster assigned",
+    description: "A booster has taken this order and will start shortly.",
+    color: "active",
+    icon: () => null,
+  },
   [$Enums.OrderStatus.IN_PROGRESS]: {
     label: "In progress",
     description: "A booster is actively working on this order.",
@@ -38,6 +44,18 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatusValue, OrderStatusConfig> = 
     label: "Cancelled",
     description: "Order has been cancelled.",
     color: "cancelled",
+    icon: () => null,
+  },
+  [$Enums.OrderStatus.DRAFT]: {
+    label: "Under review",
+    description: "The order is being reviewed by our team before it is offered to a new booster.",
+    color: "default",
+    icon: () => null,
+  },
+  [$Enums.OrderStatus.AWAITING_PAYMENT]: {
+    label: "Awaiting payment",
+    description: "Payment has not been confirmed yet. The order is not offered to boosters until it is.",
+    color: "pending",
     icon: () => null,
   },
 } as const;

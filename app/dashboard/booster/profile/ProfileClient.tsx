@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatRankLabel } from "@/lib/catalog/rank-systems";
 import { getGame } from "@/lib/catalog/games";
+import { hasBoosterAccess } from "@/lib/boosters/status";
 
 export default function ProfileClient({
   user,
@@ -79,7 +80,7 @@ export default function ProfileClient({
     }
   };
 
-  const isApproved = boosterProfile?.verificationStatus === "APPROVED";
+  const isApproved = hasBoosterAccess(boosterProfile?.verificationStatus);
 
   return (
     <div className="space-y-6">

@@ -53,12 +53,13 @@ export function CustomerOrderCard({ order }: CustomerOrderCardProps) {
     year: "numeric",
   });
 
-  const modeLabel = order.selectedMode ? ` &middot; ${order.selectedMode}` : "";
+  // A JS string is not HTML: use the character, not the "&middot;" entity.
+  const modeLabel = order.selectedMode ? ` · ${order.selectedMode}` : "";
 
   return (
     <Link
-      href={`/dashboard/customer/orders/${order.id}`}
-      className="group flex flex-col gap-4 rounded-xl border border-white/10 bg-white/5 p-5 transition hover:border-white/20 hover:bg-white/8 sm:flex-row sm:items-center sm:gap-5"
+      href={`/dashboard/${order.id}`}
+      className={`group flex flex-col gap-4 border border-white/10 bg-white/5 p-5 transition hover:border-white/20 hover:bg-white/8 sm:flex-row sm:items-center sm:gap-5 rounded-xl`}
     >
       <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-white/8 overflow-hidden">
         {game?.image ? (

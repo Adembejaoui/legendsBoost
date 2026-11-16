@@ -15,6 +15,7 @@ const validBase = {
       currentRank: { tierId: "gold", divisionId: "ii" },
       peakRank: { tierId: "platinum", divisionId: null },
       mainRole: "Jungle",
+      proofUrl: "https://op.gg/summoners/euw/test",
       yearsExperience: 3,
     },
   ],

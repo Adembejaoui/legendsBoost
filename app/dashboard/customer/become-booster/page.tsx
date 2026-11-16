@@ -3,6 +3,7 @@ import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect, getRoleHomePath } from "@/lib/dashboard/role-routing";
 import { BecomeBoosterForm } from "./BecomeBoosterForm";
 import { ApplicationStatusView } from "./ApplicationStatusView";
+import { hasBoosterAccess } from "@/lib/boosters/status";
 
 export default async function BecomeBoosterPage() {
   const ctx = await getDashboardContext({ includeCustomerProfile: true , includeBoosterProfile: true });
@@ -53,7 +54,7 @@ export default async function BecomeBoosterPage() {
     redirect("/login");
   }
 
-  if (ctx.boosterProfile?.verificationStatus === "APPROVED") {
+  if (hasBoosterAccess(ctx.boosterProfile?.verificationStatus)) {
     devLogRedirect({
       from: "/dashboard/customer/become-booster",
       to: "/dashboard/booster",
@@ -77,17 +78,21 @@ export default async function BecomeBoosterPage() {
 
      {/* Application status */}
 {(applicationStatus === "PENDING" ||
+  applicationStatus === "UNDER_REVIEW" ||
+  applicationStatus === "NEEDS_INFO" ||
   applicationStatus === "REJECTED") && (
   <ApplicationStatusView
     status={applicationStatus}
     rejectionReason={ctx.boosterProfile?.rejectionReason ?? null}
+    reviewNote={ctx.boosterProfile?.reviewNote ?? null}
     canReapply={applicationStatus === "REJECTED"}
   />
 )}
 
 {/* Application form */}
 {(applicationStatus === null ||
-  applicationStatus === "REJECTED") && (
+  applicationStatus === "REJECTED" ||
+  applicationStatus === "NEEDS_INFO") && (
   <BecomeBoosterForm
     initialName={user.name ?? ""}
     initialEmail={user.email ?? ""}

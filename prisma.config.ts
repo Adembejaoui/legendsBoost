@@ -1,4 +1,4 @@
-import { defineConfig, env } from 'prisma/config'
+import { defineConfig } from 'prisma/config'
 import 'dotenv/config'
 
 export default defineConfig({
@@ -8,6 +8,8 @@ export default defineConfig({
     seed: 'tsx ./prisma/seed.ts',
   },
   datasource: {
-    url: env('DIRECT_URL'), // used by CLI/migrations only
+    // Used by CLI/migrations only. Not required for `prisma generate` (build
+    // on Vercel): without it, generate still works and migrate fails clearly.
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL || '',
   },
 })

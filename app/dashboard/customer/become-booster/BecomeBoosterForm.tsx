@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
 import { boosterApplicationSchema } from "@/lib/boosters/application-schema";
 import { getGames } from "@/lib/catalog/games";
 import { getRankSystemsByGame } from "@/lib/catalog/rank-systems";
@@ -56,6 +57,7 @@ type GameEntry = {
   peakRank: RankSelection;
   mainRole: string;
   yearsExperience: number;
+  proofUrl: string;
 };
 
 type FormValues = {
@@ -93,6 +95,7 @@ const emptyGameEntry = (gameSlug: string): GameEntry => ({
   peakRank: defaultRank("iron"),
   mainRole: "",
   yearsExperience: 0,
+  proofUrl: "",
 });
 
 const baseForm = (): FormValues => ({
@@ -217,6 +220,7 @@ export function BecomeBoosterForm({
 
       setSubmitted(true);
       toast({
+        type: "success",
         title: "Application submitted",
         description: "Your booster application is now under review. You will be notified once a decision is made.",
       });
@@ -255,7 +259,7 @@ export function BecomeBoosterForm({
           </dd>
         </dl>
         <Button asChild className="mt-6" onClick={handleSubmit}>
-          <a href="/dashboard/customer">Return to customer dashboard</a>
+          <Link href="/dashboard/customer">Return to customer dashboard</Link>
         </Button>
       </section>
     );
@@ -429,6 +433,19 @@ export function BecomeBoosterForm({
                   />
                   {errors[`games.${index}.yearsExperience`] && (
                     <p className="mt-1 text-xs text-rose-400">{errors[`games.${index}.yearsExperience`]}</p>
+                  )}
+                </div>
+                <div className="col-span-2">
+                  <Label htmlFor={`proof-${index}`}>Proof of your peak rank (link) <span className="text-rose-500">*</span></Label>
+                  <Input
+                    id={`proof-${index}`}
+                    type="url"
+                    value={game.proofUrl}
+                    onChange={(e) => setField(["games", index, "proofUrl"], e.target.value)}
+                    placeholder="https://op.gg/... or https://tracker.gg/... or a screenshot link (imgur)"
+                  />
+                  {errors[`games.${index}.proofUrl`] && (
+                    <p className="mt-1 text-xs text-rose-400">{errors[`games.${index}.proofUrl`]}</p>
                   )}
                 </div>
               </div>

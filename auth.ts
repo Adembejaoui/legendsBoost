@@ -5,6 +5,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { logger } from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
+import { clientIp, LIMITS, sharedRateLimit } from "@/lib/security/shared-rate-limit";
+
+/** Thrown from authorize(); next-auth returns its message as `error`. */
+export const LOGIN_RATE_LIMITED = "RATE_LIMITED";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -24,7 +28,7 @@ export const authOptions: NextAuthOptions = {
         email: { type: "email" },
         password: { type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -34,6 +38,18 @@ export const authOptions: NextAuthOptions = {
 
         if (!email || !password) {
           return null;
+        }
+
+        // Brute-force protection shared by every server instance: per account
+        // and per IP. Checked BEFORE the password so a locked-out attacker
+        // learns nothing (and costs no bcrypt work).
+        const ip = clientIp(req?.headers as Record<string, string> | undefined);
+        const [byEmail, byIp] = await Promise.all([
+          sharedRateLimit("login-email", email, LIMITS.loginPerEmail),
+          sharedRateLimit("login-ip", ip, LIMITS.loginPerIp),
+        ]);
+        if (!byEmail.success || !byIp.success) {
+          throw new Error(LOGIN_RATE_LIMITED);
         }
 
         const user = await prisma.user.findUnique({
@@ -61,10 +77,20 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    // Decision 2026-11-15: stay signed in for 30 days.
+    maxAge: 30 * 24 * 60 * 60,
   },
   secret: process.env.AUTH_SECRET,
   pages: {
     signIn: "/login",
+  },
+  events: {
+    // First Google sign-in (the account row is created after the signIn
+    // callback ran): mark the email as confirmed.
+    async linkAccount({ user, account }) {
+      if (account.provider !== "google" || !user?.id) return;
+      await prisma.user.updateMany({ where: { id: user.id, emailVerified: null }, data: { emailVerified: new Date() } }).catch(() => {});
+    },
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -74,11 +100,12 @@ export const authOptions: NextAuthOptions = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { id: true, role: true },
+            select: { id: true, role: true, sessionVersion: true },
           });
           if (dbUser) {
             token.id = dbUser.id;
             token.role = dbUser.role ?? "CUSTOMER";
+            token.sv = dbUser.sessionVersion;
           }
         } catch (err) {
           logger.error("Failed to fetch user role for JWT", {
@@ -91,8 +118,10 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role ?? "CUSTOMER";
+        const u = session.user as { id?: unknown; role?: unknown; sv?: unknown };
+        u.id = token.id;
+        u.role = token.role ?? "CUSTOMER";
+        u.sv = typeof token.sv === "number" ? token.sv : 0;
       }
       return session;
     },
@@ -105,6 +134,10 @@ export const authOptions: NextAuthOptions = {
             include: { customerProfile: true },
           });
 
+          // Google has already confirmed the address.
+          if (dbUser && !dbUser.emailVerified && !dbUser.deletedAt) {
+            await prisma.user.update({ where: { id: dbUser.id }, data: { emailVerified: new Date() } });
+          }
           if (dbUser && dbUser.role === "CUSTOMER" && !dbUser.customerProfile) {
             await prisma.customerProfile.create({
               data: { userId: dbUser.id },

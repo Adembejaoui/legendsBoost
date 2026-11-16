@@ -12,6 +12,9 @@ import {
 } from "@/lib/catalog/catalog-utils";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { asRecord, RankRoute, readRank } from "@/components/dashboard/rank-route";
+import { formatMoney } from "@/lib/money";
+import { useLiveRefresh } from "@/components/realtime/LiveRefresh";
+import { poolChannel } from "@/lib/realtime/channel-names";
 
 /* ------------------------------------------------------------------ */
 /* Types & helpers                                                     */
@@ -27,6 +30,30 @@ interface AvailableOrder {
   configuration?: unknown;
   championsRoles?: unknown;
   selectedOptions?: unknown;
+  region?: string | null;
+  isPriority: boolean;
+  preferredForMe: boolean;
+  preferredUntil: string | Date | null;
+  currency: string;
+  /** Booster payout ceiling (minor units). Never the customer price. */
+  payoutCeiling: number;
+  claimNowAmount: number;
+  minBid: number;
+  biddingClosesAt: string | Date | null;
+  bidCount: number;
+  lowestBid: number | null;
+  myBid: number | null;
+}
+
+function secondsLeft(at: string | Date | null, now: number): number | null {
+  if (!at) return null;
+  return Math.max(0, Math.ceil((new Date(at).getTime() - now) / 1000));
+}
+
+function formatCountdown(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
 }
 
 type Champion = ReturnType<typeof getChampions>[number];
@@ -101,6 +128,9 @@ function OrderCard({
   claiming,
   anyClaiming,
   onClaim,
+  onBid,
+  onWithdraw,
+  blocked,
 }: {
   order: AvailableOrder;
   now: number;
@@ -108,7 +138,28 @@ function OrderCard({
   claiming: boolean;
   anyClaiming: boolean;
   onClaim: (id: string) => void;
+  onBid: (id: string, amount: number) => Promise<void>;
+  onWithdraw: (id: string) => Promise<void>;
+  blocked: boolean;
 }) {
+  const [bidText, setBidText] = useState(order.myBid !== null ? (order.myBid / 100).toFixed(2) : "");
+  const [bidBusy, setBidBusy] = useState(false);
+  const money = (n: number) => formatMoney(n, order.currency);
+  const left = secondsLeft(order.biddingClosesAt, now);
+  const prefLeft = secondsLeft(order.preferredUntil, now);
+  const directOnly = order.isPriority || order.preferredForMe;
+  const claimAmount = directOnly ? order.payoutCeiling : order.claimNowAmount;
+  // A bid can never exceed the payout, and must beat the current lowest bid.
+  const maxBid = order.lowestBid !== null && order.lowestBid !== order.myBid ? Math.min(order.payoutCeiling, order.lowestBid - 1) : order.payoutCeiling;
+  async function submitBid() {
+    const cents = Math.round(Number(bidText.replace(",", ".")) * 100);
+    setBidBusy(true);
+    try {
+      await onBid(order.id, cents);
+    } finally {
+      setBidBusy(false);
+    }
+  }
   const game = getGame(order.gameSlug);
   const gameName = game?.name ?? order.gameSlug;
   const serviceTitle =
@@ -141,7 +192,11 @@ function OrderCard({
             <p className="truncate text-xs text-zinc-400">{gameName}</p>
           </div>
         </div>
-        <Chip tone="gold">{mode}</Chip>
+        <div className="flex items-center gap-1.5">
+          {order.preferredForMe && <Chip tone="gold">Chosen for you</Chip>}
+          {order.isPriority && <Chip tone="gold">Priority</Chip>}
+          <Chip tone="gold">{mode}</Chip>
+        </div>
       </header>
 
       <RankRoute
@@ -202,16 +257,75 @@ function OrderCard({
 
       <footer className="mt-auto pt-5">
         <div className="mb-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs text-zinc-500">
-          <span suppressHydrationWarning>Posted {formatAge(order.createdAt, now)}</span>
+          <span suppressHydrationWarning>
+            Posted {formatAge(order.createdAt, now)}
+            {order.region ? ` · ${order.region}` : ""}
+          </span>
           <span className="font-mono">#{order.id.slice(-8).toUpperCase()}</span>
         </div>
+        <div className="mb-3 flex items-baseline justify-between">
+          <span className="text-xs text-zinc-500">Your payout up to</span>
+          <span className="text-lg font-semibold text-white">{money(order.payoutCeiling)}</span>
+        </div>
+        {order.preferredForMe && prefLeft !== null && (
+          <p className="mb-2 text-xs text-[#C8AA6E]" suppressHydrationWarning>
+            Reserved for you for {formatCountdown(prefLeft)}, then it goes to the pool.
+          </p>
+        )}
         <Button
           className="h-10 w-full bg-[#C8AA6E] font-semibold text-[#0A0E14] hover:bg-[#d8bc85] disabled:opacity-70"
           onClick={() => onClaim(order.id)}
-          disabled={anyClaiming}
+          disabled={anyClaiming || blocked}
         >
-          {claiming ? "Claiming…" : "Claim order"}
+          {claiming ? "Claiming…" : `${directOnly ? "Claim" : "Claim now"} for ${money(claimAmount)}`}
         </Button>
+        {directOnly ? (
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-zinc-400">
+            <div className="mb-1 font-medium text-zinc-300">Bidding: off for this order</div>
+            {order.preferredForMe
+              ? "The customer chose you for this order, so it is offered to you directly at the full payout."
+              : "Priority order: the customer paid to skip bidding, so the first booster to claim it gets the full payout."}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs text-zinc-400">
+              <span>Or bid (lowest wins)</span>
+              <span suppressHydrationWarning>
+                {left !== null ? `Closes in ${formatCountdown(left)}` : "Starts with the first bid"} · {order.bidCount} bid
+                {order.bidCount === 1 ? "" : "s"}
+                {order.lowestBid !== null ? ` · lowest ${money(order.lowestBid)}` : ""}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                inputMode="decimal"
+                aria-label="Your bid"
+                value={bidText}
+                onChange={(e) => setBidText(e.target.value)}
+                placeholder={`${(order.minBid / 100).toFixed(2)} – ${(maxBid / 100).toFixed(2)}`}
+                className="h-9 min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2.5 text-sm text-white outline-none focus:border-white/30"
+                disabled={blocked || bidBusy}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-white/15 bg-transparent text-white hover:bg-white/[0.06]"
+                onClick={() => void submitBid()}
+                disabled={blocked || bidBusy || bidText.trim() === "" || Math.round(Number(bidText.replace(",", ".")) * 100) > maxBid}
+              >
+                {order.myBid !== null ? "Update" : "Bid"}
+              </Button>
+            </div>
+            {order.myBid !== null && (
+              <p className="mt-2 flex items-center justify-between text-xs text-zinc-400">
+                <span>Your bid: {money(order.myBid)}</span>
+                <button type="button" className="text-zinc-500 hover:text-zinc-300" onClick={() => void onWithdraw(order.id)}>
+                  Withdraw
+                </button>
+              </p>
+            )}
+          </div>
+        )}
       </footer>
     </article>
   );
@@ -223,8 +337,10 @@ function OrderCard({
 
 export default function AvailableOrdersClient({
   initialOrders,
+  blockedReason,
 }: {
   initialOrders: AvailableOrder[];
+  blockedReason: string | null;
 }) {
   const router = useRouter();
   const [orders, setOrders] = useState(initialOrders);
@@ -237,11 +353,61 @@ export default function AvailableOrdersClient({
   // Pick up fresh data after router.refresh().
   useEffect(() => setOrders(initialOrders), [initialOrders]);
 
-  // Keep "Posted 5m ago" honest.
+  // Live: the pool refetches when an order is added, taken or bid on.
+  useLiveRefresh([{ channel: poolChannel(), events: ["pool.changed"] }]);
+
+  // The "new order" pop-up and sound live in the dashboard layout
+  // (BoosterNewOrderAlert), so they work on every booster page.
+
+  // Countdowns tick every second; the list reloads when a window ends.
+  const nextDeadline = useMemo(() => {
+    const times = orders
+      .flatMap((o) => [o.biddingClosesAt, o.preferredUntil])
+      .filter((t): t is string | Date => !!t)
+      .map((t) => new Date(t).getTime());
+    return times.length ? Math.min(...times) : null;
+  }, [orders]);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
+    const t = setInterval(() => setNow(Date.now()), nextDeadline ? 1_000 : 60_000);
     return () => clearInterval(t);
-  }, []);
+  }, [nextDeadline]);
+  useEffect(() => {
+    if (!nextDeadline) return;
+    const wait = Math.max(1_000, nextDeadline - Date.now() + 1_500);
+    const t = setTimeout(() => startRefresh(() => router.refresh()), wait);
+    return () => clearTimeout(t);
+  }, [nextDeadline, router]);
+
+  async function send(url: string, method: string, body?: unknown) {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? "Request failed");
+    return data;
+  }
+
+  async function handleBid(orderId: string, amount: number) {
+    setError(null);
+    try {
+      await send(`/api/booster/orders/${orderId}/bid`, "POST", { amount });
+      startRefresh(() => router.refresh());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not place the bid.");
+    }
+  }
+
+  async function handleWithdraw(orderId: string) {
+    setError(null);
+    try {
+      await send(`/api/booster/orders/${orderId}/bid`, "DELETE");
+      startRefresh(() => router.refresh());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not withdraw the bid.");
+    }
+  }
 
   const championsById = useMemo(
     () => new Map(getChampions().map((c) => [c.id, c])),
@@ -274,7 +440,8 @@ export default function AvailableOrdersClient({
 
       if (res.ok) {
         // Stay in the claiming state until the navigation completes.
-        router.push(`/dashboard/booster/orders/${orderId}`);
+        
+        router.push(`/dashboard/${orderId}`);
         return;
       }
 
@@ -335,6 +502,12 @@ export default function AvailableOrdersClient({
         </Button>
       </div>
 
+      {blockedReason && (
+        <div role="status" className="mb-5 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-sm text-amber-200">
+          {blockedReason}
+        </div>
+      )}
+
       {error && (
         <div
           role="alert"
@@ -356,7 +529,7 @@ export default function AvailableOrdersClient({
         <div className="rounded-xl border border-dashed border-white/15 px-6 py-14 text-center">
           <p className="text-sm font-medium text-white">No orders available right now</p>
           <p className="mt-1 text-sm text-zinc-400">
-            New orders show up here as customers place them.
+            New orders you can take (your games, rank ceiling and regions) show up here.
           </p>
         </div>
       ) : (
@@ -370,6 +543,9 @@ export default function AvailableOrdersClient({
               claiming={claiming === order.id}
               anyClaiming={claiming !== null}
               onClaim={handleClaim}
+              onBid={handleBid}
+              onWithdraw={handleWithdraw}
+              blocked={!!blockedReason}
             />
           ))}
         </div>

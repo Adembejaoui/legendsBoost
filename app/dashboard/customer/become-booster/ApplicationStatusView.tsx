@@ -3,14 +3,18 @@ import { $Enums } from "@/app/generated/prisma/client";
 export function ApplicationStatusView({
   status,
   rejectionReason,
+  reviewNote,
   canReapply,
 }: {
   status: $Enums.BoosterVerificationStatus;
   rejectionReason: string | null;
+  reviewNote?: string | null;
   canReapply: boolean;
 }) {
   const labels: Record<string, { label: string; color: "violet" | "rose" | "emerald" }> = {
-    PENDING: { label: "Application under review", color: "violet" },
+    PENDING: { label: "Application submitted", color: "violet" },
+    UNDER_REVIEW: { label: "Application under review", color: "violet" },
+    NEEDS_INFO: { label: "More information needed", color: "rose" },
     REJECTED: { label: "Application rejected", color: "rose" },
   };
 
@@ -30,7 +34,15 @@ export function ApplicationStatusView({
         <span className="text-sm font-medium text-white">{config.label}</span>
       </div>
 
-      {status === "PENDING" && (
+      {status === "NEEDS_INFO" && (
+        <div className="mt-2 text-sm text-zinc-300">
+          <span className="font-semibold">Our team asks: </span>
+          {reviewNote ?? "Please complete your application."}
+          <p className="mt-2 text-zinc-400">Update the form below and submit it again.</p>
+        </div>
+      )}
+
+      {(status === "PENDING" || status === "UNDER_REVIEW") && (
         <p className="mt-2 text-sm text-zinc-400">
           Your application is pending review by our admin team. You remain a CUSTOMER until your
           application is approved. You can continue placing orders in the meantime.

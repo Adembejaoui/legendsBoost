@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
 import prisma from "@/lib/prisma";
+import { sessionVersionOf } from "@/lib/auth/session-version";
 import { UserRole } from "@/types/next-auth";
 
 export async function getCurrentUser() {
@@ -10,7 +11,7 @@ export async function getCurrentUser() {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.user.id, deletedAt: null, sessionVersion: sessionVersionOf(session) },
     select: {
       id: true,
       email: true,
@@ -37,7 +38,7 @@ export async function getCurrentUserWithProfiles() {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.user.id, deletedAt: null, sessionVersion: sessionVersionOf(session) },
     include: {
       customerProfile: true,
       boosterProfile: true,

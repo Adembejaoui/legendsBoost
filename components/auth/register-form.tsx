@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { safeCallbackPath } from "@/lib/auth/safe-callback";
 import { Field, PasswordInput, Spinner, inputClass } from "@/components/auth/auth-ui";
 
 type Loading = "credentials" | "google" | null;
@@ -93,11 +94,11 @@ export function RegisterForm() {
       });
 
       if (result?.error) {
-        router.push("/login");
+        router.push(`/login${window.location.search}`);
         return;
       }
 
-      router.push("/dashboard");
+      router.push(safeCallbackPath(new URLSearchParams(window.location.search).get("callbackUrl")));
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -109,7 +110,7 @@ export function RegisterForm() {
     setError(null);
     setLoading("google");
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      await signIn("google", { callbackUrl: safeCallbackPath(new URLSearchParams(window.location.search).get("callbackUrl")) });
     } catch {
       setError("Google sign-in failed. Please try again.");
       setLoading(null);
@@ -267,6 +268,8 @@ export function RegisterForm() {
         Already have an account?{" "}
         <Link
           href="/login"
+          // Keep ?callbackUrl= so the customer returns to their order after signing in.
+          onClick={(e) => { e.preventDefault(); router.push(`/login${window.location.search}`) }}
           className="font-medium text-[#C8AA6E] underline-offset-4 hover:underline"
         >
           Sign in

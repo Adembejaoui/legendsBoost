@@ -1,11 +1,14 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth/guards';
+import { rejectIfAssignmentNotInOrder } from '@/lib/assignments/route-guard';
 import { releaseAssignment } from '@/lib/assignments/service';
 
-function isBoosterOrAdmin(user: { role: string } | null): boolean {
-  return user !== null && (user.role === 'BOOSTER' || user.role === 'ADMIN');
-}
-
+/**
+ * Release an assignment and return the order to the marketplace. ADMIN ONLY.
+ *
+ * Boosters have exactly three order actions (claim, complete, abandon); a
+ * booster who cannot continue uses POST /api/booster/orders/:orderId/abandon.
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ orderId: string }> }
@@ -15,7 +18,13 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!isBoosterOrAdmin(user)) {
+    if (user.role === 'BOOSTER') {
+      return NextResponse.json(
+        { error: 'Boosters cannot release orders. Use "Abandon order" instead.' },
+        { status: 403 }
+      );
+    }
+    if (user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -28,13 +37,16 @@ export async function POST(
       return NextResponse.json({ error: 'assignmentId required' }, { status: 400 });
     }
 
-    const assignment = await releaseAssignment(assignmentId, user.id, user.role, reason);
+    const mismatch = await rejectIfAssignmentNotInOrder(assignmentId, orderId);
+    if (mismatch) return mismatch;
 
-    if (assignment.orderId !== orderId) {
+    const result = await releaseAssignment(assignmentId, user.id, user.role, reason);
+
+    if (result.assignment.orderId !== orderId) {
       return NextResponse.json({ error: 'Assignment does not belong to this order' }, { status: 403 });
     }
 
-    return NextResponse.json({ assignment });
+    return NextResponse.json({ assignment: result.assignment });
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'NotBoosterOwnerError') {

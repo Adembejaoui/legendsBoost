@@ -5,6 +5,7 @@ import { devLogRedirect, getRoleHomePath } from "@/lib/dashboard/role-routing";
 import prisma from "@/lib/prisma";
 import { $Enums } from "@/app/generated/prisma/client";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/orders/statuses";
+import { CUSTOMER_VISIBLE_ORDER_WHERE } from "@/lib/orders/payment-gate";
 import { CustomerStats } from "@/components/dashboard/customer/CustomerStats";
 import { CustomerOrderCard } from "@/components/dashboard/customer/CustomerOrderCard";
 import { CustomerOrderFilter } from "@/components/dashboard/customer/CustomerOrderFilter";
@@ -88,8 +89,11 @@ export default async function CustomerDashboardPage({
 
   const requestedPage = Math.max(1, parseInt(sp.page || "1", 10) || 1);
 
-  const where: { userId: string; status?: $Enums.OrderStatus | { in: $Enums.OrderStatus[] } } = {
-    userId: user.id,
+  // Only real orders: an order exists for the customer once it is paid.
+  // Checkout holds are never listed or counted (see payment-gate.ts).
+  const paid = { userId: user.id, ...CUSTOMER_VISIBLE_ORDER_WHERE };
+  const where: typeof paid & { status?: $Enums.OrderStatus | { in: $Enums.OrderStatus[] } } = {
+    ...paid,
   };
 
   if (statusFilter) {
@@ -104,10 +108,10 @@ export default async function CustomerDashboardPage({
 
   const [total, totalOrders, activeOrders, completedOrders, cancelledOrders] = await Promise.all([
     prisma.order.count({ where }),
-    prisma.order.count({ where: { userId: user.id } }),
-    prisma.order.count({ where: { userId: user.id, status: { in: ACTIVE_ORDER_STATUSES } } }),
-    prisma.order.count({ where: { userId: user.id, status: $Enums.OrderStatus.COMPLETED } }),
-    prisma.order.count({ where: { userId: user.id, status: $Enums.OrderStatus.CANCELLED } }),
+    prisma.order.count({ where: paid }),
+    prisma.order.count({ where: { ...paid, status: { in: ACTIVE_ORDER_STATUSES } } }),
+    prisma.order.count({ where: { ...paid, status: $Enums.OrderStatus.COMPLETED } }),
+    prisma.order.count({ where: { ...paid, status: $Enums.OrderStatus.CANCELLED } }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));

@@ -1,6 +1,13 @@
 import { redirect } from "next/navigation";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect } from "@/lib/dashboard/role-routing";
+import { boosterFinance } from "@/lib/finance/queries";
+import { BoosterEarnings } from "@/components/finance/BoosterEarnings";
+import { PayoutMethodCard } from "@/components/finance/PayoutMethodCard";
+import { getPayoutMethodStatus } from "@/lib/finance/payout-methods";
+import { hasBoosterAccess } from "@/lib/boosters/status";
+
+export const dynamic = "force-dynamic";
 
 export default async function CashoutPage() {
   const ctx = await getDashboardContext({ includeBoosterProfile: true });
@@ -47,7 +54,7 @@ export default async function CashoutPage() {
     });
     redirect("/login");
   }
-  if (!ctx.boosterProfile || ctx.boosterProfile.verificationStatus !== "APPROVED") {
+  if (!ctx.boosterProfile || !hasBoosterAccess(ctx.boosterProfile.verificationStatus)) {
     devLogRedirect({
       from: "/dashboard/booster/cashout",
       to: "/dashboard/booster",
@@ -58,38 +65,13 @@ export default async function CashoutPage() {
     redirect("/dashboard/booster");
   }
 
+  // All figures come from the ledger and the booster's own earning / payout
+  // records (never another booster's).
+  const [finance, method] = await Promise.all([boosterFinance(user.id), getPayoutMethodStatus(user.id)]);
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Cashout</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Manage your earnings and withdrawals
-        </p>
-      </div>
-      <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-8 text-center">
-        <h2 className="mb-2 text-xl font-semibold text-white">Coming Soon</h2>
-        <p className="mb-4 text-zinc-400">
-          Earnings and cashout functionality will become available when the financial system is implemented.
-        </p>
-        <div className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-lg bg-white/5 p-4">
-            <div className="text-sm text-zinc-400">Available Balance</div>
-            <div className="mt-1 text-xl font-semibold text-white">--</div>
-          </div>
-          <div className="rounded-lg bg-white/5 p-4">
-            <div className="text-sm text-zinc-400">Pending Earnings</div>
-            <div className="mt-1 text-xl font-semibold text-white">--</div>
-          </div>
-          <div className="rounded-lg bg-white/5 p-4">
-            <div className="text-sm text-zinc-400">Total Earnings</div>
-            <div className="mt-1 text-xl font-semibold text-white">--</div>
-          </div>
-          <div className="rounded-lg bg-white/5 p-4">
-            <div className="text-sm text-zinc-400">Payout Methods</div>
-            <div className="mt-1 text-xl font-semibold text-white">--</div>
-          </div>
-        </div>
-      </div>
+      <PayoutMethodCard readiness={{ kycStatus: ctx.boosterProfile.kycStatus, method }} />
+      <BoosterEarnings data={finance} />
     </div>
   );
 }

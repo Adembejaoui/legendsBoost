@@ -40,6 +40,7 @@ export function BoosterWelcomeModal({
         router.push("/dashboard/booster");
       } else {
         toast({
+          type: "success",
           title: "Welcome aboard!",
           description: "Your booster account is now active.",
         });

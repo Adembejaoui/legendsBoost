@@ -1,7 +1,8 @@
 'use client'
 
 import type { Champion, GameServiceOffer, RankSystem } from '@/types/catalog'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { patchCheckout, readCheckout } from '@/lib/checkout/session-state'
 import { ServiceConfiguratorLayout } from '@/components/service-configurator/ServiceConfiguratorLayout'
 import { ServicePageHeader } from '@/components/service-configurator/ServicePageHeader'
 import { ServiceNavigationTabs } from '@/components/service-configurator/ServiceNavigationTabs'
@@ -9,6 +10,9 @@ import { RankPicker } from '@/components/service-configurator/RankSelectionCard'
 import { SelectField } from '@/components/service-configurator/SelectField'
 import { NumberField } from '@/components/service-configurator/NumberField'
 import { CheckoutPanel } from '@/components/checkout/CheckoutPanel'
+import { ChampionPicker } from '@/components/configurator/ChampionPicker'
+import { MultiSelectField } from '@/components/configurator/SelectField'
+import { CheckboxField } from '@/components/configurator/CheckboxField'
 import { getRankSystem } from '@/lib/catalog/catalog-utils'
 import { getOffersWithTemplate } from '@/lib/catalog/catalog-utils'
 import { Image } from 'lucide-react'
@@ -30,6 +34,25 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
     }
     return next
   })
+
+  // Keep the configuration when the customer goes back (step indicator,
+  // browser back, Stripe's back link, sign-in round trip). Restored after
+  // hydration because the server cannot read sessionStorage; only keys that
+  // are fields of this service are accepted (the server re-validates anyway).
+  const restored = useRef(false)
+  useEffect(() => {
+    const saved = readCheckout(game.slug, offer.serviceSlug).values
+    if (saved && typeof saved === 'object') {
+      const keys = new Set(offer.fields.map((f) => f.key))
+      const clean = Object.fromEntries(Object.entries(saved).filter(([k]) => keys.has(k)))
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore from sessionStorage after hydration
+      if (Object.keys(clean).length) setValues((v) => ({ ...v, ...clean }))
+    }
+    restored.current = true
+  }, [game.slug, offer.serviceSlug, offer.fields])
+  useEffect(() => {
+    if (restored.current) patchCheckout(game.slug, offer.serviceSlug, { values })
+  }, [game.slug, offer.serviceSlug, values])
 
   const allOffers = getOffersWithTemplate(game.slug)
 
@@ -122,6 +145,43 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
           step={(field as any).step}
           unit={(field as any).unit}
           required={(field as any).required}
+        />,
+      )
+    } else if (field.type === 'champion-picker') {
+      // Champion Mastery's required champion: without this picker the
+      // field could never be filled and the service could never be ordered.
+      leftContent.push(
+        <ChampionPicker
+          key={field.key}
+          label={field.label}
+          description={field.description}
+          champions={champions}
+          value={(values[field.key] as string) ?? null}
+          onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
+          required={field.required}
+        />,
+      )
+    } else if (field.type === 'multi-select') {
+      leftContent.push(
+        <MultiSelectField
+          key={field.key}
+          label={field.label}
+          description={field.description}
+          options={field.options}
+          value={(values[field.key] as string[]) ?? []}
+          onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
+          required={field.required}
+        />,
+      )
+    } else if (field.type === 'checkbox') {
+      leftContent.push(
+        <CheckboxField
+          key={field.key}
+          label={field.label}
+          description={field.description}
+          value={(values[field.key] as boolean) ?? false}
+          onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
+          required={field.required}
         />,
       )
     }

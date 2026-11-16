@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { safeCallbackPath } from "@/lib/auth/safe-callback";
 import { Field, PasswordInput, Spinner, inputClass } from "@/components/auth/auth-ui";
 
 type Loading = "credentials" | "google" | null;
@@ -42,12 +43,17 @@ export function LoginForm() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password.");
+        setError(
+          result.error === "RATE_LIMITED"
+            ? "Too many sign-in attempts. Please wait 15 minutes and try again."
+            : "Invalid email or password."
+        );
         setLoading(null);
         return;
       }
 
-      router.push("/dashboard");
+      // Return to where the customer came from (e.g. the order configuration).
+      router.push(safeCallbackPath(new URLSearchParams(window.location.search).get("callbackUrl")));
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -59,7 +65,7 @@ export function LoginForm() {
     setError(null);
     setLoading("google");
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      await signIn("google", { callbackUrl: safeCallbackPath(new URLSearchParams(window.location.search).get("callbackUrl")) });
     } catch {
       setError("Google sign-in failed. Please try again.");
       setLoading(null);
@@ -161,6 +167,8 @@ export function LoginForm() {
         New to LegendsBoost?{" "}
         <Link
           href="/register"
+          // Keep ?callbackUrl= so a new customer returns to their order after signing up.
+          onClick={(e) => { e.preventDefault(); router.push(`/register${window.location.search}`) }}
           className="font-medium text-[#C8AA6E] underline-offset-4 hover:underline"
         >
           Create an account

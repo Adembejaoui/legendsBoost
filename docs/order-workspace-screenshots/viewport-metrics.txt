@@ -1,0 +1,13 @@
+desktop-1920x1080-customer         vp=1920x1080 pageScrollY=false pageScrollX=false rank=606x661 left=290x661 chat=360x661 input=true send=true matches=1280x238 tabs=- banner=null actions=Pause order:ok
+desktop-1920x1080-valorant         vp=1920x1080 pageScrollY=false pageScrollX=false rank=606x661 left=290x661 chat=360x661 input=true send=true matches=1280x238 tabs=- banner=null actions=Pause order:ok
+desktop-1920x1080-completed-40     vp=1920x1080 pageScrollY=false pageScrollX=false rank=606x661 left=290x661 chat=360x661 input=true send=true matches=1280x238 tabs=- banner=null actions=
+desktop-1600x900-tft-booster       vp=1600x900 pageScrollY=false pageScrollX=false rank=606x521 left=290x521 chat=360x521 input=true send=true matches=1280x198 tabs=- banner=null actions=Complete:ok,Abandon:ok
+laptop-1440x900-admin-paused       vp=1440x900 pageScrollY=false pageScrollX=false rank=446x471 left=290x471 chat=360x471 input=true send=true matches=1120x198 tabs=- banner=true actions=
+laptop-1366x768-booster-paused     vp=1366x768 pageScrollY=false pageScrollX=false rank=372x352 left=290x352 chat=360x352 input=true send=true matches=1046x169 tabs=- banner=true actions=Complete:ok,Abandon:ok
+laptop-1280x720-booster            vp=1280x720 pageScrollY=false pageScrollX=false rank=286x381 left=290x381 chat=360x381 input=true send=true matches=960x158 tabs=- banner=null actions=Complete:ok,Abandon:ok
+tablet-1024x768-customer           vp=1024x768 pageScrollY=false pageScrollX=false rank=372x224 left=372x182 chat=320x418 input=true send=true matches=704x169 tabs=- banner=null actions=Pause order:ok
+tablet-768x1024-booster            vp=768x1024 pageScrollY=false pageScrollX=false rank=464x225 left=464x598 chat=- input=false send=false matches=- tabs=464x42 banner=null actions=Complete:ok,Abandon:ok
+mobile-390x844-customer-paused     vp=390x844 pageScrollY=false pageScrollX=false rank=358x224 left=358x1033 chat=- input=false send=false matches=- tabs=358x42 banner=true actions=Resume order:ok
+mobile-390x844-chat-tab            vp=390x844 pageScrollY=false pageScrollX=false rank=- left=- chat=358x577 input=true send=true matches=- tabs=358x42 banner=null actions=Complete:ok,Abandon:ok
+mobile-390x844-matches-tab         vp=390x844 pageScrollY=false pageScrollX=false rank=- left=- chat=- input=false send=false matches=358x577 tabs=358x42 banner=null actions=Complete:ok,Abandon:ok
+mobile-360x640-booster-paused      vp=360x640 pageScrollY=false pageScrollX=false rank=328x223 left=328x1031 chat=- input=false send=false matches=- tabs=328x42 banner=true actions=Complete:ok,Abandon:ok

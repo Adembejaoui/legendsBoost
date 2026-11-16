@@ -1,109 +1,30 @@
-/**
- * Standalone test runner for auth password hashing.
- * Run with: npx tsx __tests__/auth/password.test.ts
- */
+import { describe, expect, it } from "vitest";
+import { hashPassword, isPasswordHash, verifyPassword } from "@/lib/auth/password";
 
-import { hashPassword, verifyPassword, isPasswordHash } from "@/lib/auth/password";
+// Converted from a standalone tsx script (it was collected by vitest but had
+// no test suite, so it always failed). Same checks.
+describe("password hashing", () => {
+  it("hashes to a bcrypt string and verifies", async () => {
+    const hash = await hashPassword("correct horse");
+    expect(isPasswordHash(hash)).toBe(true);
+    expect(await verifyPassword("correct horse", hash)).toBe(true);
+    expect(await verifyPassword("wrong", hash)).toBe(false);
+  }, 20_000);
 
-let passed = 0;
-let failed = 0;
+  it("salts every hash", async () => {
+    expect(await hashPassword("same")).not.toBe(await hashPassword("same"));
+  }, 20_000);
 
-function assert(condition: boolean, message: string) {
-  if (condition) {
-    passed++;
-    console.log(`  PASS: ${message}`);
-  } else {
-    failed++;
-    console.log(`  FAIL: ${message}`);
-  }
-}
+  it("rejects empty and oversized (> 72 bytes) passwords; accepts exactly 72", async () => {
+    await expect(hashPassword("")).rejects.toThrow();
+    await expect(hashPassword("a".repeat(73))).rejects.toThrow(/too long/);
+    await expect(hashPassword("é".repeat(37))).rejects.toThrow(/too long/); // 74 bytes
+    expect(isPasswordHash(await hashPassword("a".repeat(72)))).toBe(true);
+  }, 20_000);
 
-async function runTests() {
-  console.log("Password hashing tests\n");
-
-  // Test 1: hash produces a string
-  console.log("Test 1: hashPassword returns a string");
-  try {
-    const hash = await hashPassword("SecurePass123");
-    assert(typeof hash === "string" && hash.length > 0, "hash is a non-empty string");
-    assert(isPasswordHash(hash), "hash starts with $ (bcrypt format)");
-  } catch (e: any) {
-    assert(false, `hashPassword threw: ${e.message}`);
-  }
-
-  // Test 2: verify correct password
-  console.log("\nTest 2: verifyPassword with correct password");
-  try {
-    const hash = await hashPassword("MyPassword1");
-    const valid = await verifyPassword("MyPassword1", hash);
-    assert(valid === true, "correct password verifies");
-  } catch (e: any) {
-    assert(false, `verifyPassword threw: ${e.message}`);
-  }
-
-  // Test 3: verify incorrect password
-  console.log("\nTest 3: verifyPassword with incorrect password");
-  try {
-    const hash = await hashPassword("CorrectHorse");
-    const valid = await verifyPassword("WrongBatter", hash);
-    assert(valid === false, "incorrect password does not verify");
-  } catch (e: any) {
-    assert(false, `verifyPassword threw: ${e.message}`);
-  }
-
-  // Test 4: empty password rejected
-  console.log("\nTest 4: empty password rejected");
-  try {
-    await hashPassword("");
-    assert(false, "empty password should throw");
-  } catch (e: any) {
-    assert(true, "empty password throws as expected");
-  }
-
-  // Test 5: oversized password rejected
-  console.log("\nTest 5: oversized password rejected");
-  try {
-    const longPassword = "a".repeat(73);
-    await hashPassword(longPassword);
-    assert(false, "oversized password should throw");
-  } catch (e: any) {
-    assert(e.message.includes("too long"), "oversized password throws 'too long'");
-  }
-
-  // Test 6: different hashes for same password
-  console.log("\nTest 6: different hashes for same password");
-  try {
-    const hash1 = await hashPassword("SamePassword");
-    const hash2 = await hashPassword("SamePassword");
-    assert(hash1 !== hash2, "hashes are different (salt)");
-  } catch (e: any) {
-    assert(false, `hashPassword threw: ${e.message}`);
-  }
-
-  // Test 7: null/undefined hash
-  console.log("\nTest 7: null hash returns false");
-  try {
-    const valid = await verifyPassword("password", null as any);
-    assert(valid === false, "null hash returns false");
-  } catch (e: any) {
-    assert(false, `verifyPassword threw: ${e.message}`);
-  }
-
-  // Test 8: 72-byte password is accepted (boundary)
-  console.log("\nTest 8: 72-byte password accepted (boundary)");
-  try {
-    const boundaryPassword = "a".repeat(72);
-    const hash = await hashPassword(boundaryPassword);
-    assert(typeof hash === "string" && hash.length > 0, "72-byte password accepted");
-  } catch (e: any) {
-    assert(false, `boundary password threw: ${e.message}`);
-  }
-
-  console.log(`\n${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
-}
-
-runTests().catch((e) => {
-  console.error("Test runner error:", e);
-  process.exit(1);
+  it("never throws on bad hashes", async () => {
+    expect(await verifyPassword("x", null as unknown as string)).toBe(false);
+    expect(await verifyPassword("x", "")).toBe(false);
+    expect(await verifyPassword("x", "not-a-hash")).toBe(false);
+  });
 });

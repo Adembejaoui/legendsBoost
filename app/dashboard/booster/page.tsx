@@ -1,7 +1,11 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { getBoosterAssignments } from "@/lib/assignments/service";
+import { LiveRefresh } from "@/components/realtime/LiveRefresh";
+import { poolChannel } from "@/lib/realtime/channel-names";
 import { devLogRedirect } from "@/lib/dashboard/role-routing";
+import { hasBoosterAccess } from "@/lib/boosters/status";
 
 type BoosterAccountStatusProps = {
   user: {
@@ -43,12 +47,12 @@ function BoosterAccountStatus({ user, boosterProfile }: BoosterAccountStatusProp
         <div className="mt-3 text-sm text-zinc-400">{reasons[status] ?? reasons.MISSING}</div>
       </div>
       <div className="mt-6">
-        <a
+        <Link
           href="/dashboard/customer"
           className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-400"
         >
           Continue to customer dashboard
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -100,7 +104,7 @@ export default async function BoosterDashboardPage() {
     redirect("/login");
   }
 
-  if (!boosterProfile || boosterProfile.verificationStatus !== "APPROVED") {
+  if (!boosterProfile || !hasBoosterAccess(boosterProfile.verificationStatus)) {
     console.info("[DASHBOARD_AUTH]", {
       from: "/dashboard/booster",
       databaseRole: user.role,
@@ -112,9 +116,9 @@ export default async function BoosterDashboardPage() {
 
   const [availableOrders, assignments] = await Promise.all([
     (async () => {
-      const { getAvailableOrders } = await import("@/lib/assignments/service");
-      const orders = await getAvailableOrders();
-      return orders.length;
+      // Same list the booster sees: only orders within their ceilings.
+      const { getPoolForBooster } = await import("@/lib/pool/service");
+      return (await getPoolForBooster(user.id)).orders.length;
     })(),
     getBoosterAssignments(user.id, "all"),
   ]);
@@ -125,6 +129,7 @@ export default async function BoosterDashboardPage() {
 
   return (
     <div>
+      <LiveRefresh subscriptions={[{ channel: poolChannel(), events: ["pool.changed"] }]} />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Welcome back, {user.name || "Booster"}</h1>
         <p className="mt-1 text-sm text-zinc-400">
@@ -154,15 +159,15 @@ export default async function BoosterDashboardPage() {
       <div className="mb-6 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6">
         <h2 className="mb-4 text-lg font-semibold text-white">Quick Navigation</h2>
         <div className="flex flex-wrap gap-3">
-          <a href="/dashboard/booster/available-orders" className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600">
+          <Link href="/dashboard/booster/available-orders" className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-medium text-white hover:bg-violet-600">
             Browse Available Orders
-          </a>
-          <a href="/dashboard/booster/claimed-orders" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
+          </Link>
+          <Link href="/dashboard/booster/claimed-orders" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
             My Claimed Orders
-          </a>
-          <a href="/dashboard/booster/profile" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
+          </Link>
+          <Link href="/dashboard/booster/profile" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20">
             My Profile
-          </a>
+          </Link>
         </div>
       </div>
 

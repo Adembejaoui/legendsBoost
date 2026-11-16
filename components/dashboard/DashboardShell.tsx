@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { iconMap, getNavigation } from "@/lib/dashboard/navigation";
 import type { UserRole } from "@/lib/dashboard/navigation";
 import { ToastProvider } from "@/components/ui/toast";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export interface DashboardUser {
   id: string;
@@ -84,7 +85,14 @@ export function DashboardSidebar({ role, user, onNavigate }: { role: UserRole; u
   );
 }
 
-export function DashboardShell({ role, user, children }: { role: UserRole; user: DashboardUser; children: React.ReactNode }) {
+interface DashboardShellProps {
+  role: UserRole;
+  user: DashboardUser;
+  children: React.ReactNode;
+  initialUnreadCount?: number;
+}
+
+export function DashboardShell({ role, user, children, initialUnreadCount = 0 }: DashboardShellProps) {
   const [open, setOpen] = useState(false);
   return (
     <ToastProvider>
@@ -113,6 +121,7 @@ export function DashboardShell({ role, user, children }: { role: UserRole; user:
                   <span className="text-sm font-medium text-zinc-300">Dashboard</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <NotificationBell initialUnreadCount={initialUnreadCount} />
                   {user.image ? (
                     <img src={user.image} alt="" className="size-8 rounded-full object-cover" />
                   ) : (

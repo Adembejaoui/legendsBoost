@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { ChevronRight } from "lucide-react";
@@ -26,14 +27,19 @@ type BoosterView = {
   customerProfile: { country: string | null } | null;
 };
 
-type Filter = "ALL" | "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+type Filter = "ALL" | "PENDING" | "UNDER_REVIEW" | "NEEDS_INFO" | "TRIAL" | "APPROVED" | "ON_BREAK" | "REJECTED" | "SUSPENDED" | "TERMINATED";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "PENDING", label: "Pending" },
-  { key: "APPROVED", label: "Approved" },
+  { key: "UNDER_REVIEW", label: "Under review" },
+  { key: "NEEDS_INFO", label: "Needs info" },
+  { key: "TRIAL", label: "Trial" },
+  { key: "APPROVED", label: "Active" },
+  { key: "ON_BREAK", label: "On break" },
   { key: "REJECTED", label: "Rejected" },
   { key: "SUSPENDED", label: "Suspended" },
+  { key: "TERMINATED", label: "Terminated" },
 ];
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -41,6 +47,11 @@ const STATUS_CLASSES: Record<string, string> = {
   APPROVED: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   REJECTED: "border-rose-500/30 bg-rose-500/10 text-rose-300",
   SUSPENDED: "border-yellow-500/30 bg-yellow-500/10 text-yellow-300",
+  UNDER_REVIEW: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  NEEDS_INFO: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  TRIAL: "border-teal-500/30 bg-teal-500/10 text-teal-300",
+  ON_BREAK: "border-zinc-500/30 bg-zinc-500/10 text-zinc-300",
+  TERMINATED: "border-rose-700/40 bg-rose-900/20 text-rose-300",
 };
 
 function rankLabel(applicationData: unknown, gameSlug: string, field: string): string {
@@ -95,7 +106,7 @@ export default function ApplicationsList() {
         toast({ title: json.error || "Approval failed", type: "destructive" });
         return;
       }
-      toast({ title: "Application approved" });
+      toast({ type: "success", title: "Application approved" });
       setSelectedId(null);
       fetchItems();
     } catch {
@@ -116,7 +127,7 @@ export default function ApplicationsList() {
         toast({ title: json.error || "Rejection failed", type: "destructive" });
         return;
       }
-      toast({ title: "Application rejected" });
+      toast({ type: "warning", title: "Application rejected" });
       setSelectedId(null);
       setRejectReason("");
       fetchItems();
@@ -224,11 +235,13 @@ export default function ApplicationsList() {
                           </Button>
                         </div>
                       )}
-                      {profile?.verificationStatus !== "PENDING" && (
-                        <Button size="sm" onClick={(e) => { e.stopPropagation(); setSelectedId(application.id); }}>
-                          View
-                        </Button>
-                      )}
+                      <Link
+                        href={`/dashboard/admin/boosters/${application.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-2 inline-block text-xs text-violet-300 underline-offset-2 hover:underline"
+                      >
+                        Manage booster
+                      </Link>
                     </td>
                   </tr>
                 );

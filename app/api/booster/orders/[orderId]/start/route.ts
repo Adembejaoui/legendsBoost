@@ -1,41 +1,21 @@
-﻿import { NextResponse } from 'next/server';
-import { getSessionUser } from '@/lib/auth/guards';
-import { startAssignment } from '@/lib/assignments/service';
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth/guards";
+import { startAssignment } from "@/lib/assignments/service";
+import { BoosterNotEligibleError, NotBoosterOwnerError, OrderNotFoundError, OrderStateConflictError } from "@/lib/assignments/types";
 
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ orderId: string }> }
-) {
+/** Booster: start a claimed order (CLAIMED -> IN_PROGRESS). */
+export async function POST(_req: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "BOOSTER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { orderId } = await params;
   try {
-    const user = await getSessionUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (user.role !== 'BOOSTER') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await params;
-    const body = await req.json().catch(() => ({}));
-    const assignmentId = body.assignmentId;
-
-    if (!assignmentId) {
-      return NextResponse.json({ error: 'assignmentId required' }, { status: 400 });
-    }
-
-    const assignment = await startAssignment(assignmentId, user.id);
-
-    return NextResponse.json({ assignment });
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('Booster')) {
-        return NextResponse.json({ error: error.message }, { status: 403 });
-      }
-    }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to start' },
-      { status: 400 }
-    );
+    const r = await startAssignment(orderId, user.id);
+    return NextResponse.json({ changed: r.changed, status: r.order.status });
+  } catch (e) {
+    if (e instanceof NotBoosterOwnerError || e instanceof OrderNotFoundError) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (e instanceof OrderStateConflictError) return NextResponse.json({ error: e.message }, { status: 409 });
+    if (e instanceof BoosterNotEligibleError) return NextResponse.json({ error: e.message }, { status: 403 });
+    return NextResponse.json({ error: "Could not start the order" }, { status: 500 });
   }
 }
-

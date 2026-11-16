@@ -163,4 +163,14 @@ export interface Champion {
   id: string
   name: string
   iconSrc?: string
+  /** "the Darkin Blade" */
+  title?: string
+  /** Riot numeric champion key (Match-V5 championId). */
+  key?: number
+  /** Data Dragon asset id ("MonkeyKing" for Wukong). */
+  ddragonId?: string
+  /** Riot class tags (Fighter, Mage, ...). */
+  tags?: string[]
+  /** Lanes the champion is played in: top, jungle, mid, adc, support. */
+  lanes?: string[]
 }

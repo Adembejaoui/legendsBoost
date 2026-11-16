@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect } from "@/lib/dashboard/role-routing";
 import AvailableOrdersClient from "./AvailableOrdersClient";
+import { hasBoosterAccess } from "@/lib/boosters/status";
 
 export default async function AvailableOrdersPage() {
   const ctx = await getDashboardContext({ includeBoosterProfile: true });
@@ -48,7 +49,7 @@ export default async function AvailableOrdersPage() {
     });
     redirect("/login");
   }
-  if (!ctx.boosterProfile || ctx.boosterProfile.verificationStatus !== "APPROVED") {
+  if (!ctx.boosterProfile || !hasBoosterAccess(ctx.boosterProfile.verificationStatus)) {
     devLogRedirect({
       from: "/dashboard/booster/available-orders",
       to: "/dashboard/booster",
@@ -59,18 +60,18 @@ export default async function AvailableOrdersPage() {
     redirect("/dashboard/booster");
   }
 
-  const { getAvailableOrders } = await import("@/lib/assignments/service");
-  const orders = await getAvailableOrders();
+  const { getPoolForBooster } = await import("@/lib/pool/service");
+  const pool = await getPoolForBooster(user.id);
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Available Orders</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Browse and claim orders from the marketplace
+          Bid on orders (lowest bid wins) or claim one now. Amounts shown are your payout.
         </p>
       </div>
-      <AvailableOrdersClient initialOrders={orders as any} />
+      <AvailableOrdersClient initialOrders={pool.orders} blockedReason={pool.blockedReason} />
     </div>
   );
 }

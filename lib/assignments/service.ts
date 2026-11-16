@@ -2,33 +2,97 @@
  * Assignment service - handles all booster assignment operations with
  * transactions, concurrency control, and business logic.
  *
- * Simplified order lifecycle:
- *   PENDING --(claim)--> IN_PROGRESS --(pause)--> PAUSED --(resume)--> IN_PROGRESS
- *   IN_PROGRESS/PAUSED --(complete)--> COMPLETED
- *   IN_PROGRESS/PAUSED --(cancel)--> CANCELLED
+ * Order lifecycle:
+ *   PENDING --(bid won / claim now / priority / preferred, lib/pool)--> CLAIMED
+ *   CLAIMED --(booster starts)--> IN_PROGRESS
+ *   IN_PROGRESS --(customer pauses)--> PAUSED --(customer resumes)--> IN_PROGRESS
+ *   IN_PROGRESS --(booster completes)--> COMPLETED
+ *   IN_PROGRESS --(booster abandons)--> DRAFT (admin review)
+ *   IN_PROGRESS/PAUSED --(admin cancels / releases / reassigns)--> ...
+ *
+ * Boosters have exactly three actions: claim, complete, abandon. A paused
+ * order blocks complete and abandon.
  *
  * Claiming an order moves it straight to IN_PROGRESS: there is no separate
  * accept/start step. Paused assignments stay active (activeOrderId is kept)
  * so a paused order is never shown as available to another booster.
+ *
+ * Payment gate: an order is listed/claimable only when it is PENDING *and*
+ * has a verified payment (Order.paymentVerifiedAt, see
+ * lib/orders/payment-gate.ts). Boosters cannot cancel orders; they abandon.
  */
 import prisma from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+import { getConfigIn } from "@/lib/config";
 import {
   ACTIVE_ASSIGNMENT_STATUSES,
   type ActiveAssignmentStatus,
   AssignmentStatus,
+  BoosterCancellationForbiddenError,
   BoosterNotEligibleError,
   canOrderTransition,
   canTransition,
   NotBoosterOwnerError,
+  NotOrderOwnerError,
   OrderAlreadyClaimedError,
+  OrderStateConflictError,
   OrderNotClaimableError,
   OrderNotFoundError,
   validateAssignmentTransition,
   validateOrderTransition,
 } from "./types";
 import { Prisma } from "@/app/generated/prisma/client";
+import { createNotificationsForEvent } from "@/lib/notifications/service";
+import { revokeOrderAccess, broadcastToOrder } from "@/lib/realtime/broadcast";
+import { hasVerifiedPayment, VERIFIED_PAYMENT_WHERE } from "@/lib/orders/payment-gate";
+import { allocateOnCompletion } from "@/lib/finance/earnings";
+import { dispatchOutbox } from "@/lib/payments/outbox";
+import { transitionOrder } from "@/lib/orders/transitions";
+import { canClaimNewOrders, hasBoosterAccess } from "@/lib/boosters/status";
 
-export async function verifyBoosterEligibility(userId: string) {
+/**
+ * purpose "work": access existing orders (APPROVED, TRIAL, ON_BREAK).
+ * purpose "claim": take a NEW order (APPROVED, or TRIAL with trial orders
+ * left); see lib/boosters/status.ts.
+ */
+/** Live: the order pool changed (best effort, after commit). */
+async function livePool(reason: "added" | "removed") {
+  const { signalPool } = await import("@/lib/realtime/live");
+  await signalPool(reason);
+}
+
+/**
+ * If the leaving booster ever viewed the customer's login, record that the
+ * customer should change their password. Best effort.
+ */
+async function adviseLoginChange(orderId: string, boosterId: string) {
+  try {
+    const viewed = await prisma.orderCredentialReveal.count({ where: { orderId, boosterId } });
+    if (viewed > 0) {
+      await prisma.orderEvent.create({
+        data: { orderId, type: "PASSWORD_CHANGE_ADVISED", message: "The previous booster viewed the login: the customer should change the password", metadata: { boosterId } },
+      });
+    }
+  } catch (e) {
+    logger.warn("Login change advice failed", { orderId, error: e instanceof Error ? e.message : "unknown" });
+  }
+}
+
+/**
+ * Close the order's open play sessions after a pause / completion / release
+ * committed. Best effort: access never depends on it (a session only counts
+ * while the order is IN_PROGRESS and held by the session's assignment).
+ */
+async function closeSessions(orderId: string, reason: "PAUSED" | "COMPLETED" | "RELEASED" | "CANCELLED") {
+  try {
+    const { endOpenSessions } = await import("@/lib/orders/sessions.service");
+    await endOpenSessions(prisma, orderId, reason);
+  } catch (e) {
+    logger.warn("Closing sessions failed", { orderId, error: e instanceof Error ? e.message : "unknown" });
+  }
+}
+
+export async function verifyBoosterEligibility(userId: string, purpose: "work" | "claim" = "work") {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { boosterProfile: true },
@@ -46,17 +110,33 @@ export async function verifyBoosterEligibility(userId: string) {
     throw new BoosterNotEligibleError("Booster profile not found");
   }
 
-  if (user.boosterProfile.verificationStatus !== "APPROVED") {
+  const status = user.boosterProfile.verificationStatus;
+  if (!hasBoosterAccess(status)) {
     throw new BoosterNotEligibleError(
       "Booster is not approved. Pending, rejected or suspended boosters cannot claim orders."
+    );
+  }
+  if (purpose === "claim" && !canClaimNewOrders(status, user.boosterProfile.trialOrdersRemaining)) {
+    throw new BoosterNotEligibleError(
+      status === "ON_BREAK"
+        ? "You are on a break. End your break to take new orders."
+        : "Your trial orders are used up. An admin will review your trial before you can take more."
     );
   }
 
   return { user, boosterProfile: user.boosterProfile };
 }
 
-export function isOrderClaimable(order: { status: string; assignments?: unknown[] }): boolean {
+export function isOrderClaimable(order: {
+  status: string;
+  assignments?: unknown[];
+  paymentVerifiedAt?: Date | string | null;
+}): boolean {
   if (order.status !== "PENDING") {
+    return false;
+  }
+  // PENDING alone never means paid: a verified payment is required.
+  if (!hasVerifiedPayment(order)) {
     return false;
   }
   if (order.assignments && order.assignments.length > 0) {
@@ -74,6 +154,8 @@ export async function getAvailableOrders(filters?: {
 }) {
   const where: any = {
     status: "PENDING",
+    // Explicitly exclude unpaid orders (paymentVerifiedAt IS NULL).
+    ...VERIFIED_PAYMENT_WHERE,
     assignments: {
       none: {
         status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
@@ -110,7 +192,7 @@ export async function getBoosterAssignments(
   boosterId: string,
   filter?: "active" | "all" | "history"
 ) {
-  let where: any = {
+  const where: any = {
     boosterId,
   };
 
@@ -120,10 +202,14 @@ export async function getBoosterAssignments(
     where.status = { in: ["COMPLETED", "DECLINED", "CANCELLED", "RELEASED"] };
   }
 
+  // Only what the booster pages show: plain values (no Decimal), and never
+  // the customer price or any customer detail.
   const assignments = await prisma.orderBoosterAssignment.findMany({
     where,
     include: {
-      order: true,
+      order: {
+        select: { id: true, gameSlug: true, serviceSlug: true, configuration: true, selectedMode: true, status: true, createdAt: true },
+      },
     },
     orderBy: {
       assignedAt: "desc",
@@ -141,7 +227,10 @@ type OrderAndAssignment = {
 async function loadAssignmentAndOrder(
   tx: Prisma.TransactionClient,
   assignmentId: string
-): Promise<{ assignment: any; order: any } | null> {
+): Promise<{
+  assignment: any;
+  order: { id: string; status: string; userId: string; paymentVerifiedAt: Date | null };
+} | null> {
   const assignment = await tx.orderBoosterAssignment.findUnique({
     where: { id: assignmentId },
     include: { order: true },
@@ -165,188 +254,214 @@ function assertAssignmentAccess(
   }
 }
 
+/**
+ * Take an order now (claim now / priority / preferred booster): see
+ * lib/pool/service.ts `claimNow`. The order becomes CLAIMED and the
+ * assignment ASSIGNED; the booster then starts it with `startAssignment`.
+ */
 export async function claimOrder(orderId: string, boosterId: string) {
-  await verifyBoosterEligibility(boosterId);
+  await verifyBoosterEligibility(boosterId, "claim");
+  const { claimNow } = await import("@/lib/pool/service");
+  const result = await claimNow(boosterId, orderId);
+  return { assignment: result.assignment, order: result.order };
+}
 
+/**
+ * The assigned booster starts a CLAIMED order: order -> IN_PROGRESS,
+ * assignment ASSIGNED -> IN_PROGRESS (startedAt). Conditional on both rows;
+ * a repeat (double click) is a no-op.
+ */
+export async function startAssignment(orderId: string, boosterId: string) {
+  await verifyBoosterEligibility(boosterId, "work");
+  const result = await prisma.$transaction(async (tx) => {
+    const assignment = await tx.orderBoosterAssignment.findFirst({
+      where: { orderId, boosterId, activeOrderId: orderId, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } },
+    });
+    if (!assignment) throw new NotBoosterOwnerError();
+    const order = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, userId: true, status: true } });
+    if (!order) throw new OrderNotFoundError(orderId);
+    if (assignment.status === "IN_PROGRESS" && order.status === "IN_PROGRESS") return { changed: false as const, order, assignment };
+    if (assignment.status !== "ASSIGNED" || order.status !== "CLAIMED") {
+      throw new OrderStateConflictError(`order is ${order.status}; only a claimed order can be started`);
+    }
+    const now = new Date();
+    const updated = await tx.orderBoosterAssignment.update({
+      where: { id: assignment.id, status: "ASSIGNED" },
+      data: { status: "IN_PROGRESS", startedAt: now, acceptedAt: assignment.acceptedAt ?? now },
+    });
+    const updatedOrder = await transitionOrder(tx, { where: { id: orderId, status: "CLAIMED" }, to: "IN_PROGRESS" });
+    await tx.orderEvent.create({
+      data: { orderId, type: "WORK_STARTED", message: "Work started", metadata: { assignmentId: assignment.id, boosterId } },
+    });
+    return { changed: true as const, order: updatedOrder, assignment: updated };
+  });
+  if (result.changed) {
+    await createNotificationsForEvent({ type: "ORDER_STARTED", orderId, assignmentId: result.assignment.id, actorId: boosterId });
+    await broadcastToOrder({
+      orderId,
+      event: "order.started",
+      payload: {
+        orderId,
+        customerId: result.order.userId,
+        boosterId,
+        assignmentId: result.assignment.id,
+        startedAt: result.assignment.startedAt?.toISOString() ?? new Date().toISOString(),
+      },
+    });
+  }
+  return result;
+}
+
+/**
+ * Customer pause / resume.
+ *
+ * Only the customer who owns the order may pause or resume it; boosters and
+ * admins cannot. The assignment stays active and keeps activeOrderId, so the
+ * order stays with its booster and is never listed as available. Nothing
+ * financial is touched (no refund, no ledger entry, no earning change), and
+ * rank progress / match history are preserved: the ORDER_PAUSED /
+ * ORDER_RESUMED events written here are what match attribution uses to
+ * exclude paused time (see buildWorkWindows).
+ *
+ * Concurrency: the order and the assignment are updated with conditional
+ * writes inside one transaction. If another request changed either row
+ * first, the transaction rolls back with OrderStateConflictError. A repeat of
+ * a request that already succeeded (double click, retry) is a no-op that
+ * reports `changed: false` and sends nothing.
+ */
+export type CustomerOrderControl = "pause" | "resume";
+
+const CUSTOMER_CONTROL = {
+  pause: {
+    from: "IN_PROGRESS",
+    to: "PAUSED",
+    event: "ORDER_PAUSED",
+    message: "Order paused by the customer",
+    notification: "ORDER_PAUSED_BY_CUSTOMER",
+  },
+  resume: {
+    from: "PAUSED",
+    to: "IN_PROGRESS",
+    event: "ORDER_RESUMED",
+    message: "Order resumed by the customer",
+    notification: "ORDER_RESUMED_BY_CUSTOMER",
+  },
+} as const;
+
+const CONCURRENT_CHANGE = "The order changed while you were updating it. Refresh and try again.";
+
+function isPrismaCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
+type ControlTxResult =
+  | { changed: false }
+  | { changed: true; assignmentId: string; boosterId: string; eventId: string; at: Date };
+
+export async function setCustomerOrderPaused(
+  orderId: string,
+  customerId: string,
+  action: CustomerOrderControl
+): Promise<{ changed: boolean; status: "PAUSED" | "IN_PROGRESS" }> {
+  const c = CUSTOMER_CONTROL[action];
+
+  let result: ControlTxResult;
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const activeAssignment = await tx.orderBoosterAssignment.findFirst({
-        where: {
-          orderId,
-          status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
-        },
-      });
-
-      if (activeAssignment) {
-        throw new OrderAlreadyClaimedError();
-      }
-
+    result = await prisma.$transaction(async (tx): Promise<ControlTxResult> => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
+        select: { id: true, userId: true, status: true },
       });
+      // Same answer for "missing" and "not yours": never disclose other orders.
+      if (!order || order.userId !== customerId) throw new NotOrderOwnerError();
 
-      if (!order) {
-        throw new OrderNotFoundError(orderId);
-      }
-
-      if (order.status !== "PENDING") {
-        throw new OrderNotClaimableError(
-          `order is ${order.status}, expected PENDING`
+      if (order.status === c.to) return { changed: false };
+      if (order.status !== c.from) {
+        throw new OrderStateConflictError(
+          action === "pause"
+            ? "Only an order that is in progress can be paused."
+            : "Only a paused order can be resumed."
         );
       }
 
-      const assignment = await tx.orderBoosterAssignment.create({
+      const assignment = await tx.orderBoosterAssignment.findFirst({
+        where: { orderId, activeOrderId: orderId, status: c.from },
+        select: { id: true, boosterId: true },
+      });
+      if (!assignment) {
+        throw new OrderStateConflictError("This order has no booster working on it.");
+      }
+
+      // Conditional writes: a concurrent change makes one of them match
+      // nothing, which rolls the whole transaction back.
+      const updated = await tx.orderBoosterAssignment.updateMany({
+        where: { id: assignment.id, status: c.from, activeOrderId: orderId },
+        data: { status: c.to },
+      });
+      if (updated.count !== 1) throw new OrderStateConflictError(CONCURRENT_CHANGE);
+      await transitionOrder(tx, {
+        where: { id: orderId, userId: customerId, status: c.from },
+        to: c.to,
+      });
+
+      const at = new Date();
+      // Operational history (not a financial record). Also the pause-window
+      // source for match attribution.
+      const event = await tx.orderEvent.create({
         data: {
           orderId,
-          boosterId,
-          assignedById: boosterId,
-          status: "IN_PROGRESS",
-          activeOrderId: orderId,
-          startedAt: new Date(),
+          type: c.event,
+          message: c.message,
+          metadata: { assignmentId: assignment.id, actorUserId: customerId, actorRole: "CUSTOMER" },
+          createdAt: at,
         },
       });
-
-      const updatedOrder = await tx.order.update({
-        where: { id: orderId, status: "PENDING" },
-        data: { status: "IN_PROGRESS" },
-      });
-
-      await tx.orderEvent.create({
-        data: {
-          orderId,
-          type: "ORDER_CLAIMED",
-          message: "Order claimed by booster",
-          metadata: { assignmentId: assignment.id, boosterId },
-        },
-      });
-
-      return { assignment, order: updatedOrder };
+      return { changed: true, assignmentId: assignment.id, boosterId: assignment.boosterId, eventId: event.id, at };
     });
-
-    return result;
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "P2002"
-    ) {
-      throw new OrderAlreadyClaimedError();
-    }
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "P2025"
-    ) {
-      throw new OrderNotClaimableError("order was claimed by another booster");
-    }
+    if (isPrismaCode(error, "P2025")) throw new OrderStateConflictError(CONCURRENT_CHANGE);
     throw error;
   }
-}
 
-export async function pauseAssignment(
-  assignmentId: string,
-  userId: string,
-  userRole: string | null | undefined
-) {
-  const isAdmin = userRole === "ADMIN";
-  if (!isAdmin) {
-    await verifyBoosterEligibility(userId);
+  if (!result.changed) return { changed: false, status: c.to };
+
+  // Tell the booster immediately: persistent notification (+ user-channel
+  // broadcast) and an order-channel status change that open workspaces use
+  // to refresh. Failures here never undo the committed state change.
+  try {
+    await createNotificationsForEvent({
+      type: c.notification,
+      orderId,
+      assignmentId: result.assignmentId,
+      actorId: customerId,
+      dedupeKey: `${c.event}:${result.eventId}`,
+    });
+  } catch (e) {
+    console.error(`[orders] ${c.event} notification failed`, {
+      orderId,
+      error: e instanceof Error ? e.message : String(e),
+    });
   }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const loaded = await loadAssignmentAndOrder(tx, assignmentId);
-    if (!loaded) {
-      throw new Error("Assignment not found");
-    }
-
-    const { assignment, order } = loaded;
-    assertAssignmentAccess(assignment, userId, userRole);
-
-    if (assignment.status !== "IN_PROGRESS") {
-      throw new Error(
-        `Cannot pause assignment in status ${assignment.status}`
-      );
-    }
-    if (order.status !== "IN_PROGRESS") {
-      throw new Error(`Cannot pause order in status ${order.status}`);
-    }
-
-    const updated = await tx.orderBoosterAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "PAUSED" },
-    });
-
-    await tx.order.update({
-      where: { id: order.id, status: "IN_PROGRESS" },
-      data: { status: "PAUSED" },
-    });
-
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "ORDER_PAUSED",
-        message: "Order paused by booster",
-        metadata: { assignmentId },
-      },
-    });
-
-    return updated;
+  await broadcastToOrder({
+    orderId,
+    event: "order.status_changed",
+    payload: {
+      orderId,
+      customerId,
+      boosterId: result.boosterId,
+      previousStatus: c.from,
+      newStatus: c.to,
+      changedAt: result.at.toISOString(),
+    },
   });
 
-  return result;
-}
-
-export async function resumeAssignment(
-  assignmentId: string,
-  userId: string,
-  userRole: string | null | undefined
-) {
-  const isAdmin = userRole === "ADMIN";
-  if (!isAdmin) {
-    await verifyBoosterEligibility(userId);
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const loaded = await loadAssignmentAndOrder(tx, assignmentId);
-    if (!loaded) {
-      throw new Error("Assignment not found");
-    }
-
-    const { assignment, order } = loaded;
-    assertAssignmentAccess(assignment, userId, userRole);
-
-    if (assignment.status !== "PAUSED") {
-      throw new Error(
-        `Cannot resume assignment in status ${assignment.status}`
-      );
-    }
-    if (order.status !== "PAUSED") {
-      throw new Error(`Cannot resume order in status ${order.status}`);
-    }
-
-    const updated = await tx.orderBoosterAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "IN_PROGRESS" },
-    });
-
-    await tx.order.update({
-      where: { id: order.id, status: "PAUSED" },
-      data: { status: "IN_PROGRESS" },
-    });
-
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "ORDER_RESUMED",
-        message: "Order resumed by booster",
-        metadata: { assignmentId },
-      },
-    });
-
-    return updated;
-  });
-
-  return result;
+  if (c.to === "PAUSED") await closeSessions(orderId, "PAUSED");
+  return { changed: true, status: c.to };
 }
 
 export async function completeAssignment(
@@ -357,6 +472,8 @@ export async function completeAssignment(
   const isAdmin = userRole === "ADMIN";
   if (!isAdmin) {
     await verifyBoosterEligibility(userId);
+    const { assertBoosterCompletionConfirmed } = await import("@/lib/orders/completion-check");
+    await assertBoosterCompletionConfirmed(assignmentId, userId);
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -368,6 +485,11 @@ export async function completeAssignment(
     const { assignment, order } = loaded;
     assertAssignmentAccess(assignment, userId, userRole);
 
+    if (order.status === "PAUSED" || assignment.status === "PAUSED") {
+      throw new OrderStateConflictError(
+        "This order is paused by the customer and cannot be completed until it is resumed."
+      );
+    }
     if (!canTransition(assignment.status as AssignmentStatus, "COMPLETED")) {
       throw new Error(
         `Cannot transition assignment from ${assignment.status} to COMPLETED`
@@ -379,21 +501,44 @@ export async function completeAssignment(
       );
     }
 
+    const boosterId = assignment.boosterId;
+    const completedAt = new Date();
+
     const updated = await tx.orderBoosterAssignment.update({
       where: { id: assignmentId },
       data: {
         status: "COMPLETED",
-        endedAt: new Date(),
+        endedAt: completedAt,
         endReason: "Completed by booster",
         activeOrderId: null,
       },
     });
 
-    await tx.order.update({
-      where: { id: order.id, status: { in: ["IN_PROGRESS", "PAUSED"] } },
-      data: { status: "COMPLETED" },
+    // Conditional update: if a concurrent request already completed the
+    // order this throws P2025 and the whole transaction rolls back, so the
+    // completion (and its notifications) can only happen once.
+    await transitionOrder(tx, {
+      where: { id: order.id, status: "IN_PROGRESS" },
+      to: "COMPLETED",
+      data: { completedAt },
     });
 
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "ORDER_COMPLETED",
+        message: "Order completed",
+        metadata: { assignmentId },
+      },
+    });
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "COMPLETION_SUBMITTED",
+        message: "Completion submitted",
+        metadata: { assignmentId },
+      },
+    });
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
@@ -403,9 +548,54 @@ export async function completeAssignment(
       },
     });
 
-    return updated;
+    // Same transaction: attribute the reserved 55% booster share. Single
+    // contributor -> that booster (PENDING, awaits admin release); several
+    // contributors -> PENDING_REVIEW for an admin allocation. No-op for
+    // unpaid / legacy orders.
+    await allocateOnCompletion(tx, order.id, assignmentId);
+
+    return { assignment: updated, order, boosterId, completedAt };
+  });
+  await dispatchOutbox({ limit: 5 });
+
+  // Revoke the booster's socket access to the order room
+  await revokeOrderAccess({ userId: result.boosterId, orderId: result.order.id });
+
+  // Customer, the completing booster and admins. The dedupe key guarantees a
+  // single completion notification per recipient even if this is retried.
+  await createNotificationsForEvent({
+    type: "ORDER_COMPLETED",
+    orderId: result.order.id,
+    assignmentId,
+    actorId: userId,
+    dedupeKey: `ORDER_COMPLETED:${result.order.id}`,
   });
 
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.completed",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      boosterId: result.boosterId,
+      assignmentId,
+      completedAt: result.completedAt.toISOString(),
+    },
+  });
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.status_changed",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      boosterId: result.boosterId,
+      previousStatus: result.order.status,
+      newStatus: "COMPLETED",
+      changedAt: result.completedAt.toISOString(),
+    },
+  });
+
+  await closeSessions(result.order.id, "COMPLETED");
   return result;
 }
 
@@ -415,9 +605,10 @@ export async function cancelAssignment(
   userRole: string | null | undefined,
   reason?: string
 ) {
-  const isAdmin = userRole === "ADMIN";
-  if (!isAdmin) {
-    await verifyBoosterEligibility(userId);
+  // Cancelling the customer's whole order is an admin decision. A booster who
+  // can no longer work on an order must abandon it (-> DRAFT, admin review).
+  if (userRole !== "ADMIN") {
+    throw new BoosterCancellationForbiddenError();
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -429,11 +620,13 @@ export async function cancelAssignment(
     const { assignment, order } = loaded;
     assertAssignmentAccess(assignment, userId, userRole);
 
-    if (!["IN_PROGRESS", "PAUSED"].includes(assignment.status)) {
+    if (!["IN_PROGRESS", "PAUSED", "ASSIGNED", "ACCEPTED"].includes(assignment.status)) {
       throw new Error(
         `Cannot cancel assignment in status ${assignment.status}`
       );
     }
+
+    const boosterId = assignment.boosterId;
 
     const updated = await tx.orderBoosterAssignment.update({
       where: { id: assignmentId },
@@ -445,11 +638,19 @@ export async function cancelAssignment(
       },
     });
 
-    await tx.order.update({
-      where: { id: order.id, status: { in: ["IN_PROGRESS", "PAUSED"] } },
-      data: { status: "CANCELLED" },
+    await transitionOrder(tx, {
+      where: { id: order.id, status: { in: ["CLAIMED", "IN_PROGRESS", "PAUSED"] } },
+      to: "CANCELLED",
     });
 
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "ORDER_CANCELLED",
+        message: reason || "Order cancelled",
+        metadata: { assignmentId },
+      },
+    });
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
@@ -459,9 +660,45 @@ export async function cancelAssignment(
       },
     });
 
-    return updated;
+    return { assignment: updated, order, boosterId };
   });
 
+  // Revoke the booster's real-time access to the order room
+  await revokeOrderAccess({ userId: result.boosterId, orderId: result.order.id });
+
+  await createNotificationsForEvent({
+    type: "ORDER_CANCELLED",
+    orderId: result.order.id,
+    assignmentId,
+    actorId: userId,
+  });
+
+    await broadcastToOrder({
+      orderId: result.order.id,
+      event: "order.cancelled",
+      payload: {
+        orderId: result.order.id,
+        customerId: result.order.userId,
+        boosterId: result.boosterId,
+        assignmentId,
+        reason: reason || "Cancelled",
+        cancelledAt: new Date().toISOString(),
+      },
+    });
+    await broadcastToOrder({
+      orderId: result.order.id,
+      event: "order.status_changed",
+      payload: {
+        orderId: result.order.id,
+        customerId: result.order.userId,
+        boosterId: result.boosterId,
+        previousStatus: result.order.status,
+        newStatus: "CANCELLED",
+        changedAt: new Date().toISOString(),
+      },
+    });
+
+  await closeSessions(result.order.id, "CANCELLED");
   return result;
 }
 
@@ -473,7 +710,9 @@ export async function releaseAssignment(
 ) {
   const isAdmin = userRole === "ADMIN";
   if (!isAdmin) {
-    await verifyBoosterEligibility(userId);
+    // A booster dropping an order they hold is an abandonment: the order must
+    // go to DRAFT for admin review, never straight back to the marketplace.
+    return abandonOrder(assignmentId, userId, reason);
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -491,88 +730,272 @@ export async function releaseAssignment(
       );
     }
 
+    const boosterId = assignment.boosterId;
+    // Only a paid order may go back to the marketplace (PENDING). An unpaid
+    // one goes to DRAFT for admin review instead, so a release can never
+    // make an unpaid order look published.
+    const paid = hasVerifiedPayment(order);
+    const nextStatus = paid ? "PENDING" : "DRAFT";
+
     const updated = await tx.orderBoosterAssignment.update({
       where: { id: assignmentId },
       data: {
         status: "RELEASED",
         endedAt: new Date(),
-        endReason: reason || "Released by booster",
+        endReason: reason || "Released by admin",
         activeOrderId: null,
       },
     });
+    // A margin kept on this booster's payout goes back into the booster share.
+    const { restoreBidMargin } = await import("@/lib/pool/service");
+    await restoreBidMargin(tx, order.id, assignmentId);
 
-    await tx.order.update({
-      where: { id: order.id, status: { in: ["IN_PROGRESS", "PAUSED"] } },
-      data: { status: "PENDING" },
+    await transitionOrder(tx, {
+      where: {
+        id: order.id,
+        status: { in: ["CLAIMED", "IN_PROGRESS", "PAUSED"] },
+        ...(paid ? VERIFIED_PAYMENT_WHERE : { paymentVerifiedAt: null }),
+      },
+      to: nextStatus,
     });
 
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
         type: "ASSIGNMENT_RELEASED",
-        message: reason || "Assignment released by booster",
-        metadata: { assignmentId },
+        message: reason || "Assignment released by admin",
+        metadata: { assignmentId, boosterId, actorUserId: userId, reason: reason ?? null, nextStatus },
       },
     });
+    if (nextStatus === "DRAFT") {
+      await tx.orderEvent.create({
+        data: {
+          orderId: order.id,
+          type: "ORDER_MOVED_TO_DRAFT",
+          message: "Released by admin without a verified payment; moved to draft for review",
+          metadata: { assignmentId, actorUserId: userId },
+        },
+      });
+    }
 
-    return updated;
+    return { assignment: updated, order, boosterId, nextStatus };
   });
 
+  // Revoke the previous booster's real-time access to the order room
+      await revokeOrderAccess({ userId: result.boosterId, orderId: result.order.id });
+
+  await createNotificationsForEvent({
+    type: "BOOSTER_REMOVED",
+    orderId: result.order.id,
+    assignmentId,
+    actorId: userId,
+  });
+  if (result.nextStatus === "PENDING") {
+    await createNotificationsForEvent({
+      type: "ORDER_REOPENED",
+      orderId: result.order.id,
+      assignmentId,
+      actorId: userId,
+    });
+    await livePool("added");
+  }
+
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.status_changed",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      boosterId: result.boosterId,
+      previousStatus: result.order.status,
+      newStatus: result.nextStatus,
+      changedAt: new Date().toISOString(),
+    },
+  });
+
+  await closeSessions(result.order.id, "RELEASED");
   return result;
 }
 
-// Legacy accept/start steps retained for historical compatibility but no
-// longer part of the claim flow. Claiming now starts work immediately.
-export async function declineAssignment(
+/**
+ * Reassign an order from one booster to another (admin only).
+ * This revokes the previous booster's access and assigns a new booster.
+ */
+export async function reassignOrder(
+  orderId: string,
+  newBoosterId: string,
+  adminId: string,
+  reason?: string
+) {
+  // Verify admin role
+  const admin = await prisma.user.findUnique({
+    where: { id: adminId },
+    select: { role: true },
+  });
+  if (!admin || admin.role !== "ADMIN") {
+    throw new Error("Only admins can reassign orders");
+  }
+
+  // Verify new booster eligibility
+  await verifyBoosterEligibility(newBoosterId, "claim");
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Find the current active assignment
+    const currentAssignment = await tx.orderBoosterAssignment.findFirst({
+      where: {
+        orderId,
+        status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
+      },
+    });
+
+    if (!currentAssignment) {
+      throw new Error("No active assignment found for this order");
+    }
+
+    const previousBoosterId = currentAssignment.boosterId;
+
+    // Release the current assignment
+    await tx.orderBoosterAssignment.update({
+      where: { id: currentAssignment.id },
+      data: {
+        status: "RELEASED",
+        endedAt: new Date(),
+        endReason: reason || `Reassigned by admin`,
+        activeOrderId: null,
+      },
+    });
+
+    // Create new assignment for the new booster. A claimed order that was
+    // not started stays CLAIMED: the new booster starts it themself.
+    const notStarted = currentAssignment.status === "ASSIGNED" || currentAssignment.status === "ACCEPTED";
+    const newAssignment = await tx.orderBoosterAssignment.create({
+      data: {
+        orderId,
+        boosterId: newBoosterId,
+        assignedById: adminId,
+        status: notStarted ? "ASSIGNED" : "IN_PROGRESS",
+        activeOrderId: orderId,
+        startedAt: notStarted ? null : new Date(),
+        awardMode: "ADMIN",
+        payoutAmount: currentAssignment.payoutAmount ?? null,
+      },
+    });
+
+    // Conditional (previously unconditional): only a live order with a
+    // verified payment may be handed to another booster.
+    await transitionOrder(tx, {
+      where: { id: orderId, status: { in: notStarted ? ["CLAIMED"] : ["IN_PROGRESS", "PAUSED"] }, ...VERIFIED_PAYMENT_WHERE },
+      to: notStarted ? "CLAIMED" : "IN_PROGRESS",
+    });
+
+    // Record events
+    await tx.orderEvent.create({
+      data: {
+        orderId,
+        type: "ASSIGNMENT_RELEASED",
+        message: `Reassigned by admin: ${reason || "No reason provided"}`,
+        metadata: { assignmentId: currentAssignment.id, previousBoosterId, newBoosterId },
+      },
+    });
+    await tx.orderEvent.create({
+      data: {
+        orderId,
+        type: "BOOSTER_ASSIGNED",
+        message: "Booster assigned to order",
+        metadata: { assignmentId: newAssignment.id, boosterId: newBoosterId },
+      },
+    });
+    await tx.orderEvent.create({
+      data: {
+        orderId,
+        type: "WORK_STARTED",
+        message: "Work started",
+        metadata: { assignmentId: newAssignment.id, boosterId: newBoosterId },
+      },
+    });
+
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+    });
+
+    return { previousBoosterId, newBoosterId, assignment: newAssignment, order: order! };
+  });
+
+  // Revoke the previous booster's real-time access
+  await revokeOrderAccess({ userId: result.previousBoosterId, orderId: result.order.id });
+
+  // Send notifications
+  await Promise.all([
+    createNotificationsForEvent({
+      type: "BOOSTER_REASSIGNED",
+      orderId: result.order.id,
+      assignmentId: result.assignment.id,
+      actorId: adminId,
+      metadata: {
+        previousBoosterId: result.previousBoosterId,
+        newBoosterId: result.newBoosterId,
+      },
+    }),
+    createNotificationsForEvent({
+      type: "ORDER_STARTED",
+      orderId: result.order.id,
+      assignmentId: result.assignment.id,
+      actorId: adminId,
+    }),
+  ]);
+
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.reassigned",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      previousBoosterId: result.previousBoosterId,
+      newBoosterId: result.newBoosterId,
+      assignedById: adminId,
+      assignmentId: result.assignment.id,
+      status: result.order.status,
+      assignedAt: new Date().toISOString(),
+      reason,
+    },
+  });
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.started",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      boosterId: result.newBoosterId,
+      assignmentId: result.assignment.id,
+      startedAt: new Date().toISOString(),
+    },
+  });
+
+  await closeSessions(orderId, "RELEASED");
+  return result;
+}
+
+/**
+ * Booster abandons an order they are assigned to.
+ *
+ *  1. Only the assigned (approved) booster may abandon.
+ *  2. The assignment is ended (RELEASED, endReason "ABANDONED: ...") and its
+ *     activeOrderId cleared, so the booster loses access and the order no
+ *     longer counts as an active booster order.
+ *  3. The order moves to DRAFT. DRAFT is not claimable and is not listed in
+ *     the marketplace; only an admin can edit and republish it.
+ *  4. History (events, messages, matches) is preserved. Admins are notified.
+ */
+export const ABANDON_REASON_MAX_LENGTH = 500;
+
+export async function abandonOrder(
   assignmentId: string,
   boosterId: string,
   reason?: string
 ) {
   await verifyBoosterEligibility(boosterId);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const loaded = await loadAssignmentAndOrder(tx, assignmentId);
-    if (!loaded) {
-      throw new Error("Assignment not found");
-    }
-
-    const { assignment, order } = loaded;
-    if (assignment.boosterId !== boosterId) {
-      throw new NotBoosterOwnerError();
-    }
-
-    if (!canTransition(assignment.status as AssignmentStatus, "DECLINED")) {
-      throw new Error(
-        `Cannot transition from ${assignment.status} to DECLINED`
-      );
-    }
-
-    const updated = await tx.orderBoosterAssignment.update({
-      where: { id: assignmentId },
-      data: {
-        status: "DECLINED",
-        endedAt: new Date(),
-        endReason: reason || "Declined by booster",
-      },
-    });
-
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "ASSIGNMENT_DECLINED",
-        message: reason || "Assignment declined by booster",
-        metadata: { assignmentId },
-      },
-    });
-
-    return updated;
-  });
-
-  return result;
-}
-
-export async function acceptAssignment(assignmentId: string, boosterId: string) {
-  await verifyBoosterEligibility(boosterId);
+  const cleanReason = reason?.trim().slice(0, ABANDON_REASON_MAX_LENGTH) || null;
 
   const result = await prisma.$transaction(async (tx) => {
     const loaded = await loadAssignmentAndOrder(tx, assignmentId);
@@ -585,78 +1008,142 @@ export async function acceptAssignment(assignmentId: string, boosterId: string) 
       throw new NotBoosterOwnerError();
     }
 
-    if (!canTransition(assignment.status as AssignmentStatus, "ACCEPTED")) {
+    // A customer pause must be respected: the booster can neither keep
+    // working on nor drop a paused order. Admins can still release/reassign.
+    if (order.status === "PAUSED" || assignment.status === "PAUSED") {
+      throw new OrderStateConflictError(
+        "This order is paused by the customer and cannot be abandoned while paused. Contact support if you cannot continue."
+      );
+    }
+    if (!["IN_PROGRESS", "ASSIGNED", "ACCEPTED"].includes(assignment.status)) {
       throw new Error(
-        `Cannot transition from ${assignment.status} to ACCEPTED`
+        `Cannot abandon assignment in status ${assignment.status}`
       );
     }
 
+    // Phase 6: a release within the grace window, before starting, puts the
+    // order straight back in the pool with no strike. Otherwise: strike and
+    // DRAFT for admin review.
+    const graceMin = await getConfigIn(tx, "release_grace_min");
+    const assignedAt = assignment.assignedAt ? new Date(assignment.assignedAt).getTime() : NaN;
+    const inGrace =
+      (assignment.status === "ASSIGNED" || assignment.status === "ACCEPTED") &&
+      order.status === "CLAIMED" &&
+      hasVerifiedPayment(order) &&
+      Date.now() - assignedAt <= graceMin * 60_000;
+    validateOrderTransition(order.status, inGrace ? "PENDING" : "DRAFT");
+
+    const endedAt = new Date();
     const updated = await tx.orderBoosterAssignment.update({
       where: { id: assignmentId },
-      data: { status: "ACCEPTED", acceptedAt: new Date() },
+      data: {
+        status: "RELEASED",
+        endedAt,
+        endReason: inGrace ? "RELEASED_IN_GRACE" : `ABANDONED: ${cleanReason ?? "No reason given"}`,
+        activeOrderId: null,
+      },
     });
 
-    await tx.order.update({
-      where: { id: order.id, status: "PENDING" },
-      data: { status: "IN_PROGRESS" },
+    // A margin the platform kept on this booster's payout goes back into the booster share.
+    const { restoreBidMargin } = await import("@/lib/pool/service");
+    await restoreBidMargin(tx, order.id, assignmentId);
+
+    if (inGrace) {
+      await transitionOrder(tx, { where: { id: order.id, status: "CLAIMED", ...VERIFIED_PAYMENT_WHERE }, to: "PENDING" });
+      // A trial booster gets the trial order back.
+      if (assignment.awardMode) {
+        await tx.boosterProfile.updateMany({
+          where: { userId: boosterId, verificationStatus: "TRIAL" },
+          data: { trialOrdersRemaining: { increment: 1 } },
+        });
+      }
+      await tx.orderEvent.create({
+        data: {
+          orderId: order.id,
+          type: "BOOSTER_RELEASED_IN_GRACE",
+          message: "The booster released the order right after taking it; it is back in the pool",
+          metadata: { assignmentId, boosterId },
+        },
+      });
+      return { assignment: updated, order, endedAt, inGrace: true as const, strike: null };
+    }
+
+    await transitionOrder(tx, {
+      where: { id: order.id, status: { in: ["CLAIMED", "IN_PROGRESS"] } },
+      to: "DRAFT",
     });
+    const { addStrike } = await import("@/lib/boosters/discipline");
+    const strike = await addStrike(tx, { boosterId, orderId: order.id, code: "LATE_RELEASE", note: cleanReason });
 
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
-        type: "ASSIGNMENT_ACCEPTED",
-        message: "Assignment accepted by booster",
-        metadata: { assignmentId },
+        type: "BOOSTER_ABANDONED",
+        message: cleanReason ?? "Booster abandoned the order",
+        metadata: { assignmentId, boosterId, reason: cleanReason, previousStatus: order.status },
       },
     });
-
-    return updated;
-  });
-
-  return result;
-}
-
-export async function startAssignment(assignmentId: string, boosterId: string) {
-  await verifyBoosterEligibility(boosterId);
-
-  const result = await prisma.$transaction(async (tx) => {
-    const loaded = await loadAssignmentAndOrder(tx, assignmentId);
-    if (!loaded) {
-      throw new Error("Assignment not found");
-    }
-
-    const { assignment, order } = loaded;
-    if (assignment.boosterId !== boosterId) {
-      throw new NotBoosterOwnerError();
-    }
-
-    if (!canTransition(assignment.status as AssignmentStatus, "IN_PROGRESS")) {
-      throw new Error(
-        `Cannot transition from ${assignment.status} to IN_PROGRESS`
-      );
-    }
-
-    const updated = await tx.orderBoosterAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "IN_PROGRESS", startedAt: new Date() },
-    });
-
-    await tx.order.update({
-      where: { id: order.id },
-      data: { status: "IN_PROGRESS" },
-    });
-
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
-        type: "ASSIGNMENT_STARTED",
-        message: "Work started on assignment",
-        metadata: { assignmentId },
+        type: "ORDER_MOVED_TO_DRAFT",
+        message: "Order moved to draft for admin review",
+        metadata: { assignmentId, actorUserId: boosterId },
       },
     });
 
-    return updated;
+    return { assignment: updated, order, endedAt, inGrace: false as const, strike };
   });
 
+  // Revoke the booster's real-time access
+  await revokeOrderAccess({ userId: boosterId, orderId: result.order.id });
+  await adviseLoginChange(result.order.id, boosterId);
+
+  if (result.inGrace) {
+    await createNotificationsForEvent({ type: "ORDER_REOPENED", orderId: result.order.id, assignmentId, actorId: boosterId, dedupeKey: `ORDER_REOPENED:${assignmentId}` });
+    await broadcastToOrder({
+      orderId: result.order.id,
+      event: "order.status_changed",
+      payload: {
+        orderId: result.order.id,
+        customerId: result.order.userId,
+        boosterId,
+        previousStatus: result.order.status,
+        newStatus: "PENDING",
+        changedAt: result.endedAt.toISOString(),
+      },
+    });
+    await closeSessions(result.order.id, "RELEASED");
+    await livePool("added");
+    return result;
+  }
+  if (result.strike) {
+    const { notifyStrike } = await import("@/lib/boosters/discipline");
+    await notifyStrike(result.strike);
+  }
+
+  await createNotificationsForEvent({
+    type: "BOOSTER_ABANDONED",
+    orderId: result.order.id,
+    assignmentId,
+    actorId: boosterId,
+    metadata: cleanReason ? { reason: cleanReason } : undefined,
+    dedupeKey: `BOOSTER_ABANDONED:${assignmentId}`,
+  });
+
+  await broadcastToOrder({
+    orderId: result.order.id,
+    event: "order.status_changed",
+    payload: {
+      orderId: result.order.id,
+      customerId: result.order.userId,
+      boosterId,
+      previousStatus: result.order.status,
+      newStatus: "DRAFT",
+      changedAt: result.endedAt.toISOString(),
+    },
+  });
+
+  await closeSessions(result.order.id, "RELEASED");
   return result;
 }

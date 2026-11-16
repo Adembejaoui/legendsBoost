@@ -3,6 +3,7 @@ import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect } from "@/lib/dashboard/role-routing";
 import { display } from "@/lib/fonts";
 import ClaimedOrdersClient from "./ClaimedOrdersClient";
+import { hasBoosterAccess } from "@/lib/boosters/status";
 
 export default async function ClaimedOrdersPage() {
   const ctx = await getDashboardContext({ includeBoosterProfile: true });
@@ -49,7 +50,7 @@ export default async function ClaimedOrdersPage() {
     });
     redirect("/login");
   }
-  if (!ctx.boosterProfile || ctx.boosterProfile.verificationStatus !== "APPROVED") {
+  if (!ctx.boosterProfile || !hasBoosterAccess(ctx.boosterProfile.verificationStatus)) {
     devLogRedirect({
       from: "/dashboard/booster/claimed-orders",
       to: "/dashboard/booster",

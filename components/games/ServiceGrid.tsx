@@ -1,14 +1,16 @@
 import type { GameDefinition } from '@/types/catalog'
 import type { GameServiceOffer } from '@/types/catalog'
 import type { ServiceTemplate } from '@/types/catalog'
+import type { StorefrontService } from '@/lib/catalog/storefront-types'
 import { ServiceCard } from '@/components/games/ServiceCard'
 
 interface ServiceGridProps {
   game: GameDefinition
   entries: { offer: GameServiceOffer; template: ServiceTemplate }[]
+  storefront?: StorefrontService[]
 }
 
-export function ServiceGrid({ game, entries }: ServiceGridProps) {
+export function ServiceGrid({ game, entries, storefront }: ServiceGridProps) {
   if (entries.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-white/10 bg-[#111319]/50 py-20 text-center">
@@ -19,6 +21,7 @@ export function ServiceGrid({ game, entries }: ServiceGridProps) {
     )
   }
 
+  const bySlug = new Map((storefront ?? []).map((s) => [s.serviceSlug, s]))
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {entries.map(({ offer, template }) => (
@@ -28,6 +31,7 @@ export function ServiceGrid({ game, entries }: ServiceGridProps) {
           template={template}
           game={game}
           accent={game.accent}
+          storefront={bySlug.get(offer.serviceSlug)}
         />
       ))}
     </div>

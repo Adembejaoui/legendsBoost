@@ -1,4 +1,5 @@
 import type { GameServiceOffer } from '@/types/catalog'
+import { lpFields } from '@/lib/pricing/lp-modifiers'
 
 // Helper to build rank-picker fields shared across ranked offers.
 function rankField(
@@ -27,11 +28,11 @@ export const gameServices: GameServiceOffer[] = [
     description:
       'Play from your current League of Legends rank to a target rank. Tiers and divisions follow the LoL ranked system.',
     rankSystemId: 'lol-ranked',
-    availability: 'pending-review',
+    availability: 'available',
     order: 1,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       rankField('currentRank', 'Current rank', 'lol-ranked', true, 'Your rank before the boost starts.'),
@@ -44,6 +45,8 @@ export const gameServices: GameServiceOffer[] = [
         rankSystemId: 'lol-ranked',
         visibleWhen: [{ key: 'currentRank', operator: 'present' as const }],
       },
+      // Current LP/RR and LP/RR gain change the price (lib/pricing/lp-modifiers.ts).
+      ...lpFields('LP'),
     ],
   },
   {
@@ -52,11 +55,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Win Boost',
     description: 'A set number of ranked wins on League of Legends.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 2,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
        rankField('currentRank', 'Current rank', 'lol-ranked', true, 'Your rank before the boost starts.'),
@@ -92,11 +95,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Placement Boost',
     description: 'Placement matches at the start of a ranked season.',
     rankSystemId: 'lol-ranked',
-    availability: 'pending-review',
+    availability: 'available',
     order: 3,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
 
@@ -121,11 +124,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Arena Boost',
     description: 'Arena mode wins on League of Legends. No ranked ladder applies to this service.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 4,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -148,11 +151,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Normal Matches',
     description: 'Normal (unranked) matches on League of Legends with optional game-mode preferences.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 5,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -187,11 +190,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Champion Mastery',
     description: 'Mastery progress on a specific League of Legends champion.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 6,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -224,11 +227,11 @@ export const gameServices: GameServiceOffer[] = [
     description:
       'Play from your current VALORANT competitive rank to a target rank. Tiers follow the VALORANT competitive system.',
     rankSystemId: 'valorant-competitive',
-    availability: 'pending-review',
+    availability: 'available',
     order: 1,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       rankField('currentRank', 'Current rank', 'valorant-competitive', true, 'Your rank before the boost starts.'),
@@ -241,6 +244,8 @@ export const gameServices: GameServiceOffer[] = [
         rankSystemId: 'valorant-competitive',
         visibleWhen: [{ key: 'currentRank', operator: 'present' as const }],
       },
+      // Current LP/RR and LP/RR gain change the price (lib/pricing/lp-modifiers.ts).
+      ...lpFields('RR'),
     ],
   },
   {
@@ -249,11 +254,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Win Boost',
     description: 'A set number of competitive wins on VALORANT.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 2,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -276,11 +281,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Placement Boost',
     description: 'Competitive placement matches on VALORANT.',
     rankSystemId: 'valorant-competitive',
-    availability: 'pending-review',
+    availability: 'available',
     order: 3,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -304,11 +309,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Unrated Matches',
     description: 'Unrated matches on VALORANT.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 4,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -334,11 +339,11 @@ export const gameServices: GameServiceOffer[] = [
     description:
       'Play from your current TFT rank to a target rank. Tiers and divisions follow the TFT ranked system.',
     rankSystemId: 'tft-ranked',
-    availability: 'pending-review',
+    availability: 'available',
     order: 1,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       rankField('currentRank', 'Current rank', 'tft-ranked', true, 'Your rank before the boost starts.'),
@@ -351,6 +356,8 @@ export const gameServices: GameServiceOffer[] = [
         rankSystemId: 'tft-ranked',
         visibleWhen: [{ key: 'currentRank', operator: 'present' as const }],
       },
+      // Current LP/RR and LP/RR gain change the price (lib/pricing/lp-modifiers.ts).
+      ...lpFields('LP'),
     ],
   },
   {
@@ -359,11 +366,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Win Boost',
     description: 'A set number of wins on Teamfight Tactics.',
     rankSystemId: undefined,
-    availability: 'pending-review',
+    availability: 'available',
     order: 2,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -388,11 +395,11 @@ export const gameServices: GameServiceOffer[] = [
     title: 'Placement Boost',
     description: 'Placement matches on Teamfight Tactics.',
     rankSystemId: 'tft-ranked',
-    availability: 'pending-review',
+    availability: 'available',
     order: 3,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       {
@@ -417,11 +424,11 @@ export const gameServices: GameServiceOffer[] = [
     description:
       'Climb the TFT Double Up ladder from your current rank to a target rank. Divisions are handled dynamically.',
     rankSystemId: 'tft-double-up',
-    availability: 'pending-review',
+    availability: 'available',
     order: 4,
-    availabilityLabel: 'Under review',
+    availabilityLabel: 'Available',
     visibility: 'visible',
-    orderCapability: 'draft-only',
+    orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
       rankField(

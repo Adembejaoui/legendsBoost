@@ -16,11 +16,30 @@ enum UserRole {
   CUSTOMER
 }
 
+/// Booster lifecycle (lib/boosters/transitions.ts is the only writer).
+/// PENDING = application submitted; APPROVED = active booster.
 enum BoosterVerificationStatus {
   PENDING
   APPROVED
   REJECTED
   SUSPENDED
+  /// Admin asked the applicant for more information.
+  NEEDS_INFO
+  /// An admin is reviewing the application.
+  UNDER_REVIEW
+  /// Approved on probation: limited number of orders (trialOrdersRemaining).
+  TRIAL
+  /// Active booster taking a break: keeps current orders, takes no new ones.
+  ON_BREAK
+  /// Permanently removed. Terminal.
+  TERMINATED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 enum BoosterAvailabilityStatus {
@@ -30,24 +49,40 @@ enum BoosterAvailabilityStatus {
 }
 
 model User {
-  id            String           @id @default(cuid())
-  name          String?
-  email         String          @unique
-  emailVerified DateTime?        @map("emailVerified")
-  image         String?
-  passwordHash  String?          @map("passwordHash")
-  role          UserRole?        @default(CUSTOMER)
-  createdAt     DateTime         @default(now()) @map("createdAt")
-  updatedAt     DateTime         @updatedAt @map("updatedAt")
+  id                    String           @id @default(cuid())
+  name                  String?
+  email                 String          @unique
+  emailVerified         DateTime?        @map("emailVerified")
+  image                 String?
+  passwordHash          String?          @map("passwordHash")
+  role                  UserRole?        @default(CUSTOMER)
+  createdAt             DateTime         @default(now()) @map("createdAt")
+  updatedAt             DateTime         @updatedAt @map("updatedAt")
+  /// Account deleted (GDPR, Phase 9): personal data anonymised, sign-in
+  /// refused. Orders and money records stay for accounting.
+  deletedAt             DateTime?        @map("deletedAt")
+  /// Bumped when the password changes or is reset: sessions signed in with
+  /// an older value stop working (sign out everywhere).
+  sessionVersion        Int              @default(0) @map("sessionVersion")
 
-accounts        Account[]
-  sessions        Session[]
-  customerProfile CustomerProfile?
-  boosterProfile  BoosterProfile?
+  accounts              Account[]
+  sessions              Session[]
+  customerProfile       CustomerProfile?
+  boosterProfile        BoosterProfile?
   reviewedBoosterProfiles BoosterProfile[] @relation("ReviewerBoosterProfiles")
-  orders          Order[]
-  boosterAssignments OrderBoosterAssignment[] @relation("boosterAssignments")
-  assignedAssignments OrderBoosterAssignment[] @relation("assignedAssignments")
+  orders                Order[]
+  preferredOrders       Order[]                  @relation("orderPreferredBooster")
+  bids                  OrderBid[]
+  boosterAssignments    OrderBoosterAssignment[] @relation("boosterAssignments")
+  assignedAssignments   OrderBoosterAssignment[] @relation("assignedAssignments")
+  notifications         Notification[]
+  sentOrderMessages     OrderMessage[]   @relation("sentOrderMessages")
+  sentSupportMessages   SupportMessage[] @relation("sentSupportMessages")
+  assignedSupportTickets SupportTicket[]  @relation("assignedSupportTickets")
+  supportTickets        SupportTicket[]  @relation("supportTickets")
+  payments              Payment[]        @relation("customerPayments")
+  boosterEarnings       BoosterEarning[] @relation("boosterEarnings")
+  boosterPayouts        BoosterPayout[]  @relation("boosterPayouts")
 
   @@map("user")
 }
@@ -119,20 +154,57 @@ model BoosterProfile {
   reviewerId         String?                   @map("reviewerId")
   approvedAt         DateTime?                 @map("approvedAt")
   welcomeModalSeen   Boolean                   @default(false) @map("welcomeModalSeen")
+  /// Admin message shown to the applicant (e.g. what info is needed).
+  reviewNote         String?                   @map("reviewNote")
+  /// TRIAL: orders the booster may still claim before an admin review.
+  trialOrdersRemaining Int?                    @map("trialOrdersRemaining")
+  /// Booster rules version accepted with the application.
+  rulesVersion       String?                   @map("rulesVersion")
+  rulesAcceptedAt    DateTime?                 @map("rulesAcceptedAt")
+  /// Identity verification (KycProvider; mock for now). Gates payouts later.
+  kycStatus          KycStatus                 @default(NOT_STARTED) @map("kycStatus")
+  kycReference       String?                   @map("kycReference")
+  /// Per-booster override of config max_concurrent_orders (null = config).
+  maxConcurrentOrders Int?                     @map("maxConcurrentOrders")
+  /// Public name shown to customers (preferred-booster picker). Unique.
+  displayName        String?                   @unique @map("displayName")
   createdAt          DateTime                  @default(now()) @map("createdAt")
   updatedAt          DateTime                  @updatedAt @map("updatedAt")
   user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviewer           User?                     @relation(fields: [reviewerId], references: [id], name: "ReviewerBoosterProfiles")
+  permissions        BoosterPermission[]
+  events             BoosterEvent[]
 
   @@map("boosterProfile")
 }
 
 enum OrderStatus {
   PENDING
+  /// Taken by a booster (bid won, claim now, priority or preferred) but not
+  /// started yet. The booster's "Start" moves it to IN_PROGRESS.
+  CLAIMED
   IN_PROGRESS
   PAUSED
   COMPLETED
   CANCELLED
+  /// Pulled off the marketplace (e.g. booster abandoned it). Only an admin
+  /// can edit and republish a DRAFT order back to PENDING.
+  DRAFT
+  /// Created by a customer but no payment has been verified yet. Never shown
+  /// to boosters. Only a verified payment confirmation (future Stripe
+  /// webhook) may move it on to PENDING.
+  AWAITING_PAYMENT
+}
+
+/// How the Riot account attached to an order was identified.
+enum RiotAccountLinkStatus {
+  /// Riot ID typed by the customer; not checked against Riot.
+  MANUAL
+  /// Riot ID resolved to a PUUID through Account-V1 (proves the account
+  /// exists, NOT that the customer owns it).
+  RESOLVED
+  /// Linked through Riot Sign On (proves ownership). Requires RSO approval.
+  RSO_VERIFIED
 }
 
 enum AssignmentStatus {
@@ -158,14 +230,76 @@ model Order {
   price          Decimal?      @db.Decimal(10, 2)
   currency       String?
   status         OrderStatus   @default(PENDING)
+  completedAt    DateTime?     @map("completedAt")
+  /// Marketplace payment gate. Set ONLY by server-side verification of a
+  /// payment (future Stripe webhook). NULL means "no verified payment" and
+  /// the order is never listed to or claimable by boosters, whatever its
+  /// status. Existing orders are NULL: they are not assumed to be paid.
+  paymentVerifiedAt DateTime?  @map("paymentVerifiedAt")
   createdAt      DateTime      @default(now()) @map("createdAt")
   updatedAt      DateTime      @updatedAt @map("updatedAt")
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   events         OrderEvent[]
   assignments    OrderBoosterAssignment[]
+  conversation   OrderConversation?
+  supportTickets SupportTicket[]
+  notifications  Notification[]
+  riotAccount    OrderRiotAccount?
+  accountCredential OrderAccountCredential?
+  cancellationRequests OrderCancellationRequest[]
+  bids                 OrderBid[]
+  sessions             OrderSession[]
+  credentialReveals    OrderCredentialReveal[]
+  chatFlags            ChatModerationFlag[]
+  rankSnapshots        OrderRankSnapshot[]
+  fines                BoosterFine[]
+  review               OrderReview?
+  tips                 OrderTip[]
+  strikes              BoosterStrike[]
 
+  /// Priority option bought: instant claim at the full payout, no bidding.
+  isPriority           Boolean   @default(false) @map("isPriority")
+  /// Bidding round, +1 each time the order (re)enters the pool.
+  biddingRound         Int       @default(0) @map("biddingRound")
+  /// Set by the first bid of the round (first bid + bid_window_sec).
+  biddingClosesAt      DateTime? @map("biddingClosesAt")
+  /// Booster the customer chose; exclusive until preferredUntil.
+  preferredBoosterId   String?   @map("preferredBoosterId")
+  preferredUntil       DateTime? @map("preferredUntil")
+  preferredBooster     User?     @relation("orderPreferredBooster", fields: [preferredBoosterId], references: [id], onDelete: SetNull)
+  /// Booster payout agreed when the order was taken (bid, claim now...).
+  /// Null = the reserved booster share (pricing snapshot).
+  boosterPayoutAmount  Int?      @map("boosterPayoutAmount")
+  claimedAt            DateTime? @map("claimedAt")
+
+  /// The customer acknowledged the risk disclosure (ban risk, no guarantee
+  /// against Riot action) before paying. Version of the text accepted.
+  riskDisclosureAcceptedAt DateTime? @map("riskDisclosureAcceptedAt")
+  riskDisclosureVersion    String?   @map("riskDisclosureVersion")
+  matches        OrderMatch[]
+
+  /// Client-supplied Idempotency-Key of the creating request (per customer).
+  /// A repeated submission returns the original order instead of a new one.
+  creationIdempotencyKey String? @map("creationIdempotencyKey")
+  /// SHA-256 of the normalised creation request; a reused key with a
+  /// different request is rejected.
+  creationRequestHash    String? @map("creationRequestHash")
+  /// The single Payment whose verified success paid this order. Unique, so
+  /// one order can never be marked paid by two payments.
+  paidPaymentId          String? @unique @map("paidPaymentId")
+  paidPayment            Payment? @relation("orderPaidPayment", fields: [paidPaymentId], references: [id], onDelete: Restrict)
+
+  pricingSnapshot        OrderPricingSnapshot?
+  payments               Payment[]            @relation("orderPayments")
+  boosterEarnings        BoosterEarning[]
+  refunds                Refund[]
+  disputes               Dispute[]
+  financialTransactions  FinancialTransaction[]
+
+  @@unique([userId, creationIdempotencyKey])
   @@index([userId])
   @@index([status])
+  @@index([status, createdAt])
   @@map("order")
 }
 
@@ -194,16 +328,1262 @@ model OrderBoosterAssignment {
   startedAt     DateTime?        @map("startedAt")
   endedAt       DateTime?        @map("endedAt")
   endReason     String?          @map("endReason")
+  /// How the booster got the order: BID, CLAIM_NOW, PRIORITY, PREFERRED, ADMIN.
+  awardMode     String?          @map("awardMode")
+  /// Payout agreed for this assignment (minor units).
+  payoutAmount  Int?             @map("payoutAmount")
+  /// SLA warnings already sent (warning only, no automatic release).
+  contactWarnedAt DateTime?      @map("contactWarnedAt")
+  startWarnedAt   DateTime?      @map("startWarnedAt")
+  /// Last inactivity warning (no games / no chat while in progress).
+  inactivityWarnedAt DateTime?   @map("inactivityWarnedAt")
   createdAt     DateTime         @default(now()) @map("createdAt")
   updatedAt     DateTime         @updatedAt @map("updatedAt")
 
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   booster        User           @relation(fields: [boosterId], references: [id], onDelete: Cascade, name: "boosterAssignments")
   assignedBy     User           @relation(fields: [assignedById], references: [id], onDelete: Cascade, name: "assignedAssignments")
+  earnings       BoosterEarning[]
 
   @@unique([activeOrderId])
   @@index([orderId])
   @@index([boosterId])
   @@index([status])
+  @@index([boosterId, status])
   @@map("orderBoosterAssignment")
+}
+
+enum NotificationType {
+  ORDER_CREATED
+  ORDER_CANCELLED
+  ORDER_STARTED
+  ORDER_PROGRESS_UPDATED
+  ORDER_COMPLETED
+  ORDER_REOPENED
+  BOOSTER_ASSIGNED
+  BOOSTER_ACCEPTED
+  BOOSTER_REJECTED
+  BOOSTER_REASSIGNED
+  BOOSTER_REMOVED
+  BOOSTER_ABANDONED
+  NEW_MESSAGE
+  SUPPORT_REPLY
+  SUPPORT_STATUS_UPDATED
+  SUPPORT_TICKET_CREATED
+  SUPPORT_TICKET_RESOLVED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  REFUND_ISSUED
+  EARNING_AVAILABLE
+  PAYOUT_UPDATED
+  FINANCE_ALERT
+  /// A customer chose this booster: exclusive offer for a limited time.
+  ORDER_OFFERED
+  /// Booster bid won / lost.
+  BID_WON
+  BID_LOST
+  /// Claimed order not contacted / not started in time (warning only).
+  SLA_WARNING
+  /// The booster started a play session on the customer account.
+  SESSION_STARTED
+  /// A ranked game was played during a pause or outside a booster session (admins).
+  GAME_ANOMALY
+  /// Booster received a strike / a fine; a fine appeal was decided.
+  STRIKE_ADDED
+  FINE_ISSUED
+  FINE_APPEAL_DECIDED
+  /// In-progress order with no games and no chat for a while (booster + admins).
+  INACTIVITY_WARNING
+  /// The booster's payout method was changed (security alert).
+  PAYOUT_METHOD_CHANGED
+  /// A customer reviewed / tipped the booster.
+  REVIEW_RECEIVED
+  TIP_RECEIVED
+  /// A user asked to delete their account (admins).
+  ACCOUNT_DELETION_REQUESTED
+  /// Booster pressed Complete but the target could not be confirmed (admins).
+  COMPLETION_REVIEW
+  /// A chat message contained contact / payment details (admins).
+  CHAT_FLAGGED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportTicketCategory {
+  ORDER_ISSUE
+  BOOSTER_ISSUE
+  PAYMENT_ISSUE
+  TECHNICAL_ISSUE
+  OTHER
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("userId")
+  type      NotificationType
+  title     String
+  message   String
+  orderId   String?          @map("orderId")
+  read      Boolean          @default(false)
+  readAt    DateTime?        @map("readAt")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("createdAt")
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  /// Idempotency key for one-shot lifecycle notifications (e.g.
+  /// "ORDER_COMPLETED:<orderId>"). NULL for ordinary notifications.
+  dedupeKey String?          @map("dedupeKey")
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([orderId])
+  @@map("notification")
+}
+
+/// Game-account login shared by the customer so the assigned booster can play
+/// the account. NEVER stored in plaintext: `ciphertext` is AES-256-GCM
+/// (key ACCOUNT_CREDENTIALS_KEY, never in the database), bound to the order
+/// id. Readable only by the booster holding the order's IN_PROGRESS
+/// assignment, through an audited reveal. A database trigger deletes the row
+/// when the order becomes COMPLETED or CANCELLED.
+model OrderAccountCredential {
+  id               String    @id @default(cuid())
+  orderId          String    @unique @map("orderId")
+  /// "v1.<iv>.<tag>.<ciphertext>" (base64url) of {"u":username,"p":password}.
+  ciphertext       String
+  keyVersion       Int       @default(1) @map("keyVersion")
+  /// Masked login shown in the UI (e.g. "ab•••yz"); never the full value.
+  usernameHint     String    @map("usernameHint")
+  updatedById      String    @map("updatedById")
+  revealCount      Int       @default(0) @map("revealCount")
+  lastRevealedAt   DateTime? @map("lastRevealedAt")
+  lastRevealedById String?   @map("lastRevealedById")
+  createdAt        DateTime  @default(now()) @map("createdAt")
+  updatedAt        DateTime  @updatedAt @map("updatedAt")
+  order            Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("orderAccountCredential")
+}
+
+/// The Riot account an order is played for, plus rank snapshots.
+/// Public Riot ID and what Riot's official APIs return for it. Login
+/// credentials live encrypted in OrderAccountCredential, never here.
+model OrderRiotAccount {
+  id                 String                @id @default(cuid())
+  orderId            String                @unique @map("orderId")
+  gameName           String                @map("gameName")
+  tagLine            String                @map("tagLine")
+  /// Riot platform routing value, e.g. EUW1, NA1.
+  platform           String?
+  /// Encrypted PUUID from Account-V1/RSO. Server-only, never sent to browsers.
+  puuid              String?
+  linkStatus         RiotAccountLinkStatus @default(MANUAL) @map("linkStatus")
+  /// Last time a sync finished without error (display only; NOT the match cursor).
+  lastSyncedAt       DateTime?             @map("lastSyncedAt")
+  lastSyncError      String?               @map("lastSyncError")
+  /// Machine-readable code for lastSyncError (e.g. wrong_region, not_found).
+  lastSyncErrorCode  String?               @map("lastSyncErrorCode")
+  /// Summoner-V4 confirmed this PUUID has a League profile on `platform`.
+  regionVerifiedAt   DateTime?             @map("regionVerifiedAt")
+
+  /// Durable match-sync progress. Every Match-V5 id of a game that STARTED
+  /// before this instant (inside the order's work windows) is either stored
+  /// as an OrderMatch or listed in pendingMatchIds. Only advanced after a
+  /// complete id scan, never past unprocessed matches.
+  matchScanUntil     DateTime?             @map("matchScanUntil")
+  /// Match ids discovered by a scan but whose details are not processed yet.
+  pendingMatchIds    String[]              @default([]) @map("pendingMatchIds")
+  /// Short lease preventing two syncs of the same order running at once.
+  syncLeaseUntil     DateTime?             @map("syncLeaseUntil")
+
+  /// Rank observed from an authorized League-V4 response.
+  observedTier       String?               @map("observedTier")
+  observedDivision   String?               @map("observedDivision")
+  observedLp         Int?                  @map("observedLp")
+  observedAt         DateTime?             @map("observedAt")
+
+  /// Rank manually reported by the customer, booster or an admin.
+  reportedTier       String?               @map("reportedTier")
+  reportedDivision   String?               @map("reportedDivision")
+  reportedLp         Int?                  @map("reportedLp")
+  reportedAt         DateTime?             @map("reportedAt")
+  reportedById       String?               @map("reportedById")
+
+  /// Rank captured when work first started (progress baseline).
+  baselineTier       String?               @map("baselineTier")
+  baselineDivision   String?               @map("baselineDivision")
+  baselineLp         Int?                  @map("baselineLp")
+  baselineAt         DateTime?             @map("baselineAt")
+  baselineSource     String?               @map("baselineSource")
+
+  /// Last Riot profile snapshot (level, icon, all ranked queues, top
+  /// mastery, live game, active region). Display only, refreshed by sync.
+  profile            Json?                 @map("profile")
+  profileSyncedAt    DateTime?             @map("profileSyncedAt")
+
+  createdAt          DateTime              @default(now()) @map("createdAt")
+  updatedAt          DateTime              @updatedAt @map("updatedAt")
+  order              Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("orderRiotAccount")
+}
+
+/// A Match-V5 game attributed to an order (played by the order's account
+/// inside one of the order's active work windows). Minimal metadata only.
+model OrderMatch {
+  id            String   @id @default(cuid())
+  orderId       String   @map("orderId")
+  matchId       String   @map("matchId")
+  queueId       Int      @map("queueId")
+  championId    Int      @map("championId")
+  championName  String   @map("championName")
+  win           Boolean
+  kills         Int
+  deaths        Int
+  assists       Int
+  cs            Int
+  durationSec   Int      @map("durationSec")
+  gameStartAt   DateTime @map("gameStartAt")
+  gameEndAt     DateTime @map("gameEndAt")
+  /// BOOSTER (inside a booster session), CUSTOMER (outside one) or PAUSED
+  /// (while the order was paused). Only BOOSTER games count for the order.
+  playedBy      String   @default("BOOSTER") @map("playedBy")
+  /// LP change from the rank snapshots around this game (Riot has no LP per
+  /// match); null when it cannot be attributed to this game alone.
+  lpDelta       Int?     @map("lpDelta")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, matchId])
+  @@index([orderId, gameStartAt])
+  @@index([orderId, playedBy, win])
+  @@map("orderMatch")
+}
+
+/// Shared (cross-instance) Riot API throttle state. One row per limiter key:
+/// "<keyFingerprint>:<host>:<windowSec>" for fixed-window counters and
+/// "<keyFingerprint>:<host>:cooldown" for Retry-After cooldowns. The key
+/// fingerprint is a truncated SHA-256 of the API key, never the key itself.
+model RiotApiThrottle {
+  key          String    @id
+  windowStart  DateTime  @map("windowStart")
+  count        Int       @default(0)
+  blockedUntil DateTime? @map("blockedUntil")
+  updatedAt    DateTime  @updatedAt @map("updatedAt")
+
+  @@map("riotApiThrottle")
+}
+
+model OrderConversation {
+  id        String   @id @default(cuid())
+  orderId   String   @unique @map("orderId")
+  closedAt  DateTime? @map("closedAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  messages  OrderMessage[]
+
+  @@map("orderConversation")
+}
+
+model OrderMessage {
+  id              String   @id @default(cuid())
+  conversationId  String   @map("conversationId")
+  senderId        String?  @map("senderId")
+  content         String
+  messageType     String   @default("text") @map("messageType")
+  readAt          DateTime? @map("readAt")
+  createdAt       DateTime @default(now()) @map("createdAt")
+
+  conversation    OrderConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User?             @relation("sentOrderMessages", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([senderId, createdAt])
+  @@map("orderMessage")
+}
+
+model SupportTicket {
+  id              String               @id @default(cuid())
+  customerId      String               @map("customerId")
+  orderId         String?              @map("orderId")
+  subject         String
+  description     String
+  category        SupportTicketCategory
+  priority        SupportTicketPriority @default(MEDIUM)
+  status          SupportTicketStatus   @default(OPEN)
+  assignedAdminId String?              @map("assignedAdminId")
+  createdAt       DateTime             @default(now()) @map("createdAt")
+  updatedAt       DateTime             @updatedAt @map("updatedAt")
+  resolvedAt      DateTime?            @map("resolvedAt")
+
+  customer        User                 @relation("supportTickets", fields: [customerId], references: [id], onDelete: Cascade)
+  order           Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  assignedAdmin   User?                @relation("assignedSupportTickets", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages        SupportMessage[]
+
+  @@index([customerId])
+  @@index([orderId])
+  @@index([status])
+  @@index([assignedAdminId])
+  @@map("supportTicket")
+}
+
+model SupportMessage {
+  id           String   @id @default(cuid())
+  ticketId     String   @map("ticketId")
+  senderId     String?  @map("senderId")
+  content      String
+  isAdminReply Boolean  @default(false) @map("isAdminReply")
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender       User?         @relation("sentSupportMessages", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([senderId])
+  @@map("supportMessage")
+}
+
+// ===========================================================================
+// Pricing, payments and financial ledger
+//
+// Money is ALWAYS an integer amount in the minor unit of its currency (for
+// example cents) plus an explicit ISO-4217 currency code (upper case).
+// No floats, no Decimals. Financial history is never deleted: relations that
+// point at an order, payment or user use onDelete: Restrict, and
+// financialTransaction rows are protected from UPDATE/DELETE by a database
+// trigger. See docs/FINANCIAL-LEDGER-DESIGN.md.
+// ===========================================================================
+
+enum PricingModel {
+  /// Base amount + a configured amount for every rank step crossed.
+  RANK_STEPS
+  /// Base amount + unitAmount x the value of a numeric configuration field.
+  PER_UNIT
+  /// Base amount only.
+  FIXED
+}
+
+enum ServicePriceStatus {
+  ACTIVE
+  RETIRED
+}
+
+/// Admin-configured, versioned price list for one catalog service. Versions
+/// are append-only: a change creates a new version and retires the old one,
+/// so every order snapshot points at the exact version it was priced with.
+/// A service without an ACTIVE version is not purchasable.
+model ServicePrice {
+  id            String             @id @default(cuid())
+  gameSlug      String             @map("gameSlug")
+  serviceSlug   String             @map("serviceSlug")
+  version       Int
+  status        ServicePriceStatus @default(ACTIVE)
+  /// "<gameSlug>:<serviceSlug>" while ACTIVE, NULL once retired.
+  activeKey     String?            @unique @map("activeKey")
+  currency      String
+  pricingModel  PricingModel       @map("pricingModel")
+  baseAmount    Int                @map("baseAmount")
+  /// RANK_STEPS: { "<tierId>": amount per step that starts in that tier }.
+  stepAmounts   Json?              @map("stepAmounts")
+  /// PER_UNIT: numeric configuration field that holds the unit count.
+  unitFieldKey  String?            @map("unitFieldKey")
+  unitAmount    Int?               @map("unitAmount")
+  /// { "<optionId>": {"type":"fixed","amount":n} | {"type":"bps","bps":n} }.
+  /// An option missing here cannot be purchased.
+  optionPricing Json               @map("optionPricing")
+  /// Same shape, keyed by mode id ("solo", "duo").
+  modePricing   Json               @map("modePricing")
+  createdById   String             @map("createdById")
+  createdAt     DateTime           @default(now()) @map("createdAt")
+  retiredAt     DateTime?          @map("retiredAt")
+  retiredById   String?            @map("retiredById")
+
+  snapshots     OrderPricingSnapshot[]
+
+  @@unique([gameSlug, serviceSlug, version])
+  @@map("servicePrice")
+}
+
+/// Platform commission policy. Append-only; the policy in force is the most
+/// recent one whose effectiveFrom <= now. Changing it never affects existing
+/// orders: every order stores its own snapshot.
+model CommissionPolicy {
+  id              String   @id @default(cuid())
+  platformFeeBps  Int      @map("platformFeeBps")
+  boosterShareBps Int      @map("boosterShareBps")
+  effectiveFrom   DateTime @default(now()) @map("effectiveFrom")
+  createdById     String?  @map("createdById")
+  note            String?
+  createdAt       DateTime @default(now()) @map("createdAt")
+
+  snapshots       OrderPricingSnapshot[]
+
+  @@index([effectiveFrom])
+  @@map("commissionPolicy")
+}
+
+/// Immutable price and commission snapshot taken when the order is created.
+/// commissionBaseAmount = subtotal - discount (tax is never part of it).
+/// platformFeeAmount + boosterShareAmount = commissionBaseAmount, exactly.
+model OrderPricingSnapshot {
+  id                   String           @id @default(cuid())
+  orderId              String           @unique @map("orderId")
+  currency             String
+  subtotalAmount       Int              @map("subtotalAmount")
+  discountAmount       Int              @default(0) @map("discountAmount")
+  taxAmount            Int              @default(0) @map("taxAmount")
+  totalAmount          Int              @map("totalAmount")
+  commissionBaseAmount Int              @map("commissionBaseAmount")
+  platformFeeBps       Int              @map("platformFeeBps")
+  boosterShareBps      Int              @map("boosterShareBps")
+  platformFeeAmount    Int              @map("platformFeeAmount")
+  boosterShareAmount   Int              @map("boosterShareAmount")
+  commissionPolicyId   String           @map("commissionPolicyId")
+  servicePriceId       String           @map("servicePriceId")
+  servicePriceVersion  Int              @map("servicePriceVersion")
+  /// Line-by-line calculation (base, steps, units, options, mode).
+  breakdown            Json
+  /// Coupon applied to this order (discountAmount). Platform-funded: the
+  /// booster share is computed on the price BEFORE the discount.
+  couponId             String?          @map("couponId")
+  couponCode           String?          @map("couponCode")
+  createdAt            DateTime         @default(now()) @map("createdAt")
+
+  coupon               Coupon?          @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  order                Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  commissionPolicy     CommissionPolicy @relation(fields: [commissionPolicyId], references: [id], onDelete: Restrict)
+  servicePrice         ServicePrice     @relation(fields: [servicePriceId], references: [id], onDelete: Restrict)
+
+  @@map("orderPricingSnapshot")
+}
+
+enum PaymentStatus {
+  /// Row created; Stripe session not created yet.
+  CREATED
+  /// Checkout Session open; the customer may pay.
+  OPEN
+  /// Checkout completed with a delayed payment method; funds not confirmed.
+  PROCESSING
+  /// Funds confirmed by a verified Stripe event.
+  SUCCEEDED
+  FAILED
+  EXPIRED
+  CANCELED
+}
+
+/// One payment attempt (one Stripe Checkout Session) for an order. An order
+/// may have many attempts; at most one is open at a time (openSlotOrderId)
+/// and at most one can pay the order (order.paidPaymentId is unique).
+model Payment {
+  id                      String        @id @default(cuid())
+  orderId                 String        @map("orderId")
+  customerId              String        @map("customerId")
+  provider                String        @default("STRIPE")
+  status                  PaymentStatus @default(CREATED)
+  attemptNumber           Int           @map("attemptNumber")
+  amount                  Int
+  currency                String
+  idempotencyKey          String        @unique @map("idempotencyKey")
+  /// = orderId while CREATED/OPEN/PROCESSING, NULL otherwise.
+  openSlotOrderId         String?       @unique @map("openSlotOrderId")
+  stripeCheckoutSessionId String?       @unique @map("stripeCheckoutSessionId")
+  stripePaymentIntentId   String?       @unique @map("stripePaymentIntentId")
+  stripeChargeId          String?       @unique @map("stripeChargeId")
+  checkoutUrl             String?       @map("checkoutUrl")
+  checkoutExpiresAt       DateTime?     @map("checkoutExpiresAt")
+  amountReceived          Int?          @map("amountReceived")
+  amountRefunded          Int           @default(0) @map("amountRefunded")
+  /// Stripe processing fee (platform cost; never deducted from boosters).
+  stripeFeeAmount         Int?          @map("stripeFeeAmount")
+  failureCode             String?       @map("failureCode")
+  failureMessage          String?       @map("failureMessage")
+  lastFailedAt            DateTime?     @map("lastFailedAt")
+  /// Set when money was received but could not be applied to the order
+  /// (amount/currency/metadata mismatch, order already paid or cancelled).
+  /// Such payments need admin review and usually a refund.
+  reviewReason            String?       @map("reviewReason")
+  succeededAt             DateTime?     @map("succeededAt")
+  createdAt               DateTime      @default(now()) @map("createdAt")
+  updatedAt               DateTime      @updatedAt @map("updatedAt")
+
+  order                   Order         @relation("orderPayments", fields: [orderId], references: [id], onDelete: Restrict)
+  customer                User          @relation("customerPayments", fields: [customerId], references: [id], onDelete: Restrict)
+  paidOrder               Order?        @relation("orderPaidPayment")
+  refunds                 Refund[]
+  disputes                Dispute[]
+  events                  PaymentEvent[]
+  transactions            FinancialTransaction[]
+
+  @@unique([orderId, attemptNumber])
+  @@index([orderId])
+  @@index([status])
+  @@map("payment")
+}
+
+enum PaymentEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+/// Every verified Stripe webhook event, stored before processing. The unique
+/// stripeEventId makes processing idempotent; FAILED / RECEIVED rows can be
+/// retried from the stored payload.
+model PaymentEvent {
+  id            String             @id @default(cuid())
+  provider      String             @default("STRIPE")
+  stripeEventId String             @unique @map("stripeEventId")
+  type          String
+  livemode      Boolean
+  status        PaymentEventStatus @default(RECEIVED)
+  payload       Json
+  attempts      Int                @default(0)
+  outcome       String?
+  lastError     String?            @map("lastError")
+  paymentId     String?            @map("paymentId")
+  receivedAt    DateTime           @default(now()) @map("receivedAt")
+  processedAt   DateTime?          @map("processedAt")
+
+  payment       Payment?           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([type])
+  @@map("paymentEvent")
+}
+
+/// Ledger accounts. Balances are the sum of signed amounts per account
+/// (per booster for BOOSTER_PAYABLE, per order for BOOSTER_POOL).
+enum LedgerAccount {
+  /// Money received from customers (+) and returned to them (-).
+  CUSTOMER_PAYMENTS
+  /// Platform commission earned (+) and reversed (-).
+  PLATFORM_REVENUE
+  /// Booster share of a paid order not yet allocated to a booster.
+  BOOSTER_POOL
+  /// Amount owed to one booster.
+  BOOSTER_PAYABLE
+  /// Money paid out to boosters manually.
+  BOOSTER_PAYOUTS
+  /// Stripe processing fees (platform cost).
+  STRIPE_FEES
+  /// Funds lost to disputes.
+  DISPUTE_LOSSES
+}
+
+enum FinancialTransactionType {
+  CUSTOMER_PAYMENT
+  PLATFORM_COMMISSION
+  BOOSTER_SHARE_RESERVED
+  BOOSTER_EARNING_ALLOCATED
+  REFUND
+  PLATFORM_COMMISSION_REVERSAL
+  BOOSTER_SHARE_REVERSAL
+  STRIPE_FEE
+  DISPUTE_LOSS
+  BOOSTER_PAYOUT
+  /// Winning bid / claim-now below the reserved booster share: the
+  /// difference moves BOOSTER_POOL -> PLATFORM_REVENUE.
+  BOOSTER_BID_MARGIN
+  /// Admin fine: BOOSTER_PAYABLE -> PLATFORM_REVENUE (reversal = opposite).
+  BOOSTER_FINE
+  BOOSTER_FINE_REVERSAL
+  /// Customer tip: CUSTOMER_PAYMENTS = PLATFORM_REVENUE (commission) + BOOSTER_PAYABLE.
+  TIP_PAYMENT
+  TIP_COMMISSION
+  TIP_BOOSTER_SHARE
+}
+
+/// Immutable ledger entry. Never updated or deleted (enforced by trigger);
+/// corrections are compensating entries. idempotencyKey makes every posting
+/// exactly-once.
+model FinancialTransaction {
+  id             String                   @id @default(cuid())
+  type           FinancialTransactionType
+  account        LedgerAccount
+  /// Signed, in minor units.
+  amount         Int
+  currency       String
+  idempotencyKey String                   @unique @map("idempotencyKey")
+  orderId        String?                  @map("orderId")
+  boosterId      String?                  @map("boosterId")
+  paymentId      String?                  @map("paymentId")
+  refundId       String?                  @map("refundId")
+  disputeId      String?                  @map("disputeId")
+  payoutId       String?                  @map("payoutId")
+  earningId      String?                  @map("earningId")
+  description    String?
+  createdById    String?                  @map("createdById")
+  createdAt      DateTime                 @default(now()) @map("createdAt")
+
+  order          Order?                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  payment        Payment?                 @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([boosterId])
+  @@index([account])
+  @@index([createdAt])
+  @@map("financialTransaction")
+}
+
+enum BoosterEarningStatus {
+  /// Booster share of a paid order, not yet attributed to a booster.
+  RESERVED
+  /// Several boosters worked on the order; an admin must allocate.
+  PENDING_REVIEW
+  /// Attributed to a booster; awaiting release (admin approval).
+  PENDING
+  /// Blocked (open dispute).
+  ON_HOLD
+  /// Released; can be included in a payout request.
+  AVAILABLE
+  IN_PAYOUT
+  PAID
+  /// Fully reversed by refunds or dispute losses.
+  REVERSED
+  /// Superseded by per-booster allocations (kept for history).
+  SPLIT
+}
+
+model BoosterEarning {
+  id              String               @id @default(cuid())
+  orderId         String               @map("orderId")
+  boosterId       String?              @map("boosterId")
+  assignmentId    String?              @map("assignmentId")
+  parentEarningId String?              @map("parentEarningId")
+  /// = orderId for the order-level reservation row only (one per order).
+  reservationKey  String?              @unique @map("reservationKey")
+  grossAmount     Int                  @map("grossAmount")
+  /// Cumulative refunds / dispute losses applied to this earning.
+  reversedAmount  Int                  @default(0) @map("reversedAmount")
+  currency        String
+  platformFeeBps  Int                  @map("platformFeeBps")
+  boosterShareBps Int                  @map("boosterShareBps")
+  status          BoosterEarningStatus
+  holdReason      String?              @map("holdReason")
+  allocationNote  String?              @map("allocationNote")
+  approvedAt      DateTime?            @map("approvedAt")
+  approvedById    String?              @map("approvedById")
+  releasedAt      DateTime?            @map("releasedAt")
+  paidAt          DateTime?            @map("paidAt")
+  payoutId        String?              @map("payoutId")
+  createdAt       DateTime             @default(now()) @map("createdAt")
+  updatedAt       DateTime             @updatedAt @map("updatedAt")
+
+  order           Order                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  booster         User?                   @relation("boosterEarnings", fields: [boosterId], references: [id], onDelete: Restrict)
+  assignment      OrderBoosterAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  payout          BoosterPayout?          @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([boosterId, status])
+  @@index([payoutId])
+  @@map("boosterEarning")
+}
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  PAID
+  REJECTED
+  FAILED
+}
+
+/// Manual payout to a booster (no Stripe Connect). Marked PAID only after an
+/// admin records the external payment reference and evidence.
+model BoosterPayout {
+  id                String        @id @default(cuid())
+  boosterId         String        @map("boosterId")
+  amount            Int
+  currency          String
+  status            PayoutStatus  @default(REQUESTED)
+  /// "<boosterId>:<currency>" while REQUESTED/APPROVED/PROCESSING: one open
+  /// payout per booster and currency.
+  openKey           String?       @unique @map("openKey")
+  /// Fines taken off this payout (amount is already net of them).
+  finesDeducted     Int           @default(0) @map("finesDeducted")
+  /// Payout method copied at request time (a later change cannot redirect
+  /// this payout). Encrypted; admins reveal it to pay (audited).
+  methodType        String?       @map("methodType")
+  methodHint        String?       @map("methodHint")
+  methodCiphertext  String?       @map("methodCiphertext")
+  methodRevealCount Int           @default(0) @map("methodRevealCount")
+  method            String?
+  externalReference String?       @map("externalReference")
+  evidence          String?
+  requestedAt       DateTime      @default(now()) @map("requestedAt")
+  approvedAt        DateTime?     @map("approvedAt")
+  approvedById      String?       @map("approvedById")
+  processingAt      DateTime?     @map("processingAt")
+  paidAt            DateTime?     @map("paidAt")
+  paidRecordedById  String?       @map("paidRecordedById")
+  rejectedAt        DateTime?     @map("rejectedAt")
+  rejectedById      String?       @map("rejectedById")
+  rejectionReason   String?       @map("rejectionReason")
+  failedAt          DateTime?     @map("failedAt")
+  failureReason     String?       @map("failureReason")
+  createdAt         DateTime      @default(now()) @map("createdAt")
+  updatedAt         DateTime      @updatedAt @map("updatedAt")
+
+  booster           User          @relation("boosterPayouts", fields: [boosterId], references: [id], onDelete: Restrict)
+  earnings          BoosterEarning[]
+
+  @@unique([method, externalReference])
+  @@index([boosterId, status])
+  @@map("boosterPayout")
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+model Refund {
+  id                     String       @id @default(cuid())
+  paymentId              String       @map("paymentId")
+  orderId                String       @map("orderId")
+  amount                 Int
+  currency               String
+  status                 RefundStatus @default(PENDING)
+  reason                 String
+  /// ADMIN (requested in LegendsBoost) or STRIPE (created in the Dashboard).
+  source                 String       @default("ADMIN")
+  stripeRefundId         String?      @unique @map("stripeRefundId")
+  idempotencyKey         String       @unique @map("idempotencyKey")
+  initiatedById          String?      @map("initiatedById")
+  failureReason          String?      @map("failureReason")
+  platformReversalAmount Int?         @map("platformReversalAmount")
+  boosterReversalAmount  Int?         @map("boosterReversalAmount")
+  succeededAt            DateTime?    @map("succeededAt")
+  createdAt              DateTime     @default(now()) @map("createdAt")
+  updatedAt              DateTime     @updatedAt @map("updatedAt")
+
+  payment                Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  order                  Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("refund")
+}
+
+enum DisputeStatus {
+  OPEN
+  WON
+  LOST
+}
+
+model Dispute {
+  id              String        @id @default(cuid())
+  paymentId       String        @map("paymentId")
+  orderId         String        @map("orderId")
+  stripeDisputeId String        @unique @map("stripeDisputeId")
+  amount          Int
+  currency        String
+  reason          String?
+  stripeStatus    String        @map("stripeStatus")
+  status          DisputeStatus @default(OPEN)
+  evidenceDueBy   DateTime?     @map("evidenceDueBy")
+  openedAt        DateTime      @default(now()) @map("openedAt")
+  closedAt        DateTime?     @map("closedAt")
+  lossPostedAt    DateTime?     @map("lossPostedAt")
+  updatedAt       DateTime      @updatedAt @map("updatedAt")
+
+  payment         Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("dispute")
+}
+
+enum OutboxStatus {
+  PENDING
+  DONE
+  FAILED
+}
+
+/// Side effects (notifications, Stripe fee lookup, session expiry) recorded
+/// in the same transaction as the financial change and dispatched after
+/// commit. A failing side effect never undoes or loses a payment.
+model OutboxEvent {
+  id          String       @id @default(cuid())
+  type        String
+  payload     Json
+  dedupeKey   String       @unique @map("dedupeKey")
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  lastError   String?      @map("lastError")
+  availableAt DateTime     @default(now()) @map("availableAt")
+  createdAt   DateTime     @default(now()) @map("createdAt")
+  processedAt DateTime?    @map("processedAt")
+
+  @@index([status, availableAt])
+  @@map("outboxEvent")
+}
+
+/// Append-only audit trail of administrative financial actions.
+model FinancialAuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actorId")
+  action     String
+  entityType String   @map("entityType")
+  entityId   String   @map("entityId")
+  details    Json?
+  createdAt  DateTime @default(now()) @map("createdAt")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("financialAuditLog")
+}
+
+/// Admin-editable configuration [registry F18]. One row per key; the value is
+/// typed JSON validated by lib/config. Missing rows fall back to code defaults.
+model AppConfig {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updatedById")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  @@map("appConfig")
+}
+
+/// General audit trail for admin, security and operational actions (money
+/// actions keep using FinancialAuditLog). Append-only.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actorId")
+  action     String
+  entityType String   @map("entityType")
+  entityId   String?  @map("entityId")
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("createdAt")
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("auditLog")
+}
+
+/// Lease + last-run info for scheduled jobs (lib/jobs): one row per job name.
+/// A run takes the lease with a conditional update, so concurrent cron
+/// invocations never run the same job twice.
+model JobLease {
+  name           String    @id
+  leasedUntil    DateTime? @map("leasedUntil")
+  runId          String?   @map("runId")
+  lastStartedAt  DateTime? @map("lastStartedAt")
+  lastFinishedAt DateTime? @map("lastFinishedAt")
+  lastStatus     String?   @map("lastStatus")
+  lastError      String?   @map("lastError")
+
+  @@map("jobLease")
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+/// Discount code. Platform-funded: it never reduces the booster share.
+/// Usage counts orders whose snapshot references the coupon and that are
+/// paid or still in checkout (cancelled holds do not count).
+model Coupon {
+  id               String     @id @default(cuid())
+  /// Upper-case code customers type, e.g. "WELCOME10".
+  code             String     @unique
+  type             CouponType
+  /// PERCENT: basis points (1000 = 10%).
+  percentBps       Int?       @map("percentBps")
+  /// FIXED: minor units in `currency`.
+  amount           Int?
+  currency         String?
+  /// Optional cap on the discount (minor units), mostly for PERCENT.
+  maxDiscount      Int?       @map("maxDiscount")
+  minSubtotal      Int?       @map("minSubtotal")
+  maxRedemptions   Int?       @map("maxRedemptions")
+  perCustomerLimit Int        @default(1) @map("perCustomerLimit")
+  /// Optional restriction to one game and/or service.
+  gameSlug         String?    @map("gameSlug")
+  serviceSlug      String?    @map("serviceSlug")
+  startsAt         DateTime?  @map("startsAt")
+  expiresAt        DateTime?  @map("expiresAt")
+  active           Boolean    @default(true)
+  note             String?
+  createdById      String     @map("createdById")
+  createdAt        DateTime   @default(now()) @map("createdAt")
+  updatedAt        DateTime   @updatedAt @map("updatedAt")
+
+  snapshots        OrderPricingSnapshot[]
+
+  @@map("coupon")
+}
+
+enum CancellationRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Customer request to cancel a paid order (EU right of withdrawal, D1).
+/// An admin decides; approval cancels the order and refunds the amount the
+/// admin sets (pro-rata to progress). At most one open request per order
+/// (partial unique index in the migration).
+model OrderCancellationRequest {
+  id           String                    @id @default(cuid())
+  orderId      String                    @map("orderId")
+  customerId   String                    @map("customerId")
+  reason       String
+  status       CancellationRequestStatus @default(REQUESTED)
+  adminNote    String?                   @map("adminNote")
+  decidedById  String?                   @map("decidedById")
+  decidedAt    DateTime?                 @map("decidedAt")
+  refundAmount Int?                      @map("refundAmount")
+  refundId     String?                   @map("refundId")
+  createdAt    DateTime                  @default(now()) @map("createdAt")
+  updatedAt    DateTime                  @updatedAt @map("updatedAt")
+
+  order        Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("orderCancellationRequest")
+}
+
+/// What a booster may work on, per game [plan Phase 2]. The rank ceiling is
+/// the highest TARGET rank the booster may take (lib/domain/rank.ts value);
+/// enforced on the order pool in Phase 3. Admins set it; the booster may only
+/// lower it.
+model BoosterPermission {
+  id                 String   @id @default(cuid())
+  boosterProfileId   String   @map("boosterProfileId")
+  gameSlug           String   @map("gameSlug")
+  rankSystemId       String   @map("rankSystemId")
+  maxTargetRankValue Int      @map("maxTargetRankValue")
+  maxTargetTierId    String   @map("maxTargetTierId")
+  maxTargetDivisionId String? @map("maxTargetDivisionId")
+  /// Riot platforms the booster may play on (empty = all).
+  regions            String[] @default([])
+  /// Service slugs allowed (empty = all services of the game).
+  serviceSlugs       String[] @default([]) @map("serviceSlugs")
+  updatedById        String?  @map("updatedById")
+  createdAt          DateTime @default(now()) @map("createdAt")
+  updatedAt          DateTime @updatedAt @map("updatedAt")
+  boosterProfile     BoosterProfile @relation(fields: [boosterProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([boosterProfileId, gameSlug])
+  @@map("boosterPermission")
+}
+
+/// Booster history: status changes, ceiling changes, KYC (append-only).
+model BoosterEvent {
+  id               String   @id @default(cuid())
+  boosterProfileId String   @map("boosterProfileId")
+  type             String
+  fromStatus       String?  @map("fromStatus")
+  toStatus         String?  @map("toStatus")
+  actorId          String?  @map("actorId")
+  note             String?
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("createdAt")
+  boosterProfile   BoosterProfile @relation(fields: [boosterProfileId], references: [id], onDelete: Cascade)
+
+  @@index([boosterProfileId, createdAt])
+  @@map("boosterEvent")
+}
+
+enum OrderBidStatus {
+  ACTIVE
+  WITHDRAWN
+  WON
+  LOST
+}
+
+/// Sealed bid: what a booster accepts to do the order (minor units, at most
+/// the payout ceiling). No endpoint returns other boosters' amounts.
+model OrderBid {
+  id        String         @id @default(cuid())
+  orderId   String         @map("orderId")
+  boosterId String         @map("boosterId")
+  round     Int
+  amount    Int
+  currency  String
+  status    OrderBidStatus @default(ACTIVE)
+  /// Number of times the amount was changed.
+  editCount Int            @default(0) @map("editCount")
+  createdAt DateTime       @default(now()) @map("createdAt")
+  updatedAt DateTime       @updatedAt @map("updatedAt")
+
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  booster User  @relation(fields: [boosterId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, boosterId, round])
+  @@index([orderId, round, status])
+  @@index([boosterId, status])
+  @@map("orderBid")
+}
+
+/// Booster play session on the customer account (Phase 4). Required before
+/// the login can be revealed; the booster accepts the rules when starting.
+/// One open session per assignment (partial unique index in SQL).
+model OrderSession {
+  id           String    @id @default(cuid())
+  orderId      String    @map("orderId")
+  assignmentId String    @map("assignmentId")
+  boosterId    String    @map("boosterId")
+  rulesVersion String    @map("rulesVersion")
+  startedAt    DateTime  @default(now()) @map("startedAt")
+  endedAt      DateTime? @map("endedAt")
+  /// BOOSTER, PAUSED, COMPLETED, RELEASED, EXPIRED.
+  endReason    String?   @map("endReason")
+  ip           String?
+  userAgent    String?   @map("userAgent")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, startedAt])
+  @@index([boosterId])
+  @@map("orderSession")
+}
+
+/// Every reveal of the customer login: who, when, in which session, from where.
+model OrderCredentialReveal {
+  id        String   @id @default(cuid())
+  orderId   String   @map("orderId")
+  boosterId String   @map("boosterId")
+  sessionId String?  @map("sessionId")
+  ip        String?
+  userAgent String?  @map("userAgent")
+  createdAt DateTime @default(now()) @map("createdAt")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("orderCredentialReveal")
+}
+
+/// Chat message that contained contact or payment details. The message
+/// itself is stored with those details hidden; the original text is kept
+/// here for admins only.
+model ChatModerationFlag {
+  id           String    @id @default(cuid())
+  orderId      String    @map("orderId")
+  messageId    String    @unique @map("messageId")
+  senderId     String?   @map("senderId")
+  /// EMAIL, PHONE, DISCORD, MESSENGER, PAYMENT, LINK.
+  kinds        String[]
+  original     String
+  createdAt    DateTime  @default(now()) @map("createdAt")
+  reviewedAt   DateTime? @map("reviewedAt")
+  reviewedById String?   @map("reviewedById")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([reviewedAt, createdAt])
+  @@map("chatModerationFlag")
+}
+
+/// Riot rank observed at a sync (one row per change or new games). Used for
+/// the LP change per game; deleted with match history after retention.
+model OrderRankSnapshot {
+  id       String   @id @default(cuid())
+  orderId  String   @map("orderId")
+  /// RANKED_SOLO_5x5 or RANKED_FLEX_SR.
+  queue    String
+  tier     String
+  division String?
+  lp       Int
+  takenAt  DateTime @default(now()) @map("takenAt")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, takenAt])
+  @@map("orderRankSnapshot")
+}
+
+enum BoosterFineStatus {
+  ISSUED
+  APPEALED
+  UPHELD
+  REVERSED
+}
+
+/// Fine issued by an admin from the fine schedule (Phase 6: admins only).
+/// Money: a BOOSTER_FINE ledger entry at issue; taken off the booster's next
+/// payout (deductedPayoutId); a reversal posts the opposite entry and, if it
+/// was already deducted, gives the amount back as an AVAILABLE earning.
+model BoosterFine {
+  id               String            @id @default(cuid())
+  boosterId        String            @map("boosterId")
+  orderId          String            @map("orderId")
+  code             String
+  amount           Int
+  currency         String
+  note             String
+  status           BoosterFineStatus @default(ISSUED)
+  issuedById       String            @map("issuedById")
+  appealText       String?           @map("appealText")
+  appealedAt       DateTime?         @map("appealedAt")
+  decidedAt        DateTime?         @map("decidedAt")
+  decidedById      String?           @map("decidedById")
+  decisionNote     String?           @map("decisionNote")
+  deductedPayoutId String?           @map("deductedPayoutId")
+  reversedAt       DateTime?         @map("reversedAt")
+  createdAt        DateTime          @default(now()) @map("createdAt")
+  updatedAt        DateTime          @updatedAt @map("updatedAt")
+
+  order  Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  strike BoosterStrike?
+
+  @@index([boosterId, status])
+  @@index([status, appealedAt])
+  @@map("boosterFine")
+}
+
+/// A strike on a booster (late release, missed start, fine). Shown to the
+/// booster and admins; no automatic suspension (decision 2026-11-15).
+model BoosterStrike {
+  id           String    @id @default(cuid())
+  boosterId    String    @map("boosterId")
+  orderId      String?   @map("orderId")
+  /// LATE_RELEASE, SLA_START, FINE.
+  code         String
+  note         String?
+  fineId       String?   @unique @map("fineId")
+  createdById  String?   @map("createdById")
+  createdAt    DateTime  @default(now()) @map("createdAt")
+  removedAt    DateTime? @map("removedAt")
+  removedById  String?   @map("removedById")
+  removeReason String?   @map("removeReason")
+
+  order Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  fine  BoosterFine? @relation(fields: [fineId], references: [id], onDelete: SetNull)
+
+  @@index([boosterId, createdAt])
+  @@map("boosterStrike")
+}
+
+/// Where a booster is paid (Phase 7). One per booster. Details are encrypted
+/// (AES-256-GCM, ACCOUNT_CREDENTIALS_KEY, context "payout-method:<boosterId>");
+/// only a masked hint is stored in clear. After a change, payouts are locked
+/// for payout_method_cooldown_hours.
+model BoosterPayoutMethod {
+  id         String   @id @default(cuid())
+  boosterId  String   @unique @map("boosterId")
+  /// PAYPAL, IBAN or CRYPTO.
+  type       String
+  ciphertext String
+  hint       String
+  /// When the current details were set; a change starts the payout lock.
+  setAt      DateTime @default(now()) @map("setAt")
+  /// True when these details replaced earlier ones (the lock applies).
+  replaced   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("createdAt")
+  updatedAt  DateTime @updatedAt @map("updatedAt")
+
+  @@map("boosterPayoutMethod")
+}
+
+/// Customer review of a completed order (Phase 8). One per order; the
+/// booster may reply once; admins can hide it (hidden reviews count nowhere).
+model OrderReview {
+  id           String    @id @default(cuid())
+  orderId      String    @unique @map("orderId")
+  customerId   String    @map("customerId")
+  boosterId    String    @map("boosterId")
+  rating       Int
+  tags         String[]  @default([])
+  text         String?
+  reply        String?
+  repliedAt    DateTime? @map("repliedAt")
+  hiddenAt     DateTime? @map("hiddenAt")
+  hiddenById   String?   @map("hiddenById")
+  hiddenReason String?   @map("hiddenReason")
+  createdAt    DateTime  @default(now()) @map("createdAt")
+  updatedAt    DateTime  @updatedAt @map("updatedAt")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([boosterId, createdAt])
+  @@map("orderReview")
+}
+
+enum OrderTipStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+}
+
+/// Customer tip for the booster of a completed order (Phase 8), paid with
+/// Stripe Checkout. Split like an order (decision 2026-11-16): platform
+/// commission + booster share, the share becomes a PENDING earning.
+model OrderTip {
+  id                String         @id @default(cuid())
+  orderId           String         @map("orderId")
+  customerId        String         @map("customerId")
+  boosterId         String         @map("boosterId")
+  amount            Int
+  currency          String
+  platformFeeAmount Int            @map("platformFeeAmount")
+  boosterAmount     Int            @map("boosterAmount")
+  status            OrderTipStatus @default(PENDING)
+  stripeSessionId   String?        @unique @map("stripeSessionId")
+  idempotencyKey    String         @unique @map("idempotencyKey")
+  paidAt            DateTime?      @map("paidAt")
+  createdAt         DateTime       @default(now()) @map("createdAt")
+  updatedAt         DateTime       @updatedAt @map("updatedAt")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([boosterId, status])
+  @@map("orderTip")
+}
+
+enum AccountDeletionStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// A user's request to delete their account (Phase 9, GDPR). An admin
+/// approves (personal data anonymised) or rejects with a note.
+model AccountDeletionRequest {
+  id           String                @id @default(cuid())
+  userId       String                @map("userId")
+  reason       String?
+  status       AccountDeletionStatus @default(REQUESTED)
+  requestedAt  DateTime              @default(now()) @map("requestedAt")
+  decidedAt    DateTime?             @map("decidedAt")
+  decidedById  String?               @map("decidedById")
+  decisionNote String?               @map("decisionNote")
+
+  @@index([status, requestedAt])
+  @@index([userId])
+  @@map("accountDeletionRequest")
 }

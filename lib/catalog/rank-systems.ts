@@ -7,10 +7,13 @@ const lolDivisions: RankDivision[] = [
   { id: 'i', label: 'I' },
 ]
 
+// Lowest first, like lolDivisions (IV -> I). In VALORANT, 1 is the lowest
+// division and 3 the highest (Iron 1 -> Iron 3 -> Bronze 1). rankScore and the
+// pricing ladder both read divisions in array order.
 const valorantDivisions: RankDivision[] = [
-  { id: '3', label: '3' },
-  { id: '2', label: '2' },
   { id: '1', label: '1' },
+  { id: '2', label: '2' },
+  { id: '3', label: '3' },
 ]
 
 function tier(id: string, name: string, order: number, divisions?: RankDivision[], iconSrc?: string): RankTier {
@@ -29,14 +32,14 @@ export const rankSystems: RankSystem[] = [
     gameSlug: 'league-of-legends',
     name: 'League of Legends Ranked',
     tiers: [
-      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.png'),
-      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.png'),
-      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.png'),
-      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.png'),
-      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.png'),
-      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.png'),
-      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.png'),
-      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.png'),
+      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.webp'),
+      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.webp'),
+      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.webp'),
+      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.webp'),
+      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.webp'),
+      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.webp'),
+      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.webp'),
+      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.webp'),
 
     ],
   },
@@ -45,15 +48,15 @@ export const rankSystems: RankSystem[] = [
     gameSlug: 'valorant',
     name: 'VALORANT Competitive',
     tiers: [
-      tier('iron', 'Iron', 1, valorantDivisions, '/images/ranks/valorant-rank-icons/iron.png'),
-      tier('bronze', 'Bronze', 2, valorantDivisions, '/images/ranks/valorant-rank-icons/bronze.png'),
-      tier('silver', 'Silver', 3, valorantDivisions, '/images/ranks/valorant-rank-icons/silver.png'),
-      tier('gold', 'Gold', 4, valorantDivisions, '/images/ranks/valorant-rank-icons/gold.png'),
-      tier('platinum', 'Platinum', 5, valorantDivisions, '/images/ranks/valorant-rank-icons/platinum.png'),
-      tier('diamond', 'Diamond', 6, valorantDivisions, '/images/ranks/valorant-rank-icons/diamond.png'),
-      tier('ascendant', 'Ascendant', 7, valorantDivisions, '/images/ranks/valorant-rank-icons/ascendant.png'),
-      tier('immortal', 'Immortal', 8, valorantDivisions, '/images/ranks/valorant-rank-icons/immortal.png'),
-      tier('radiant', 'Radiant', 9, undefined, '/images/ranks/valorant-rank-icons/radiant.png'),
+      tier('iron', 'Iron', 1, valorantDivisions, '/images/ranks/valorant-rank-icons/iron.webp'),
+      tier('bronze', 'Bronze', 2, valorantDivisions, '/images/ranks/valorant-rank-icons/bronze.webp'),
+      tier('silver', 'Silver', 3, valorantDivisions, '/images/ranks/valorant-rank-icons/silver.webp'),
+      tier('gold', 'Gold', 4, valorantDivisions, '/images/ranks/valorant-rank-icons/gold.webp'),
+      tier('platinum', 'Platinum', 5, valorantDivisions, '/images/ranks/valorant-rank-icons/platinum.webp'),
+      tier('diamond', 'Diamond', 6, valorantDivisions, '/images/ranks/valorant-rank-icons/diamond.webp'),
+      tier('ascendant', 'Ascendant', 7, valorantDivisions, '/images/ranks/valorant-rank-icons/ascendant.webp'),
+      tier('immortal', 'Immortal', 8, valorantDivisions, '/images/ranks/valorant-rank-icons/immortal.webp'),
+      tier('radiant', 'Radiant', 9, undefined, '/images/ranks/valorant-rank-icons/radiant.webp'),
     ],
   },
   {
@@ -62,14 +65,14 @@ export const rankSystems: RankSystem[] = [
     name: 'TFT Ranked',
     mode: 'Ranked',
     tiers: [
-      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.png'),
-      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.png'),
-      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.png'),
-      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.png'),
-      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.png'),
-      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.png'),
-      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.png'),
-      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.png'),
+      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.webp'),
+      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.webp'),
+      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.webp'),
+      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.webp'),
+      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.webp'),
+      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.webp'),
+      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.webp'),
+      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.webp'),
 
     ],
   },
@@ -79,14 +82,14 @@ export const rankSystems: RankSystem[] = [
     name: 'TFT Double Up',
     mode: 'Double Up',
     tiers: [
-      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.png'),
-      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.png'),
-      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.png'),
-      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.png'),
-      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.png'),
-      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.png'),
-      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.png'),
-      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.png'),
+      tier('iron', 'Iron', 1, lolDivisions, '/images/ranks/lol-rank-images/iron.webp'),
+      tier('bronze', 'Bronze', 2, lolDivisions, '/images/ranks/lol-rank-images/bronze.webp'),
+      tier('silver', 'Silver', 3, lolDivisions, '/images/ranks/lol-rank-images/silver.webp'),
+      tier('gold', 'Gold', 4, lolDivisions, '/images/ranks/lol-rank-images/gold.webp'),
+      tier('platinum', 'Platinum', 5, lolDivisions, '/images/ranks/lol-rank-images/platinum.webp'),
+      tier('emerald', 'Emerald', 6, lolDivisions, '/images/ranks/lol-rank-images/emerald.webp'),
+      tier('diamond', 'Diamond', 7, lolDivisions, '/images/ranks/lol-rank-images/diamond.webp'),
+      tier('master', 'Master', 8, undefined, '/images/ranks/lol-rank-images/master.webp'),
 
     ],
   },

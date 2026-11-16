@@ -19,7 +19,17 @@ const gameExpertiseSchema = z.object({
     .int("Years must be a whole number")
     .min(0, "Years cannot be negative")
     .max(50, "Years cannot exceed 50"),
+  /** Link proving the peak rank (op.gg, tracker.gg, screenshot). Reviewed by an admin. */
+  proofUrl: z
+    .string()
+    .trim()
+    .url("Enter a valid link")
+    .max(500, "Link is too long")
+    .refine((u) => u.startsWith("https://"), "Use an https:// link"),
 });
+
+/** Booster rules version accepted with the application (bump when the rules change). */
+export const BOOSTER_RULES_VERSION = "2026-11-14";
 
 export const boosterApplicationSchema = z.object({
   personal: z.object({

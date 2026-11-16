@@ -1,29 +1,51 @@
 import type { Champion } from '@/types/catalog'
+import type { LolLane } from './lol-champion-types'
+import { LOL_CHAMPION_DATA, LOL_DDRAGON_VERSION } from './lol-champions.generated'
 
-// Configurable champion data source. Champion options for the champion-picker
-// field come from here and are independent of the service and game configuration.
-export const champions: Champion[] = [
-  { id: 'ahri', name: 'Ahri', iconSrc: '/images/champions/ahri.png' },
-  { id: 'akali', name: 'Akali', iconSrc: '/images/champions/akali.png' },
-  { id: 'ashe', name: 'Ashe', iconSrc: '/images/champions/ashe.png' },
-  { id: 'darius', name: 'Darius', iconSrc: '/images/champions/darius.png' },
-  { id: 'ezreal', name: 'Ezreal', iconSrc: '/images/champions/ezreal.png' },
-  { id: 'jinx', name: 'Jinx', iconSrc: '/images/champions/jinx.png' },
-  { id: 'kaihasa', name: "Kai'Sa", iconSrc: '/images/champions/kaihasa.png' },
-  { id: 'lee-sin', name: "Lee Sin", iconSrc: '/images/champions/lee-sin.png' },
-  { id: 'lux', name: 'Lux', iconSrc: '/images/champions/lux.png' },
-  { id: 'master-yi', name: 'Master Yi', iconSrc: '/images/champions/master-yi.png' },
-  { id: 'ryze', name: 'Ryze', iconSrc: '/images/champions/ryze.png' },
-  { id: 'thresh', name: 'Thresh', iconSrc: '/images/champions/thresh.png' },
-  { id: 'yasuo', name: 'Yasuo', iconSrc: '/images/champions/yasuo.png' },
-  { id: 'yone', name: 'Yone', iconSrc: '/images/champions/yone.png' },
-  { id: 'zed', name: 'Zed', iconSrc: '/images/champions/zed.png' },
+/**
+ * Every League of Legends champion (generated from Riot Data Dragon by
+ * scripts/sync-lol-champions.ts; re-run it when a new champion is released).
+ * Icons come from Riot's official Data Dragon CDN.
+ */
+
+/** Lanes ("roles") a customer can ask the booster to play. */
+export const LOL_ROLES: { id: LolLane; label: string }[] = [
+  { id: 'top', label: 'Top' },
+  { id: 'jungle', label: 'Jungle' },
+  { id: 'mid', label: 'Mid' },
+  { id: 'adc', label: 'ADC' },
+  { id: 'support', label: 'Support' },
 ]
+export const LOL_ROLE_IDS = new Set<string>(LOL_ROLES.map((r) => r.id))
+
+/** Ids stored on older orders before the full list existed. */
+const LEGACY_IDS: Record<string, string> = {
+  kaihasa: 'kaisa',
+}
+
+export const champions: Champion[] = LOL_CHAMPION_DATA.map((c) => ({
+  id: c.id,
+  name: c.name,
+  title: c.title,
+  key: c.key,
+  ddragonId: c.ddragonId,
+  tags: c.tags,
+  lanes: c.lanes,
+  iconSrc: `https://ddragon.leagueoflegends.com/cdn/${LOL_DDRAGON_VERSION}/img/champion/${c.ddragonId}.png`,
+}))
+
+const byId = new Map(champions.map((c) => [c.id, c]))
+
+/** Current id for a stored id (handles legacy ids); undefined if unknown. */
+export function normalizeChampionId(id: string): string | undefined {
+  const current = LEGACY_IDS[id] ?? id
+  return byId.has(current) ? current : undefined
+}
 
 export function getChampions(): Champion[] {
   return champions
 }
 
 export function getChampion(id: string): Champion | undefined {
-  return champions.find((champion) => champion.id === id)
+  return byId.get(LEGACY_IDS[id] ?? id)
 }

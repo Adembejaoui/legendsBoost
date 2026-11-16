@@ -34,3 +34,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Riot API
+
+- **Key:** set `RIOT_API_KEY` in `.env` (server only, never committed). League of Legends tracking (rank, match history, LP per game) uses it.
+- **Status (2026-11-15):** League of Legends only. Valorant and TFT tracking, and manual rank reports by boosters, are not built yet: they wait for the needed API keys. Until then those orders are completed by an admin.
+- **Production key:** register the product in the Riot Developer Portal before going live; development keys expire every 24 hours.
+- **Switch off:** set the config `tracker_provider` to `manual` or `mock` to stop all Riot calls; orders keep working.
+- **Policy:** Riot IDs only (no summoner names), the "not endorsed by Riot Games" notice is in the footer, match and rank history are deleted 15 days after an order ends (config `match_retention_days`). Progress is never shown as MMR.

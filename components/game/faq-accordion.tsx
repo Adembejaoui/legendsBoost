@@ -28,9 +28,10 @@ export function FaqAccordion({
     ? faqs
     : (gameFaqItems ?? []).map(({ q, a }) => ({ question: q, answer: a }))
 
-  if (items.length === 0) return null
-
+  // Hooks first: React requires the same hooks on every render.
   const [active, setActive] = useState<number | null>(null)
+
+  if (items.length === 0) return null
 
   return (
     <section className="border-t border-white/[0.06] py-24 sm:py-32">

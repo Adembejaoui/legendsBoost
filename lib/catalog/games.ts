@@ -9,7 +9,7 @@ export const games: GameDefinition[] = [
     shortDescription: 'Ranked support for every stage of your climb.',
     description:
       'Explore League of Legends services built around the ranked ladder. Every offer is configured per game and reviewed for eligibility before publication.',
-    image: '/images/games/league.png',
+    image: '/images/games/league.webp',
     accent: '#8b5cf6',
     rankSystemIds: ['lol-ranked'],
     serviceSlugs: [
@@ -30,7 +30,7 @@ export const games: GameDefinition[] = [
     shortDescription: 'Sharpen your edge across the competitive ladder.',
     description:
       'Explore VALORANT services built around the competitive ladder. Every offer is configured per game and reviewed for eligibility before publication.',
-    image: '/images/games/valorant.png',
+    image: '/images/games/valorant.webp',
     accent: '#f59e0b',
     rankSystemIds: ['valorant-competitive'],
     serviceSlugs: ['rank-boost', 'win-boost', 'placement-boost', 'unrated-matches'],
@@ -44,7 +44,7 @@ export const games: GameDefinition[] = [
     shortDescription: 'Make smarter plays and reach your next tier.',
     description:
       'Explore Teamfight Tactics services for Ranked and Double Up. Every offer is configured per game and reviewed for eligibility before publication.',
-    image: '/images/games/tft.png',
+    image: '/images/games/tft.webp',
     accent: '#22d3ee',
     rankSystemIds: ['tft-ranked', 'tft-double-up'],
     serviceSlugs: ['rank-boost', 'win-boost', 'placement-boost', 'double-up-boost'],

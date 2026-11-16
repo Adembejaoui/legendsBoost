@@ -4,7 +4,8 @@ import { z, ZodError } from "zod";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth/guards";
 import { logger } from "@/lib/logger";
-import { boosterApplicationSchema, type BoosterApplicationInput } from "@/lib/boosters/application-schema";
+import { boosterApplicationSchema, BOOSTER_RULES_VERSION, type BoosterApplicationInput } from "@/lib/boosters/application-schema";
+import { transitionBooster } from "@/lib/boosters/transitions";
 import { getGame, getRankSystemsByGame, getTier, getDivision } from "@/lib/catalog/catalog-utils";
 
 export const runtime = "nodejs";
@@ -66,19 +67,24 @@ export async function POST(req: Request) {
     if (existing) {
       switch (existing.verificationStatus) {
         case "APPROVED":
+        case "TRIAL":
+        case "ON_BREAK":
           return NextResponse.json({ error: "Already approved as booster" }, { status: 400 });
         case "PENDING":
+        case "UNDER_REVIEW":
           return NextResponse.json(
             { error: "You already have a pending booster application" },
             { status: 409 },
           );
         case "SUSPENDED":
+        case "TERMINATED":
           return NextResponse.json(
             { error: "Booster account is suspended; applications are blocked" },
             { status: 403 },
           );
         case "REJECTED":
-          // Resubmission after rejection is allowed.
+        case "NEEDS_INFO":
+          // Resubmission (after a rejection, or with the requested information) is allowed.
           break;
       }
     }
@@ -139,31 +145,29 @@ export async function POST(req: Request) {
     const languages = Array.from(new Set(data.availability.languages));
     const specializations = data.games.map((game) => game.mainRole);
 
-    const boosterProfile = await prisma.boosterProfile.upsert({
-      where: { userId: dbUser.id },
-      update: {
-        applicationData,
-        biography: data.experience.biography,
-        experienceYears,
-        languages,
-        specializations,
-        verificationStatus: "PENDING",
-        rejectionReason: null,
-        reviewedAt: null,
-        reviewerId: null,
-        approvedAt: null,
-        availabilityStatus: existing?.availabilityStatus ?? "UNAVAILABLE",
-      },
-      create: {
-        userId: dbUser.id,
-        applicationData,
-        biography: data.experience.biography,
-        experienceYears,
-        languages,
-        specializations,
-        verificationStatus: "PENDING",
-        availabilityStatus: "UNAVAILABLE",
-      },
+    const now = new Date();
+    const fields = {
+      applicationData,
+      biography: data.experience.biography,
+      experienceYears,
+      languages,
+      specializations,
+      rulesVersion: BOOSTER_RULES_VERSION,
+      rulesAcceptedAt: now,
+    };
+    // Status changes go through transitionBooster (resubmission -> PENDING).
+    const boosterProfile = await prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.boosterProfile.update({ where: { id: existing.id }, data: fields });
+        return transitionBooster(tx, { profileId: existing.id, to: "PENDING", actorId: dbUser.id, actor: "self" });
+      }
+      const created = await tx.boosterProfile.create({
+        data: { userId: dbUser.id, ...fields, verificationStatus: "PENDING", availabilityStatus: "UNAVAILABLE" },
+      });
+      await tx.boosterEvent.create({
+        data: { boosterProfileId: created.id, type: "APPLICATION_SUBMITTED", toStatus: "PENDING", actorId: dbUser.id },
+      });
+      return created;
     });
 
     return NextResponse.json({
