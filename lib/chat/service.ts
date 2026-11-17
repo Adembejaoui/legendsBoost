@@ -95,7 +95,8 @@ export async function canAccessConversation(userId: string, userRole: string, or
     where: { id: orderId },
     include: {
       assignments: {
-        where: { status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED"] } },
+        // SUBMITTED: completion waiting for the customer; chat stays open.
+        where: { status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] } },
         select: { boosterId: true },
       },
     },

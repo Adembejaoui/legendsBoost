@@ -10,15 +10,16 @@ export interface WorkspaceRankDTO {
   lp: number;
   label: string;
   iconSrc: string | null;
-  /** riot = League-V4 observation; order = declared by the customer at checkout. */
-  source: "riot" | "order";
+  /** booster = reported by the booster; order = declared at checkout; riot = legacy Riot data. */
+  source: "riot" | "order" | "booster";
   at: string | null;
   lpAssumed: boolean;
 }
 
 export interface WorkspaceProgressDTO {
   kind: "rank" | "wins" | "none";
-  status: "unavailable" | "invalid" | "in_progress" | "complete" | "indeterminate";
+  /** waiting = no rank reported by the booster yet. */
+  status: "unavailable" | "invalid" | "waiting" | "in_progress" | "complete" | "indeterminate";
   percent: number | null;
   lpDelta: number | null;
   lpRemaining: number | null;
@@ -213,7 +214,21 @@ export interface WorkspaceDTO {
      * unsupported: no automatic rank source for this game (VALORANT, TFT),
      * so only the ordered start and target ranks are shown.
      */
-    tracking: "riot" | "unsupported";
+    tracking: "riot" | "booster" | "unsupported";
+  };
+  /** Booster progress updates (decision 2026-11-17: replaces Riot tracking). */
+  updates: {
+    list: { id: string; label: string; tierId: string; divisionId: string | null; lp: number | null; iconSrc: string | null; at: string }[];
+    /** The working booster may post an update now. */
+    canPost: boolean;
+    /** "LP" (League, TFT) or "RR" (VALORANT). */
+    pointsLabel: "LP" | "RR";
+    /** Ranks the booster can pick (the order's rank system), lowest first. */
+    rankOptions: { tierId: string; name: string; iconSrc: string | null; divisions: { id: string; label: string }[] }[];
+    /** Public profile link for the customer to check the rank (OP.GG / tracker.gg). */
+    selfCheck: { label: string; url: string } | null;
+    /** No update for 24 h while in progress. */
+    stale: boolean;
   };
   progress: WorkspaceProgressDTO;
   preferences: {
@@ -227,6 +242,28 @@ export interface WorkspaceDTO {
   conversationId: string | null;
   credentials: WorkspaceCredentialsDTO;
   sessions: WorkspaceSessionsDTO;
+  /** Completion with proof (decision 2026-11-16): latest request and what the viewer may do. */
+  completion: {
+    request: {
+      id: string;
+      status: string;
+      submittedAt: string;
+      autoConfirmAt: string;
+      boosterNote: string | null;
+      disputeReason: string | null;
+      disputedAt: string | null;
+      adminNote: string | null;
+      decidedAt: string | null;
+      proofs: { id: string; url: string }[];
+    } | null;
+    /** Customer: confirm (pending or disputed request). */
+    canConfirm: boolean;
+    /** Customer: report a problem (pending request). */
+    canDispute: boolean;
+    /** Admin: complete or send back (pending or disputed request). */
+    canDecide: boolean;
+    autoConfirmHours: number;
+  };
   /** Admin only: the in-progress assignment an admin may complete (no Riot check). */
   adminCompletion: { assignmentId: string } | null;
   /** Booster on a claimed, not started order: free release (no strike) until this time. */

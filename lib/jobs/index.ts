@@ -11,6 +11,8 @@ import { closeStaleCheckoutHolds } from "@/lib/payments/checkout.service";
 import { closeDueBidding } from "@/lib/pool/service";
 import { runInactivityWarnings, runSlaWarnings } from "@/lib/pool/sla";
 import { purgeOldTrackerData } from "@/lib/services/games/league-of-legends/retention";
+import { autoConfirmDue } from "@/lib/orders/completion-request.service";
+import { runProgressReminders } from "@/lib/orders/progress-updates.service";
 import { acquireLease, releaseLease, type RawDb } from "./lease";
 
 export interface JobDefinition {
@@ -35,10 +37,15 @@ export const JOBS: Record<string, JobDefinition> = {
     leaseMs: 2 * 60_000,
     run: async () => closeDueBidding(),
   },
-  /** Contact / start SLA warnings after a claim (warnings only). */
+  /** Contact / start SLA warnings after a claim, inactivity and missing rank updates (warnings only). */
   "sla-warnings": {
     leaseMs: 4 * 60_000,
-    run: async () => ({ ...(await runSlaWarnings()), ...(await runInactivityWarnings()) }),
+    run: async () => ({ ...(await runSlaWarnings()), ...(await runInactivityWarnings()), ...(await runProgressReminders()) }),
+  },
+  /** Confirm completions the customer did not answer within auto_confirm_hours. */
+  "auto-confirm": {
+    leaseMs: 4 * 60_000,
+    run: async () => autoConfirmDue(),
   },
   /** Delete match and rank history N days after an order ends (config match_retention_days). */
   "tracker-retention": {

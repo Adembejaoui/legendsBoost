@@ -27,7 +27,8 @@ import {
  * CANCELLED.
  */
 
-const EDITABLE_STATUSES = new Set(["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "DRAFT"]);
+// AWAITING_CONFIRMATION: the customer may still remove the saved login.
+const EDITABLE_STATUSES = new Set(["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION", "DRAFT"]);
 
 export const credentialsInputSchema = z
   .object({

@@ -99,7 +99,7 @@ dashboard.stripe.com → make sure **Test mode** is on → **Developers → Webh
 ## 6. Scheduled jobs (cron-job.org, while on Hobby)
 
 Vercel Hobby only runs crons once a day, so the jobs run from cron-job.org (free).
-Create an account, then **Create cronjob** five times:
+Create an account, then **Create cronjob** six times:
 
 | Title | URL | Schedule |
 |---|---|---|
@@ -107,6 +107,7 @@ Create an account, then **Create cronjob** five times:
 | outbox-dispatch | `https://hoodiz.net/api/cron/outbox-dispatch` | every 5 minutes |
 | sla-warnings | `https://hoodiz.net/api/cron/sla-warnings` | every 5 minutes |
 | close-stale-holds | `https://hoodiz.net/api/cron/close-stale-holds` | every 15 minutes |
+| auto-confirm | `https://hoodiz.net/api/cron/auto-confirm` | every 15 minutes |
 | tracker-retention | `https://hoodiz.net/api/cron/tracker-retention` | daily 03:30 |
 
 For each one, open **Advanced**:
@@ -118,7 +119,8 @@ For each one, open **Advanced**:
 Check: **Test run** should answer `200`. `401` means the header does not
 match `CRON_SECRET`; `503` means `CRON_SECRET` is not set on Vercel.
 
-Without `close-bidding`, bids never close and orders are never assigned.
+Without `close-bidding`, bids never close and orders are never assigned. Without `auto-confirm`, completed orders
+the customer does not answer never confirm (and the booster is never paid).
 
 ## 7. Check the deployment
 
@@ -150,6 +152,7 @@ On `https://hoodiz.net`:
        { "path": "/api/cron/close-stale-holds", "schedule": "*/15 * * * *" },
        { "path": "/api/cron/close-bidding", "schedule": "* * * * *" },
        { "path": "/api/cron/sla-warnings", "schedule": "*/5 * * * *" },
+       { "path": "/api/cron/auto-confirm", "schedule": "*/15 * * * *" },
        { "path": "/api/cron/tracker-retention", "schedule": "30 3 * * *" }
      ]
    }

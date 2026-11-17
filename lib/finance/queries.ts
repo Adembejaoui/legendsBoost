@@ -10,6 +10,31 @@ const add = (m: CurrencyMap, c: string, v: number) => {
   m[c] = (m[c] ?? 0) + v;
 };
 
+/**
+ * Booster dashboard cards (decision 2026-11-17): what can be cashed out now
+ * (AVAILABLE), what is frozen by a dispute / chargeback (ON_HOLD), and what
+ * waits for an admin release (PENDING) plus the orders still waiting for the
+ * customer's confirmation. Net of reversals, per currency.
+ */
+export async function boosterBalances(boosterId: string) {
+  const [rows, awaitingConfirmation] = await Promise.all([
+    prisma.boosterEarning.groupBy({
+      by: ["status", "currency"],
+      where: { boosterId, status: { in: ["AVAILABLE", "ON_HOLD", "PENDING"] } },
+      _sum: { grossAmount: true, reversedAmount: true },
+    }),
+    prisma.orderBoosterAssignment.count({ where: { boosterId, status: "SUBMITTED" } }),
+  ]);
+  const available: CurrencyMap = {};
+  const frozen: CurrencyMap = {};
+  const pending: CurrencyMap = {};
+  for (const r of rows) {
+    const net = (r._sum.grossAmount ?? 0) - (r._sum.reversedAmount ?? 0);
+    add(r.status === "AVAILABLE" ? available : r.status === "ON_HOLD" ? frozen : pending, r.currency, net);
+  }
+  return { available, frozen, pending, awaitingConfirmation };
+}
+
 export async function boosterFinance(boosterId: string) {
   const [earnings, payouts, payable] = await Promise.all([
     prisma.boosterEarning.findMany({

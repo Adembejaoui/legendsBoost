@@ -28,6 +28,12 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatusValue, OrderStatusConfig> = 
     color: "active",
     icon: () => null,
   },
+  [$Enums.OrderStatus.AWAITING_CONFIRMATION]: {
+    label: "Awaiting confirmation",
+    description: "The booster finished the order. The customer confirms the result, or it confirms automatically after 72 hours.",
+    color: "active",
+    icon: () => null,
+  },
   [$Enums.OrderStatus.PAUSED]: {
     label: "Paused",
     description: "Work on this order is paused and can be resumed.",

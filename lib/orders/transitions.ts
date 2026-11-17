@@ -26,7 +26,10 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   // or releases; booster abandons (DRAFT); cancelled.
   CLAIMED: ["IN_PROGRESS", "CLAIMED", "PENDING", "DRAFT", "CANCELLED"],
   // Being worked on. IN_PROGRESS -> IN_PROGRESS = admin reassignment.
-  IN_PROGRESS: ["IN_PROGRESS", "PAUSED", "COMPLETED", "CANCELLED", "DRAFT", "PENDING"],
+  IN_PROGRESS: ["IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION", "COMPLETED", "CANCELLED", "DRAFT", "PENDING"],
+  // Booster completed with proof: the customer confirms (or auto-confirm /
+  // admin accepts) -> COMPLETED; an admin sends it back -> IN_PROGRESS.
+  AWAITING_CONFIRMATION: ["COMPLETED", "IN_PROGRESS"],
   // Paused by the customer.
   PAUSED: ["IN_PROGRESS", "CANCELLED", "DRAFT", "PENDING"],
   // Pulled off the marketplace (abandoned / unpaid): admin republish or cancel.

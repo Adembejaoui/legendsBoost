@@ -83,7 +83,7 @@ async function adviseLoginChange(orderId: string, boosterId: string) {
  * committed. Best effort: access never depends on it (a session only counts
  * while the order is IN_PROGRESS and held by the session's assignment).
  */
-async function closeSessions(orderId: string, reason: "PAUSED" | "COMPLETED" | "RELEASED" | "CANCELLED") {
+export async function closeSessions(orderId: string, reason: "PAUSED" | "COMPLETED" | "RELEASED" | "CANCELLED") {
   try {
     const { endOpenSessions } = await import("@/lib/orders/sessions.service");
     await endOpenSessions(prisma, orderId, reason);
@@ -501,102 +501,124 @@ export async function completeAssignment(
       );
     }
 
-    const boosterId = assignment.boosterId;
-    const completedAt = new Date();
-
-    const updated = await tx.orderBoosterAssignment.update({
-      where: { id: assignmentId },
-      data: {
-        status: "COMPLETED",
-        endedAt: completedAt,
-        endReason: "Completed by booster",
-        activeOrderId: null,
-      },
+    const { updated, completedAt } = await completeOrderInTx(tx, {
+      assignmentId,
+      orderId: order.id,
+      fromOrderStatus: "IN_PROGRESS",
+      endReason: "Completed by booster",
     });
-
-    // Conditional update: if a concurrent request already completed the
-    // order this throws P2025 and the whole transaction rolls back, so the
-    // completion (and its notifications) can only happen once.
-    await transitionOrder(tx, {
-      where: { id: order.id, status: "IN_PROGRESS" },
-      to: "COMPLETED",
-      data: { completedAt },
-    });
-
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "ORDER_COMPLETED",
-        message: "Order completed",
-        metadata: { assignmentId },
-      },
-    });
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "COMPLETION_SUBMITTED",
-        message: "Completion submitted",
-        metadata: { assignmentId },
-      },
-    });
-    await tx.orderEvent.create({
-      data: {
-        orderId: order.id,
-        type: "ASSIGNMENT_COMPLETED",
-        message: "Assignment completed",
-        metadata: { assignmentId },
-      },
-    });
-
-    // Same transaction: attribute the reserved 55% booster share. Single
-    // contributor -> that booster (PENDING, awaits admin release); several
-    // contributors -> PENDING_REVIEW for an admin allocation. No-op for
-    // unpaid / legacy orders.
-    await allocateOnCompletion(tx, order.id, assignmentId);
-
-    return { assignment: updated, order, boosterId, completedAt };
+    return { assignment: updated, order, boosterId: assignment.boosterId as string, completedAt };
   });
+  await afterOrderCompleted({
+    orderId: result.order.id,
+    customerId: result.order.userId,
+    boosterId: result.boosterId,
+    assignmentId,
+    actorId: userId,
+    previousStatus: result.order.status,
+    completedAt: result.completedAt,
+  });
+  return result;
+}
+
+/**
+ * The completion write, shared by the admin "Complete" and the confirmed
+ * completion request (lib/orders/completion-request.service.ts). Must run in
+ * the caller's transaction. Conditional on the order's current status, so a
+ * concurrent completion makes it throw (P2025) and roll back.
+ */
+export async function completeOrderInTx(
+  tx: Prisma.TransactionClient,
+  p: { assignmentId: string; orderId: string; fromOrderStatus: "IN_PROGRESS" | "AWAITING_CONFIRMATION"; endReason: string; metadata?: Record<string, unknown> }
+) {
+  const completedAt = new Date();
+  const updated = await tx.orderBoosterAssignment.update({
+    where: { id: p.assignmentId },
+    data: {
+      status: "COMPLETED",
+      endedAt: completedAt,
+      endReason: p.endReason,
+      activeOrderId: null,
+    },
+  });
+
+  await transitionOrder(tx, {
+    where: { id: p.orderId, status: p.fromOrderStatus },
+    to: "COMPLETED",
+    data: { completedAt },
+  });
+
+  const meta = { assignmentId: p.assignmentId, ...(p.metadata ?? {}) };
+  await tx.orderEvent.create({
+    data: { orderId: p.orderId, type: "ORDER_COMPLETED", message: "Order completed", metadata: meta as Prisma.InputJsonValue },
+  });
+  if (p.fromOrderStatus === "IN_PROGRESS") {
+    await tx.orderEvent.create({
+      data: { orderId: p.orderId, type: "COMPLETION_SUBMITTED", message: "Completion submitted", metadata: meta as Prisma.InputJsonValue },
+    });
+  }
+  await tx.orderEvent.create({
+    data: { orderId: p.orderId, type: "ASSIGNMENT_COMPLETED", message: "Assignment completed", metadata: meta as Prisma.InputJsonValue },
+  });
+
+  // Same transaction: attribute the reserved 55% booster share. Single
+  // contributor -> that booster (PENDING, awaits admin release); several
+  // contributors -> PENDING_REVIEW for an admin allocation. No-op for
+  // unpaid / legacy orders.
+  await allocateOnCompletion(tx, p.orderId, p.assignmentId);
+  return { updated, completedAt };
+}
+
+/** Side effects after a completion committed (best effort, idempotent). */
+export async function afterOrderCompleted(p: {
+  orderId: string;
+  customerId: string;
+  boosterId: string;
+  assignmentId: string;
+  actorId: string;
+  previousStatus: string;
+  completedAt: Date;
+}) {
   await dispatchOutbox({ limit: 5 });
 
   // Revoke the booster's socket access to the order room
-  await revokeOrderAccess({ userId: result.boosterId, orderId: result.order.id });
+  await revokeOrderAccess({ userId: p.boosterId, orderId: p.orderId });
 
   // Customer, the completing booster and admins. The dedupe key guarantees a
   // single completion notification per recipient even if this is retried.
   await createNotificationsForEvent({
     type: "ORDER_COMPLETED",
-    orderId: result.order.id,
-    assignmentId,
-    actorId: userId,
-    dedupeKey: `ORDER_COMPLETED:${result.order.id}`,
+    orderId: p.orderId,
+    assignmentId: p.assignmentId,
+    actorId: p.actorId,
+    dedupeKey: `ORDER_COMPLETED:${p.orderId}`,
   });
 
   await broadcastToOrder({
-    orderId: result.order.id,
+    orderId: p.orderId,
     event: "order.completed",
     payload: {
-      orderId: result.order.id,
-      customerId: result.order.userId,
-      boosterId: result.boosterId,
-      assignmentId,
-      completedAt: result.completedAt.toISOString(),
+      orderId: p.orderId,
+      customerId: p.customerId,
+      boosterId: p.boosterId,
+      assignmentId: p.assignmentId,
+      completedAt: p.completedAt.toISOString(),
     },
   });
   await broadcastToOrder({
-    orderId: result.order.id,
+    orderId: p.orderId,
     event: "order.status_changed",
     payload: {
-      orderId: result.order.id,
-      customerId: result.order.userId,
-      boosterId: result.boosterId,
-      previousStatus: result.order.status,
+      orderId: p.orderId,
+      customerId: p.customerId,
+      boosterId: p.boosterId,
+      previousStatus: p.previousStatus,
       newStatus: "COMPLETED",
-      changedAt: result.completedAt.toISOString(),
+      changedAt: p.completedAt.toISOString(),
     },
   });
 
-  await closeSessions(result.order.id, "COMPLETED");
-  return result;
+  await closeSessions(p.orderId, "COMPLETED");
 }
 
 export async function cancelAssignment(

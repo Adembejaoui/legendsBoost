@@ -14,9 +14,16 @@ import type {
   WorkspaceMatchPage,
   WorkspaceRankDTO,
 } from "./workspace-types";
-import { formatRank } from "@/lib/services/games/league-of-legends/progression.service";
-import { computeOrderProgress, RIOT_RANK_GAMES } from "./order-progress";
-import type { SourcedRank } from "@/lib/services/games/league-of-legends/riot.types";
+import {
+  allowedRankOptions,
+  computeReportedProgress,
+  listProgressUpdates,
+  orderRankSystemId,
+  pointsLabel,
+  PROGRESS_REMINDER_HOURS,
+  rankRefOf,
+  selfCheckLink,
+} from "./progress-updates.service";
 import { getRiotCapabilities, publicRiotCapabilities } from "@/lib/services/games/league-of-legends/capabilities";
 import {
   RIOT_PLATFORMS,
@@ -36,13 +43,13 @@ import {
 } from "@/lib/services/games/league-of-legends/champion-assets";
 import type { RiotPlatform } from "@/lib/services/games/league-of-legends/riot.types";
 import { getMessages, getOrCreateConversation } from "@/lib/chat/service";
-import { toProfileDTO } from "./workspace-profile";
 import { canRequestCancellation } from "./cancellation-request.service";
 import { credentialPermissions, getCredentialStatus } from "./account-credentials.service";
 import { credentialsConfigured } from "@/lib/security/account-credentials";
 import { getOpenSession, listSessions, SESSION_RULES } from "./sessions.service";
 import { getConfig } from "@/lib/config";
 import { REVIEW_TAGS } from "@/lib/reviews/service";
+import { latestCompletionRequest } from "./completion-request.service";
 
 /** Review and tips block of the order page (Phase 8). */
 async function feedbackFor(orderId: string, status: string, role: string, viewerId: string): Promise<WorkspaceDTO["feedback"]> {
@@ -93,29 +100,6 @@ const ROLE_LABELS: Record<string, string> = {
  * kept as operational history (and pause events drive match attribution).
  */
 const WORKSPACE_EVENT_TYPES = ["ORDER_PAUSED", "BOOSTER_ABANDONED"];
-
-/** Emblem for a tier, from the order's own game rank system. */
-function rankIcon(rankSystemId: string, tier: string): string | null {
-  return (
-    getTier(rankSystemId, tier.toLowerCase())?.iconSrc ??
-    getTier("lol-ranked", tier.toLowerCase())?.iconSrc ??
-    null
-  );
-}
-
-function toRankDTO(rank: SourcedRank | null, rankSystemId: string, withLp = true): WorkspaceRankDTO | null {
-  if (!rank) return null;
-  return {
-    tier: rank.tier,
-    division: rank.division,
-    lp: rank.lp,
-    label: formatRank(rank, withLp && !rank.lpAssumed),
-    iconSrc: rankIcon(rankSystemId, rank.tier),
-    source: rank.source,
-    at: rank.at?.toISOString() ?? null,
-    lpAssumed: !!rank.lpAssumed,
-  };
-}
 
 /**
  * A rank declared on the order, read straight from the game's catalog rank
@@ -277,23 +261,55 @@ export async function getOrderWorkspace(
   // (League-V4 observation). Manual rank reports were removed: any legacy
   // reported* columns on OrderRiotAccount are ignored.
   const rankField = offer?.fields.find((f) => f.key === "targetRank" || f.key === "currentRank");
+  const orderSystem = orderRankSystemId(order.gameSlug, order.serviceSlug);
   const rankSystemId =
     (rankField && "rankSystemId" in rankField ? rankField.rankSystemId : undefined) ??
     offer?.rankSystemId ??
+    orderSystem ??
     "lol-ranked";
-  const riotTracked = RIOT_RANK_GAMES.has(order.gameSlug);
+  // Riot tracking is off (decision 2026-11-17): stored matches only count for the Riot ID lock.
   const matchesTotal = await prisma.orderMatch.count({ where: { orderId } });
-  // Only games played inside booster sessions count (Phase 5).
-  const winsAttributed = await prisma.orderMatch.count({ where: { orderId, win: true, playedBy: "BOOSTER" } });
-  // Same rule as the booster "Complete" check (lib/orders/order-progress.ts).
-  const { progress, start, current, target } = computeOrderProgress({
-    gameSlug: order.gameSlug,
-    serviceSlug: order.serviceSlug,
-    configuration: cfg,
-    createdAt: order.createdAt,
-    riotAccount: ra ?? null,
-    winsAttributed,
-  });
+
+  // Progress from the booster's reported ranks.
+  const updates = await listProgressUpdates(orderId);
+  const latest = updates[0] ?? null;
+  const startRef = rankRefOf(rankSystemId, cfg.currentRank);
+  const targetRef = rankRefOf(rankSystemId, cfg.targetRank);
+  const reported = computeReportedProgress(
+    rankSystemId,
+    startRef,
+    latest ? { tierId: latest.tierId, divisionId: latest.divisionId, lp: latest.lp } : null,
+    targetRef
+  );
+  const staleUpdates =
+    order.status === "IN_PROGRESS" &&
+    Date.now() - new Date(latest?.at ?? order.assignments.find((a) => a.activeOrderId === order.id)?.startedAt ?? Date.now()).getTime() >
+      PROGRESS_REMINDER_HOURS * 3_600_000;
+  const progress: WorkspaceDTO["progress"] = {
+    kind: startRef && targetRef ? "rank" : "none",
+    status: reported.status,
+    percent: reported.percent,
+    lpDelta: null,
+    lpRemaining: null,
+    stepsDelta: reported.stepsDelta,
+    demoted: (reported.stepsDelta ?? 0) < 0,
+    stale: staleUpdates,
+    startLpAssumed: true,
+  };
+  const pts = pointsLabel(order.gameSlug);
+  const rankOptions = orderSystem ? allowedRankOptions(orderSystem, cfg) : [];
+  const currentRank: WorkspaceRankDTO | null = latest
+    ? {
+        tier: latest.tierId.toUpperCase(),
+        division: latest.divisionId ? getDivision(rankSystemId, latest.tierId, latest.divisionId)?.label ?? null : null,
+        lp: latest.lp ?? 0,
+        label: latest.label + (latest.lp !== null ? ` ${latest.lp} ${pts}` : ""),
+        iconSrc: latest.iconSrc,
+        source: "booster",
+        at: latest.at,
+        lpAssumed: latest.lp === null,
+      }
+    : null;
 
   const ddragonVersion = order.gameSlug === "league-of-legends" ? await getDdragonVersion() : null;
 
@@ -333,10 +349,8 @@ export async function getOrderWorkspace(
 
   // Ranks shown in the workspace. Riot-tracked games use League-V4 data;
   // others show the ordered start/target from their own rank system.
-  const rankStart = riotTracked ? toRankDTO(start, rankSystemId) : catalogRankDTO(rankSystemId, cfg.currentRank);
-  const rankTarget = riotTracked
-    ? toRankDTO(target, rankSystemId, false)
-    : catalogRankDTO(rankSystemId, cfg.targetRank);
+  const rankStart = catalogRankDTO(rankSystemId, cfg.currentRank);
+  const rankTarget = catalogRankDTO(rankSystemId, cfg.targetRank);
 
   // Play sessions (required for the booster to reveal the login).
   const viewerIsWorkingBooster =
@@ -377,7 +391,8 @@ export async function getOrderWorkspace(
         : null,
   };
   const credStatus = await getCredentialStatus(orderId);
-  const riotProfile = riotTracked && ra ? await toProfileDTO(ra.profile, ra.profileSyncedAt, ddragonVersion) : null;
+  // Riot tracking is off (decision 2026-11-17): no Riot profile on the page.
+  const riotProfile = null;
 
   let conversationId: string | null = null;
   if (access.canChat) {
@@ -476,9 +491,18 @@ export async function getOrderWorkspace(
     },
     ranks: {
       start: rankStart,
-      current: toRankDTO(current, rankSystemId),
+      current: currentRank,
       target: rankTarget,
-      tracking: riotTracked ? "riot" : "unsupported",
+      tracking: orderSystem ? "booster" : "unsupported",
+    },
+    updates: {
+      list: updates,
+      // Only rank boosts (start + target) get updates, within the bought range.
+      canPost: viewerIsWorkingBooster && rankOptions.length > 0,
+      pointsLabel: pts,
+      rankOptions,
+      selfCheck: selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: ra.platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform: null } : null),
+      stale: staleUpdates,
     },
     progress,
     preferences: {
@@ -520,6 +544,20 @@ export async function getOrderWorkspace(
       rules: [...SESSION_RULES],
     },
     cancellation,
+    completion: await completionFor(orderId, access.viewerRole),
+  };
+}
+
+/** Completion with proof block of the order page. */
+async function completionFor(orderId: string, role: string): Promise<WorkspaceDTO["completion"]> {
+  const request = await latestCompletionRequest(orderId);
+  const open = request?.status === "PENDING" || request?.status === "DISPUTED";
+  return {
+    request,
+    canConfirm: role === "customer" && open,
+    canDispute: role === "customer" && request?.status === "PENDING",
+    canDecide: role === "admin" && open,
+    autoConfirmHours: await getConfig("auto_confirm_hours"),
   };
 }
 

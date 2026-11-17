@@ -59,6 +59,10 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   GAME_ANOMALY: ShieldAlert,
   CHAT_FLAGGED: ShieldAlert,
   FINANCE_ALERT: ShieldAlert,
+  COMPLETION_SUBMITTED: CheckCircle2,
+  COMPLETION_DISPUTED: AlertTriangle,
+  COMPLETION_SENT_BACK: AlertTriangle,
+  PROGRESS_UPDATE_DUE: TrendingUp,
 };
 
 /** Coloured icon tile for a notification type (same colours as the toasts). */

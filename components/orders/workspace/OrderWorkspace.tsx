@@ -14,14 +14,12 @@ import { OrderInfoPanel } from "./OrderInfoPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { GameAccountPanel } from "./GameAccountPanel";
 import { CancellationBanner } from "./CancellationBanner";
-import { useRiotAutoRefresh } from "./useRiotAutoRefresh";
-import { RiotProfilePanel } from "./RiotProfilePanel";
+import { CompletionPanel } from "./CompletionPanel";
 import { ChampionRolesPanel } from "./ChampionRolesPanel";
 import { RankProgressPanel } from "./RankProgressPanel";
-import { MatchHistoryPanel } from "./MatchHistoryPanel";
+import { ProgressUpdatesPanel } from "./ProgressUpdatesPanel";
 import { OrderControls } from "./OrderControls";
 import { Pill, ORDER_STATUS_TONE } from "./Panel";
-import { StatTiles } from "./StatTiles";
 import { gameThemeStyle } from "./game-theme";
 
 const STATUS_POLL_MS = 15_000;
@@ -182,7 +180,6 @@ function DetailsCard({ data, className }: { data: WorkspaceDTO; className?: stri
         ) : (
           <>
             <GameAccountPanel data={data} />
-            <RiotProfilePanel data={data} />
             {hasPrefs && <ChampionRolesPanel data={data} />}
           </>
         )}
@@ -204,7 +201,6 @@ export default function OrderWorkspace({
   const router = useRouter();
   const { toast } = useToast();
   useLiveOrderRefresh(data.order.id);
-  useRiotAutoRefresh(data);
   const showChat = Boolean(data.access.canChat && data.conversationId);
   const role = data.viewer.role;
 
@@ -316,6 +312,7 @@ export default function OrderWorkspace({
 
       <PausedBanner data={data} />
       <CancellationBanner data={data} />
+      <CompletionPanel data={data} />
 
       {/* lg only: switch the left area between progress and details (chat is always visible). */}
       <div role="tablist" aria-label="Workspace sections" className="hidden shrink-0 gap-1 lg:flex xl:hidden">
@@ -356,12 +353,11 @@ export default function OrderWorkspace({
         <div
           id="ws-progress"
           role="region"
-          aria-label="Progress and matches"
+          aria-label="Progress"
           className={cn("min-h-0 flex-col gap-3 [grid-area:main]", progressCls)}
         >
           <RankProgressPanel data={data} />
-          <StatTiles data={data} />
-          <MatchHistoryPanel data={data} className="min-h-[9rem] flex-1" />
+          <ProgressUpdatesPanel data={data} className="min-h-[9rem] flex-1" />
         </div>
 
         {showChat && (

@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, LogOut, Pause, Play } from "lucide-react";
+import { CheckCircle2, ImagePlus, LogOut, Pause, Play, X } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { shrinkImage } from "./shrink-image";
+
+const MAX_PROOFS = 3;
 
 type Dialog = "pause" | "complete" | "abandon" | "cancel-request" | "not-confirmed" | null;
 
@@ -49,10 +52,20 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
   const [notConfirmed, setNotConfirmed] = useState<{ message: string; reason: string; current: string | null; target: string | null } | null>(null);
   const { access, order, viewer, assignment } = data;
   const paused = order.status === "PAUSED";
+  // Booster completion: 1-3 screenshots of the final rank + optional note.
+  const [proofs, setProofs] = useState<File[]>([]);
+  const previews = useMemo(() => proofs.map((p) => URL.createObjectURL(p)), [proofs]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+  function addProofs(list: FileList | null) {
+    if (!list) return;
+    const images = Array.from(list).filter((f) => f.type.startsWith("image/"));
+    setProofs((cur) => [...cur, ...images].slice(0, MAX_PROOFS));
+  }
 
   function open(d: Dialog) {
     setError(null);
     setReason("");
+    if (d === "complete") setProofs([]);
     setDialog(d);
   }
 
@@ -108,12 +121,25 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
 
   const complete = () =>
     run("complete", async () => {
-      const res = await fetch(`/api/booster/orders/${order.id}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Admins complete without the Riot check (after reviewing it).
-        body: JSON.stringify({ assignmentId: viewer.role === "admin" ? data.adminCompletion?.assignmentId : assignment?.id }),
-      });
+      let res: Response;
+      if (viewer.role === "admin") {
+        // Admins complete an in-progress order directly.
+        res = await fetch(`/api/booster/orders/${order.id}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignmentId: data.adminCompletion?.assignmentId }),
+        });
+      } else {
+        if (proofs.length === 0) throw new Error("Add at least one screenshot of the final rank.");
+        const form = new FormData();
+        form.set("assignmentId", assignment?.id ?? "");
+        if (reason.trim()) form.set("note", reason.trim());
+        for (const [i, p] of proofs.entries()) {
+          const small = await shrinkImage(p);
+          form.append("proof", small, `proof-${i + 1}.${small.type === "image/jpeg" ? "jpg" : (p.name.split(".").pop() ?? "png")}`);
+        }
+        res = await fetch(`/api/booster/orders/${order.id}/complete`, { method: "POST", body: form });
+      }
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (res.status === 409 && (body.code === "TARGET_NOT_REACHED" || body.code === "CANNOT_VERIFY")) {
         // Riot did not confirm the target: keep working; an admin will contact the booster.
@@ -127,11 +153,15 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
         return true;
       }
       if (!res.ok) throw new Error((body.error as string) || "Something went wrong. Try again.");
+      const pending = (body.completion as { status?: string } | undefined)?.status === "PENDING";
       toast({
         type: "success",
-        title: "Order completed",
-        description: "The order has been marked as complete.",
+        title: pending ? "Sent to the customer" : "Order completed",
+        description: pending
+          ? "The customer confirms the result, or it confirms automatically. Stop playing on the account."
+          : "The order has been marked as complete.",
       });
+      setProofs([]);
       router.refresh();
     });
 
@@ -361,19 +391,70 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
         <>
           <ConfirmDialog
             open={dialog === "complete"}
-            title="Mark this order as complete?"
-            confirmLabel="Complete order"
-            busyLabel="Completing…"
+            title={viewer.role === "admin" ? "Mark this order as complete?" : "Complete this order"}
+            confirmLabel={viewer.role === "admin" ? "Complete order" : "Send to the customer"}
+            busyLabel={viewer.role === "admin" ? "Completing…" : "Uploading…"}
             cancelLabel="Keep working"
             busy={busy === "complete"}
+            confirmDisabled={viewer.role !== "admin" && proofs.length === 0}
             error={error}
             onConfirm={() => void complete()}
             onClose={() => setDialog(null)}
           >
-            <p>
-              Only do this once the boost is finished. The customer and our team
-              are notified.
-            </p>
+            {viewer.role === "admin" ? (
+              <p>Only do this once the boost is finished. The customer and the booster are notified.</p>
+            ) : (
+              <>
+                <p>
+                  Add 1 to {MAX_PROOFS} screenshots that clearly show the <b>final rank</b> (profile or ranked screen). The
+                  customer checks them and confirms; without an answer the order confirms automatically after{" "}
+                  {data.completion.autoConfirmHours} hours.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {previews.map((src, i) => (
+                    <div key={src} className="relative aspect-video overflow-hidden rounded-md border border-white/10 bg-black/40">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- local preview */}
+                      <img src={src} alt={`Screenshot ${i + 1}`} className="size-full object-cover" />
+                      <button
+                        type="button"
+                        aria-label="Remove screenshot"
+                        onClick={() => setProofs((cur) => cur.filter((_, j) => j !== i))}
+                        className="absolute right-1 top-1 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {proofs.length < MAX_PROOFS && (
+                    <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(var(--g-rgb),0.45)] bg-[rgba(var(--g-rgb),0.06)] text-xs text-[var(--g-light)] hover:bg-[rgba(var(--g-rgb),0.12)]">
+                      <ImagePlus className="size-5" />
+                      Add screenshot
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        multiple
+                        className="sr-only"
+                        onChange={(e) => {
+                          addProofs(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-400">Note for the customer (optional)</span>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    maxLength={1000}
+                    rows={2}
+                    className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                  />
+                </label>
+                <p className="text-xs text-zinc-500">After sending, stop playing on the account. Your login access ends.</p>
+              </>
+            )}
           </ConfirmDialog>
 
           <ConfirmDialog

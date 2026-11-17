@@ -6,6 +6,15 @@ import { LiveRefresh } from "@/components/realtime/LiveRefresh";
 import { poolChannel } from "@/lib/realtime/channel-names";
 import { devLogRedirect } from "@/lib/dashboard/role-routing";
 import { hasBoosterAccess } from "@/lib/boosters/status";
+import { boosterBalances } from "@/lib/finance/queries";
+import { formatMoney } from "@/lib/money";
+import { Clock, Snowflake, Wallet } from "lucide-react";
+
+/** "€12.50" or "€12.50 · $3.00"; zero in EUR when empty. */
+function money(m: Record<string, number>): string {
+  const parts = Object.entries(m).filter(([, v]) => v !== 0).map(([cur, v]) => formatMoney(v, cur));
+  return parts.length ? parts.join(" · ") : formatMoney(0, "EUR");
+}
 
 type BoosterAccountStatusProps = {
   user: {
@@ -114,13 +123,14 @@ export default async function BoosterDashboardPage() {
     return <BoosterAccountStatus user={user} boosterProfile={boosterProfile} />;
   }
 
-  const [availableOrders, assignments] = await Promise.all([
+  const [availableOrders, assignments, balances] = await Promise.all([
     (async () => {
       // Same list the booster sees: only orders within their ceilings.
       const { getPoolForBooster } = await import("@/lib/pool/service");
       return (await getPoolForBooster(user.id)).orders.length;
     })(),
     getBoosterAssignments(user.id, "all"),
+    boosterBalances(user.id),
   ]);
 
   const claimed = assignments.length;
@@ -135,6 +145,38 @@ export default async function BoosterDashboardPage() {
         <p className="mt-1 text-sm text-zinc-400">
           Verification: {boosterProfile.verificationStatus} • Availability: {boosterProfile.availabilityStatus}
         </p>
+      </div>
+
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
+        <Link
+          href="/dashboard/booster/cashout"
+          className="group rounded-xl border border-emerald-400/25 bg-gradient-to-br from-emerald-500/[0.12] to-emerald-500/[0.03] p-4 transition-colors hover:border-emerald-400/45"
+        >
+          <div className="flex items-center gap-2 text-sm text-emerald-200/80">
+            <Wallet className="size-4 text-emerald-300" /> Balance
+          </div>
+          <div className="mt-1 text-2xl font-bold text-white">{money(balances.available)}</div>
+          <div className="mt-1 text-xs text-emerald-200/60 group-hover:text-emerald-200">Ready to cash out →</div>
+        </Link>
+        <div className="rounded-xl border border-sky-400/25 bg-gradient-to-br from-sky-500/[0.12] to-sky-500/[0.03] p-4">
+          <div className="flex items-center gap-2 text-sm text-sky-200/80">
+            <Snowflake className="size-4 text-sky-300" /> Frozen balance
+          </div>
+          <div className="mt-1 text-2xl font-bold text-white">{money(balances.frozen)}</div>
+          <div className="mt-1 text-xs text-sky-200/60">Held while a customer dispute is open</div>
+        </div>
+        <div className="rounded-xl border border-amber-400/25 bg-gradient-to-br from-amber-500/[0.12] to-amber-500/[0.03] p-4">
+          <div className="flex items-center gap-2 text-sm text-amber-200/80">
+            <Clock className="size-4 text-amber-300" /> Pending approval
+          </div>
+          <div className="mt-1 text-2xl font-bold text-white">{money(balances.pending)}</div>
+          <div className="mt-1 text-xs text-amber-200/60">
+            Completed orders waiting for our team
+            {balances.awaitingConfirmation > 0
+              ? ` · ${balances.awaitingConfirmation} order${balances.awaitingConfirmation === 1 ? "" : "s"} waiting for the customer`
+              : ""}
+          </div>
+        </div>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -72,8 +72,10 @@ export interface WorkspaceAccess {
   canManageDraft: boolean;
 }
 
-const OPEN_STATUSES = new Set(["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED"]);
-const ACTIVE_ASSIGNMENT = new Set(["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED"]);
+const OPEN_STATUSES = new Set(["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION"]);
+// SUBMITTED: completion waiting for the customer. The booster keeps the
+// workspace and chat but has no actions (and no login access).
+const ACTIVE_ASSIGNMENT = new Set(["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"]);
 
 const NO_ACTIONS = {
   canCompleteOrder: false,

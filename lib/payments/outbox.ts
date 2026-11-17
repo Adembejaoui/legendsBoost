@@ -33,7 +33,9 @@ export type OutboxMessage =
   /** Live update: tell boosters the pool changed (no order data). */
   | { type: "POOL_SIGNAL"; payload: { reason: "added" | "removed" } }
   /** "Order confirmed" email to the customer (once per paid order). */
-  | { type: "EMAIL_ORDER_CONFIRMED"; payload: { orderId: string } };
+  | { type: "EMAIL_ORDER_CONFIRMED"; payload: { orderId: string } }
+  /** "Please confirm" email when a booster completes with proof. */
+  | { type: "EMAIL_COMPLETION_SUBMITTED"; payload: { requestId: string } };
 
 export async function enqueueOutbox(
   tx: Prisma.TransactionClient,
@@ -66,6 +68,10 @@ const handlers: Record<OutboxMessage["type"], Handler> = {
   EMAIL_ORDER_CONFIRMED: (async (p: { orderId: string }) => {
     const { sendOrderConfirmedEmail } = await import("@/lib/email/order-confirmed");
     await sendOrderConfirmedEmail(p.orderId);
+  }) as Handler,
+  EMAIL_COMPLETION_SUBMITTED: (async (p: { requestId: string }) => {
+    const { sendCompletionSubmittedEmail } = await import("@/lib/email/completion-submitted");
+    await sendCompletionSubmittedEmail(p.requestId);
   }) as Handler,
   POOL_SIGNAL: (async (p: Extract<OutboxMessage, { type: "POOL_SIGNAL" }>["payload"]) => {
     const { signalPool } = await import("@/lib/realtime/live");

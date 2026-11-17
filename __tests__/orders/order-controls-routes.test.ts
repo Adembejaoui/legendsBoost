@@ -1,3 +1,4 @@
+// @vitest-environment node
 /* eslint-disable @typescript-eslint/no-explicit-any -- mock plumbing */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -12,6 +13,7 @@ const m = vi.hoisted(() => ({
   order: null as any,
   setPaused: vi.fn(),
   complete: vi.fn(),
+  submit: vi.fn(),
   abandon: vi.fn(),
   release: vi.fn(),
   mismatch: vi.fn(async () => null),
@@ -32,6 +34,7 @@ vi.mock("@/lib/assignments/service", () => ({
   ABANDON_REASON_MAX_LENGTH: 500,
 }));
 vi.mock("@/lib/assignments/route-guard", () => ({ rejectIfAssignmentNotInOrder: m.mismatch }));
+vi.mock("@/lib/orders/completion-request.service", () => ({ submitCompletion: m.submit }));
 
 import { POST as pauseRoute } from "@/app/api/orders/[orderId]/pause/route";
 import { POST as resumeRoute } from "@/app/api/orders/[orderId]/resume/route";
@@ -132,8 +135,12 @@ describe("booster order routes", () => {
   });
 
   it("complete of a paused order is rejected with 409", async () => {
-    m.complete.mockRejectedValue(new OrderStateConflictError("This order is paused by the customer and cannot be completed until it is resumed."));
-    const res = await completeRoute(req({ assignmentId: "as-1" }), params);
+    // Boosters complete with a form (proof screenshots, decision 2026-11-16).
+    m.submit.mockRejectedValue(Object.assign(new Error("This order is paused by the customer and cannot be completed until it is resumed."), { name: "CompletionFlowError", status: 409 }));
+    const form = new FormData();
+    form.set("assignmentId", "as-1");
+    form.append("proof", new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "p.png", { type: "image/png" }));
+    const res = await completeRoute(new Request("http://localhost/x", { method: "POST", body: form }), params);
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/paused/);
   });

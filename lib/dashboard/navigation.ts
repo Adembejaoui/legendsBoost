@@ -105,6 +105,7 @@ export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
     { id: "admin-live", label: "Live Orders", href: "/dashboard/admin/live", icon: "ClipboardList" },
     { id: "admin-finance", label: "Finance", href: "/dashboard/admin/finance", icon: "Wallet" },
     { id: "admin-cancellations", label: "Cancellations", href: "/dashboard/admin/cancellations", icon: "Package" },
+    { id: "admin-completions", label: "Completions", href: "/dashboard/admin/completions", icon: "ClipboardList" },
     { id: "admin-chat-flags", label: "Chat Flags", href: "/dashboard/admin/chat-flags", icon: "LifeBuoy" },
     { id: "admin-fines", label: "Fines", href: "/dashboard/admin/fines", icon: "Wallet" },
     { id: "admin-users", label: "Users", href: "/dashboard/admin/users", icon: "Users" },

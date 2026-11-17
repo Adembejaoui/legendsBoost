@@ -61,7 +61,7 @@ describe("order workspace layout", () => {
     expect(ws.className).toContain("min-h-0");
   });
 
-  it("has details / progress / chat columns, with the match history inside the progress column", () => {
+  it("has details / progress / chat columns, with the rank updates inside the progress column", () => {
     render();
     const ws = container.querySelector('[data-testid="order-workspace"]')!;
     const grid = ws.querySelector('[class*="xl:[grid-template-areas:\x27left_main_chat\x27]"]');
@@ -70,15 +70,17 @@ describe("order workspace layout", () => {
     const progress = grid!.querySelector("#ws-progress")!;
     expect(progress.className).toContain("[grid-area:main]");
     expect(progress.querySelector('section[aria-label="Rank progression"]')).not.toBeNull();
-    expect(progress.querySelector('section[aria-label="Match history"]')).not.toBeNull();
+    expect(progress.querySelector('section[aria-label="Rank updates"]')).not.toBeNull();
+    // Riot tracking is off (decision 2026-11-17): no match history, no stat tiles.
+    expect(progress.querySelector('section[aria-label="Match history"]')).toBeNull();
     expect(grid!.querySelector('[class*="lg:[grid-area:chat]"] [data-testid="chat"]')).not.toBeNull();
   });
 
-  it("scrolls only inside panels: chat fills its column, history and details scroll internally", () => {
+  it("scrolls only inside panels: chat fills its column, updates and details scroll internally", () => {
     render();
     expect(container.querySelector('[data-testid="chat"]')!.getAttribute("data-fill")).toBe("true");
-    const historyBody = container.querySelector('section[aria-label="Match history"] > div')!;
-    expect(historyBody.className).toContain("overflow-y-auto");
+    const updatesBody = container.querySelector('section[aria-label="Rank updates"] ol')!;
+    expect(updatesBody.className).toContain("overflow-y-auto");
     const details = container.querySelector('section[aria-label="Order details and account"]')!;
     expect(details.className).toContain("overflow-hidden");
     expect(details.querySelector(".overflow-y-auto")).not.toBeNull();
@@ -103,23 +105,49 @@ describe("order workspace layout", () => {
     expect(ws.style.getPropertyValue("--g-accent")).toBe("#C8AA6E");
   });
 
-  it("lists matches newest first with result, champion, mode, duration, KDA and date", () => {
-    render();
-    const rows = Array.from(container.querySelectorAll('section[aria-label="Match history"] li'));
-    expect(rows).toHaveLength(10);
-    const times = rows.map((r) => new Date(r.querySelector("time")!.getAttribute("dateTime")!).getTime());
-    expect([...times].sort((a, b) => b - a)).toEqual(times);
-    expect(rows[0].textContent).toMatch(/Win|Loss/);
-    expect(rows[0].textContent).toContain("Ranked Solo/Duo");
-    expect(rows[0].textContent).toContain("KDA");
+  it("lists the booster's rank updates newest first", () => {
+    const data = workspaceFixture();
+    data.updates.list = [
+      { id: "u2", label: "Gold I", tierId: "gold", divisionId: "i", lp: 64, iconSrc: null, at: "2026-11-17T10:00:00.000Z" },
+      { id: "u1", label: "Gold III", tierId: "gold", divisionId: "iii", lp: null, iconSrc: null, at: "2026-11-16T10:00:00.000Z" },
+    ];
+    render(data);
+    const rows = Array.from(container.querySelectorAll('section[aria-label="Rank updates"] li'));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("Gold I");
+    expect(rows[0].textContent).toContain("64 LP");
+    expect(rows[0].textContent).toContain("Latest");
+    expect(rows[1].textContent).toContain("Gold III");
+  });
+});
+
+describe("rank updates", () => {
+  it("the working booster gets 'Update rank'; customers and admins do not", () => {
+    const booster = workspaceFixture({ role: "booster" });
+    booster.updates.canPost = true;
+    booster.updates.rankOptions = [{ tierId: "gold", name: "Gold", iconSrc: null, divisions: [{ id: "iv", label: "IV" }] }];
+    render(booster);
+    expect(buttons().some((b) => b.label.includes("Update rank"))).toBe(true);
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(workspaceFixture({ role: "customer" }));
+    expect(buttons().some((b) => b.label.includes("Update rank"))).toBe(false);
+  });
+
+  it("the customer gets a link to check the rank on OP.GG", () => {
+    const data = workspaceFixture({ role: "customer" });
+    data.updates.selfCheck = { label: "Check on OP.GG", url: "https://op.gg/lol/summoners/euw/Name-EUW" };
+    render(data);
+    const link = Array.from(container.querySelectorAll("a")).find((a) => a.textContent?.includes("Check on OP.GG"))!;
+    expect(link.getAttribute("href")).toBe("https://op.gg/lol/summoners/euw/Name-EUW");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 });
 
 describe("removed features", () => {
-  it.each(["customer", "booster", "admin"] as const)("%s view has no manual rank reporting and no activity timeline", (role) => {
+  it.each(["customer", "booster", "admin"] as const)("%s view has no activity timeline and no Riot sync", (role) => {
     render(workspaceFixture({ role }));
-    expect(text()).not.toMatch(/report current rank/i);
-    expect(text()).not.toMatch(/reported/i);
+    expect(text()).not.toMatch(/Sync Riot data/i);
     expect(container.querySelector('section[aria-label="Activity"]')).toBeNull();
     expect(text()).not.toMatch(/No activity yet/);
   });
@@ -198,7 +226,6 @@ describe("rank progression per game", () => {
     expect(panel.querySelector('[role="progressbar"]')).toBeNull();
     const imgs = Array.from(panel.querySelectorAll("img")).map((i) => i.getAttribute("src"));
     expect(imgs.every((src) => src?.includes("valorant-rank-icons"))).toBe(true);
-    expect(text()).toContain("Automatic match tracking isn't available for VALORANT");
   });
 
   it("TFT: tiers and divisions from the order, no Riot League data shown", () => {

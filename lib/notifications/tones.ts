@@ -68,6 +68,7 @@ export const TONE_CLASSES: Record<
 export function notificationTone(type: string): Tone {
   switch (type) {
     case "ORDER_COMPLETED":
+    case "COMPLETION_SUBMITTED":
     case "BOOSTER_ASSIGNED":
     case "BOOSTER_ACCEPTED":
     case "PAYMENT_SUCCEEDED":
@@ -96,6 +97,9 @@ export function notificationTone(type: string): Tone {
     case "STRIKE_ADDED":
     case "FINE_APPEAL_DECIDED":
     case "COMPLETION_REVIEW":
+    case "COMPLETION_DISPUTED":
+    case "COMPLETION_SENT_BACK":
+    case "PROGRESS_UPDATE_DUE":
     case "ACCOUNT_DELETION_REQUESTED":
     case "PAYOUT_METHOD_CHANGED":
     case "GAME_ANOMALY":

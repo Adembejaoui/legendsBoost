@@ -22,9 +22,17 @@ export const INACTIVE_ASSIGNMENT_STATUSES = [
 
 export type ActiveAssignmentStatus = (typeof ACTIVE_ASSIGNMENT_STATUSES)[number];
 export type InactiveAssignmentStatus = (typeof INACTIVE_ASSIGNMENT_STATUSES)[number];
+/**
+ * Completion submitted with proof, waiting for the customer. Neither active
+ * (does not count toward the booster's order limit) nor finished (keeps
+ * activeOrderId: workspace and chat stay open; an admin may send it back).
+ */
+export const SUBMITTED_ASSIGNMENT_STATUS = "SUBMITTED" as const;
+
 export type AssignmentStatus =
   | ActiveAssignmentStatus
-  | InactiveAssignmentStatus;
+  | InactiveAssignmentStatus
+  | typeof SUBMITTED_ASSIGNMENT_STATUS;
 
 /**
  * Valid status transitions for a single assignment lifecycle.
@@ -37,7 +45,9 @@ export const ASSIGNMENT_TRANSITIONS: Record<AssignmentStatus, AssignmentStatus[]
   {
     ASSIGNED: ["IN_PROGRESS", "ACCEPTED", "DECLINED", "CANCELLED", "RELEASED"],
     ACCEPTED: ["IN_PROGRESS", "CANCELLED", "RELEASED"],
-    IN_PROGRESS: ["PAUSED", "COMPLETED", "CANCELLED", "RELEASED"],
+    IN_PROGRESS: ["PAUSED", "SUBMITTED", "COMPLETED", "CANCELLED", "RELEASED"],
+    // Waiting for the customer: confirmed -> COMPLETED; sent back -> IN_PROGRESS.
+    SUBMITTED: ["COMPLETED", "IN_PROGRESS"],
     // Paused by the customer: only the customer's resume (or an admin
     // action) moves it on. Never COMPLETED directly.
     PAUSED: ["IN_PROGRESS", "CANCELLED"],
@@ -61,7 +71,8 @@ export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   AWAITING_PAYMENT: ["PENDING", "CANCELLED"],
   PENDING: ["CLAIMED", "CANCELLED"],
   CLAIMED: ["IN_PROGRESS", "CANCELLED", "DRAFT", "PENDING"],
-  IN_PROGRESS: ["PAUSED", "COMPLETED", "CANCELLED", "DRAFT"],
+  IN_PROGRESS: ["PAUSED", "AWAITING_CONFIRMATION", "COMPLETED", "CANCELLED", "DRAFT"],
+  AWAITING_CONFIRMATION: ["COMPLETED", "IN_PROGRESS"],
   PAUSED: ["IN_PROGRESS", "CANCELLED", "DRAFT"],
   COMPLETED: [],
   CANCELLED: [],

@@ -2,6 +2,38 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-17 · Fix: completing with screenshots; booster balance cards
+
+- **Fix:** "Complete" with screenshots failed with `violates check constraint "orderBoosterAssignment_active_order_check"`. That database rule (written before the `SUBMITTED` assignment status) only let active statuses keep the order link. Migration `20261120120000_assignment_submitted_check` (applied) adds `SUBMITTED` to it; no data change. The rule was missing from the test database snapshot, so tests did not catch it; the migration now adds it there too.
+- **Booster dashboard home:** three money cards: **Balance** (can be cashed out now, links to Cash out), **Frozen balance** (held while a customer dispute is open), **Pending approval** (completed orders waiting for an admin release, plus how many orders are waiting for the customer's confirmation). Per currency, net of reversals (`boosterBalances` in `lib/finance/queries.ts`).
+
+## 2026-11-17 · Rank updates limited to the bought range
+
+- **Update rank** only offers the ranks of the order: from the starting rank to the target rank, both included (Bronze I → Gold I: Bronze I, Silver IV–I, Gold IV–I). The server refuses anything outside the range ("Choose a rank between … and …"), so the limit cannot be bypassed.
+- Services without a start and a target rank (Win Boost, placements, normal games…) no longer show **Update rank**; they use chat and the completion screenshots.
+- The picker opens on the latest update (or the starting rank) and states the allowed range.
+
+## 2026-11-17 · Booster rank updates replace Riot tracking
+
+No Riot API key is available, so the order page no longer uses Riot. Decisions: Riot removed from the page (code kept, unused); the booster reports the rank only; asked after every play session + reminder after 24 h; customer gets an OP.GG / tracker.gg link.
+
+- **Removed from `/dashboard/[orderId]`:** Riot rank sync, the every-minute Riot check, match history, stat tiles, the Riot profile box and the "Sync Riot data" button. The Riot code (client, sync, routes) stays in the project unused, ready if a production key is ever approved.
+- **Rank updates:** the working booster posts the current rank (tier, division, optional LP / RR) with **Update rank**; ending a play session opens the same form. The hero shows start → current (latest update, "Booster update · 2 h ago") → target with a % computed from the rank ladder (each division one step, LP / RR as a fraction). A **Rank updates** timeline replaces the match history. The customer gets a notification for each update ("now Gold III 42 LP").
+- **Reminder:** no update for 24 h on an in-progress order → `PROGRESS_UPDATE_DUE` notification to the booster (one per 24 h, in the `sla-warnings` job); the page shows "No update for 24h".
+- **Self-check link:** "Check on OP.GG" (League, TFT) or "Check on tracker.gg" (VALORANT) built from the customer's Riot ID and region; just a link, no data fetched. The Riot ID box keeps name#tag + region (no sync, no Riot status).
+- New `POST /api/orders/[orderId]/progress` (working booster only). Migration `20261119120000_progress_updates` (table `orderProgressUpdate` with RLS, enum value `PROGRESS_UPDATE_DUE`; additive).
+
+## 2026-11-16 · Completion with proof + customer confirmation
+
+Replaces the Riot check for completing orders (Riot does not allow a public product on a development key). Decisions: end screenshots only (1–3), customer has 72 hours, a reported problem goes to an admin, booster loses login access while waiting.
+
+- **Booster "Complete"** now asks for 1–3 screenshots of the final rank (shrunk in the browser, checked by their bytes on the server: PNG/JPG/WebP, 4 MB each, 4.4 MB total) and an optional note. If Riot confirms the target (LoL with an approved key), the order completes at once; otherwise it waits for the customer. Riot never blocks a completion any more.
+- **New statuses:** order `AWAITING_CONFIRMATION`, assignment `SUBMITTED`. While waiting the booster keeps the order page and chat, has no login access, and can take another order.
+- **Customer:** panel on the order page with the screenshots: "Confirm, all good" or "Report a problem" (reason). Notification + "please confirm" email. No answer in `auto_confirm_hours` (now 72) → confirmed automatically by the new `auto-confirm` job.
+- **Admin:** new **Completions** page (and the same panel on the order page): disputed completions with screenshots and the customer's reason → "Complete order" or "Send back to booster" (note sent to both; order and login access come back).
+- Screenshots are stored in the private Supabase Storage bucket `order-proofs` (created on first use) and served only through `/api/orders/[orderId]/proofs/[proofId]` to the order's customer, booster and admins.
+- Migration `20261118120000_completion_confirmation` (new tables with RLS, new enum values; additive). Deploy guide: one more cron-job.org job (`auto-confirm`, every 15 minutes).
+
 ## 2026-11-16 · Order confirmed page and email
 
 - **Checkout success page:** once the payment is confirmed, a receipt in the game's colours (game, service, current → target rank with emblems, details, options, price lines, discount, total paid) with "Open my order" and "Go to dashboard". Other states (checking, processing, cancelled, failed) unchanged.

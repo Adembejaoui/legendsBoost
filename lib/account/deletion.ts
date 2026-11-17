@@ -32,7 +32,7 @@ type Db = Prisma.TransactionClient | typeof prisma;
 /** What still prevents deleting this account (empty = nothing). */
 export async function deletionBlockers(userId: string, db: Db = prisma): Promise<string[]> {
   const [activeOrders, activeWork, openPayouts, unpaid] = await Promise.all([
-    db.order.count({ where: { userId, status: { in: ["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "DRAFT"] } } }),
+    db.order.count({ where: { userId, status: { in: ["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION", "DRAFT"] } } }),
     db.orderBoosterAssignment.count({ where: { boosterId: userId, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } } }),
     db.boosterPayout.count({ where: { boosterId: userId, status: { in: ["REQUESTED", "APPROVED", "PROCESSING"] } } }),
     db.boosterEarning.count({ where: { boosterId: userId, status: { in: ["PENDING", "AVAILABLE", "ON_HOLD", "IN_PAYOUT"] } } }),

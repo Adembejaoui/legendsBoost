@@ -77,8 +77,10 @@ export const CONFIG_SCHEMA = {
     .max(50),
   // Not enforced yet (Phase 6).
   inactivity_release_hours: posInt,
-  // Completion and money (Phases 4, 7). Not enforced yet.
-  auto_confirm_hours: posInt,
+  // Completion with proof: the customer has this long to confirm or report a
+  // problem before the order confirms itself (decision 2026-11-16).
+  auto_confirm_hours: posInt.max(24 * 14),
+  // Not enforced yet (Phase 7).
   earnings_hold_hours: z.number().int().min(0),
   min_payout_minor: z.number().int().min(0),
 } as const;
@@ -115,7 +117,7 @@ export const CONFIG_DEFAULTS: { [K in ConfigKey]: ConfigValue<K> } = {
     { code: "OTHER", label: "Other rule breach (see note)", amount: 0 },
   ],
   inactivity_release_hours: 12,
-  auto_confirm_hours: 24,
+  auto_confirm_hours: 72,
   earnings_hold_hours: 24,
   min_payout_minor: 2000,
 };

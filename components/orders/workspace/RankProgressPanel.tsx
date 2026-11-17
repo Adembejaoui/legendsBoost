@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronsRight, TrendingUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsRight, ExternalLink, TrendingUp } from "lucide-react";
 import type { WorkspaceDTO, WorkspaceRankDTO } from "@/lib/orders/workspace-types";
 import { cn } from "@/lib/utils";
 import { GameArt, Pill } from "./Panel";
@@ -8,7 +8,16 @@ import { GameArt, Pill } from "./Panel";
 const SOURCE_LABEL: Record<WorkspaceRankDTO["source"], { text: string; tone: "green" | "neutral" }> = {
   riot: { text: "Riot data", tone: "green" },
   order: { text: "From order", tone: "neutral" },
+  booster: { text: "Booster update", tone: "green" },
 };
+
+function ago(iso: string) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  if (m < 48 * 60) return `${Math.round(m / 60)} h ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 function tierName(rank: WorkspaceRankDTO) {
   const t = rank.tier.charAt(0) + rank.tier.slice(1).toLowerCase();
@@ -26,7 +35,9 @@ function RankBlock({
   emptyText,
   accent,
   showLp = true,
+  points = "LP",
 }: {
+  points?: string;
   heading: string;
   rank: WorkspaceRankDTO | null;
   emptyTitle: string;
@@ -71,10 +82,10 @@ function RankBlock({
         <>
           <p className="max-w-full truncate text-sm font-bold leading-tight text-white sm:text-base">{tierName(rank)}</p>
           <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
-            {showLp && !rank.lpAssumed && <span className="text-xs tabular-nums text-zinc-300">{rank.lp} LP</span>}
+            {showLp && !rank.lpAssumed && <span className="text-xs tabular-nums text-zinc-300">{rank.lp} {points}</span>}
             <Pill tone={SOURCE_LABEL[rank.source].tone} className="hidden px-1.5 py-0 text-[10px] sm:inline-flex">
               {SOURCE_LABEL[rank.source].text}
-              {rank.at && rank.source === "riot" ? ` · ${new Date(rank.at).toLocaleDateString()}` : ""}
+              {rank.at && rank.source !== "order" ? ` · ${ago(rank.at)}` : ""}
             </Pill>
           </div>
         </>
@@ -90,22 +101,17 @@ function RankBlock({
 
 /** The hero of the workspace: current rank -> progress -> target rank. */
 export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; className?: string }) {
-  const { ranks, progress, riot, order } = data;
+  const { ranks, progress, order, updates } = data;
   const pct = progress.percent;
   const unsupported = ranks.tracking === "unsupported";
 
-  // Current rank: Riot only. When there is none yet we say why, honestly.
-  let currentEmptyTitle = "Not available yet";
-  let currentEmptyText = "Shown after the first Riot sync.";
+  // Current rank: the booster's latest update (Riot tracking is off).
+  let currentEmptyTitle = "No update yet";
+  let currentEmptyText =
+    data.viewer.role === "booster" ? "Post the current rank with “Update rank”." : "Your booster posts the current rank after each session.";
   if (unsupported) {
-    currentEmptyTitle = "Not tracked automatically";
-    currentEmptyText = `Live ranks aren't available for ${order.gameName}. Your booster keeps you updated in chat.`;
-  } else if (!riot.account) {
-    currentEmptyText = "Add the Riot ID to track the current rank.";
-  } else if (!riot.capabilities.dataAccess) {
-    currentEmptyText = "Waiting for the official Riot integration.";
-  } else if (riot.account.lastSyncError) {
-    currentEmptyText = "The last Riot sync failed. Try syncing again.";
+    currentEmptyTitle = "Not tracked";
+    currentEmptyText = `${order.gameName} has no ranks for this service. Your booster keeps you updated in chat.`;
   }
 
   let caption: string;
@@ -114,22 +120,21 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
   } else {
     switch (progress.status) {
       case "complete":
-        caption = "Target reached";
+        caption = "Target reached (reported by the booster)";
         break;
       case "in_progress":
-        caption = progress.lpRemaining !== null && progress.kind === "rank" ? `${progress.lpRemaining} LP to go` : "In progress";
-        break;
-      case "indeterminate":
-        caption = "Grandmaster/Challenger cut-offs vary by region";
+        caption = progress.stepsDelta && progress.stepsDelta > 0 ? `+${progress.stepsDelta} division${progress.stepsDelta === 1 ? "" : "s"} since the start` : "In progress";
         break;
       case "invalid":
         caption = "Target is not above the starting rank";
         break;
+      case "waiting":
+        caption = "Waiting for the first rank update";
+        break;
       default:
-        caption = ranks.current ? "Not enough data to measure progress" : "Waiting for Riot rank data";
+        caption = ranks.current ? "Latest rank from your booster" : "Progress appears with the first rank update";
     }
   }
-
   const showBar = progress.kind !== "none" && !unsupported;
   const value =
     progress.kind === "wins" && progress.wins
@@ -159,16 +164,25 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
           <TrendingUp className="size-3.5 text-[var(--g-accent)]" />
           Rank progression
         </h2>
-        {ranks.start && progress.kind === "rank" && !unsupported && (
-          <span className="truncate text-[11px] text-zinc-500">
-            Started at {ranks.start.label} ({ranks.start.source === "riot" ? "Riot" : "declared"})
-          </span>
-        )}
+        {updates.selfCheck ? (
+          <a
+            href={updates.selfCheck.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 truncate text-[11px] font-medium text-[var(--g-light)] hover:underline"
+          >
+            {updates.selfCheck.label}
+            <ExternalLink className="size-3" />
+          </a>
+        ) : ranks.start && progress.kind === "rank" && !unsupported ? (
+          <span className="truncate text-[11px] text-zinc-500">Started at {ranks.start.label}</span>
+        ) : null}
       </header>
 
       <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-2 px-3 pb-4 pt-2 sm:gap-4 sm:px-5">
         <RankBlock
           heading={unsupported ? "Starting rank" : "Current rank"}
+          points={updates.pointsLabel}
           rank={unsupported ? ranks.start : ranks.current}
           emptyTitle={currentEmptyTitle}
           emptyText={currentEmptyText}
@@ -213,7 +227,7 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
               </Pill>
             )}
             {progress.demoted && <Pill tone="red" className="px-1.5 py-0 text-[10px]">Below start</Pill>}
-            {progress.stale && <Pill tone="amber" className="px-1.5 py-0 text-[10px]">Data over 24h old</Pill>}
+            {progress.stale && <Pill tone="amber" className="px-1.5 py-0 text-[10px]">No update for 24h</Pill>}
           </div>
         </div>
 

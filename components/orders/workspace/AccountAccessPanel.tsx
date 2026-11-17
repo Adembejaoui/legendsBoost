@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Copy, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";
+import { OPEN_RANK_UPDATE_EVENT } from "./ProgressUpdatesPanel";
 import { PanelOrSection, Pill } from "./Panel";
 
 /** Revealed credentials are wiped from memory after this long. */
@@ -116,7 +117,11 @@ export function AccountAccessPanel({ data, embedded = false }: { data: Workspace
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Request failed");
-      if (action === "end") setRevealed(null);
+      if (action === "end") {
+        setRevealed(null);
+        // Ask for the current rank after every session (decision 2026-11-17).
+        window.dispatchEvent(new Event(OPEN_RANK_UPDATE_EVENT));
+      }
       setRulesOpen(false);
       setRulesAccepted(false);
       toast({ type: "success", title: action === "start" ? "Session started" : "Session ended" });

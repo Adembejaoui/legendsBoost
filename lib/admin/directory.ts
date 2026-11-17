@@ -82,7 +82,7 @@ export type BoardTone = "ok" | "warn" | "alert" | "idle";
 /** Active orders with how long they have been waiting in their state. */
 export async function liveOrdersBoard(now = new Date()) {
   const orders = await prisma.order.findMany({
-    where: { status: { in: ["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED"] }, paymentVerifiedAt: { not: null } },
+    where: { status: { in: ["PENDING", "CLAIMED", "IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION"] }, paymentVerifiedAt: { not: null } },
     orderBy: { createdAt: "asc" },
     take: 300,
     select: {

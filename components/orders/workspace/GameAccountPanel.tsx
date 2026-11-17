@@ -14,8 +14,8 @@ const input =
 
 /**
  * Everything the booster needs about the game account, in one box:
- *  1. Riot ID (game name + tag) and server: public, used to track rank and
- *     matches through the Riot API;
+ *  1. Riot ID (game name + tag) and server: public, for the OP.GG /
+ *     tracker.gg check link (no Riot API, decision 2026-11-17);
  *  2. Login (username + password): encrypted, only for the active booster.
  * A customer who has entered neither gets one combined form.
  */

@@ -158,7 +158,7 @@ function getRecipientRules(): NotificationRecipientRule[] {
           where: { id: event.orderId },
           include: {
             assignments: {
-              where: { status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED"] } },
+              where: { status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] } },
               select: { boosterId: true },
             },
           },
@@ -355,7 +355,7 @@ function getRecipientRules(): NotificationRecipientRule[] {
         const activeAssignment = await prisma.orderBoosterAssignment.findFirst({
           where: {
             orderId: event.orderId,
-            status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED"] },
+            status: { in: ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] },
           },
           select: { boosterId: true },
         });

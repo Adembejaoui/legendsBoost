@@ -180,6 +180,9 @@ model BoosterProfile {
 
 enum OrderStatus {
   PENDING
+  /// The booster completed with proof screenshots; waiting for the customer
+  /// to confirm (or for auto-confirmation / an admin decision).
+  AWAITING_CONFIRMATION
   /// Taken by a booster (bid won, claim now, priority or preferred) but not
   /// started yet. The booster's "Start" moves it to IN_PROGRESS.
   CLAIMED
@@ -212,6 +215,9 @@ enum AssignmentStatus {
   ACCEPTED
   IN_PROGRESS
   PAUSED
+  /// Completion submitted, waiting for the customer. Keeps activeOrderId
+  /// (workspace + chat) but does not count toward the booster's order limit.
+  SUBMITTED
   COMPLETED
   DECLINED
   CANCELLED
@@ -255,6 +261,8 @@ model Order {
   fines                BoosterFine[]
   review               OrderReview?
   tips                 OrderTip[]
+  completionRequests   OrderCompletionRequest[]
+  progressUpdates      OrderProgressUpdate[]
   strikes              BoosterStrike[]
 
   /// Priority option bought: instant claim at the full payout, no bidding.
@@ -405,6 +413,14 @@ enum NotificationType {
   COMPLETION_REVIEW
   /// A chat message contained contact / payment details (admins).
   CHAT_FLAGGED
+  /// Booster completed with proof: customer must confirm (customer).
+  COMPLETION_SUBMITTED
+  /// Customer reported a problem with a completion (admins, booster).
+  COMPLETION_DISPUTED
+  /// An admin sent a completion back to the booster (booster, customer).
+  COMPLETION_SENT_BACK
+  /// No rank update for 24 h on an in-progress order (booster).
+  PROGRESS_UPDATE_DUE
 }
 
 enum SupportTicketStatus {
@@ -1586,4 +1602,84 @@ model AccountDeletionRequest {
   @@index([status, requestedAt])
   @@index([userId])
   @@map("accountDeletionRequest")
+}
+
+/// Outcome of a booster's completion (decision 2026-11-16: proof screenshots
+/// + customer confirmation replace the Riot check in production).
+enum CompletionRequestStatus {
+  /// Waiting for the customer (auto-confirms at autoConfirmAt).
+  PENDING
+  /// The customer reported a problem: an admin decides. No auto-confirm.
+  DISPUTED
+  CONFIRMED
+  AUTO_CONFIRMED
+  ADMIN_ACCEPTED
+  /// Riot confirmed the target rank (LoL with an approved key).
+  RIOT_CONFIRMED
+  /// An admin sent the order back to the booster.
+  SENT_BACK
+}
+
+/// A booster's "Complete" with proof screenshots. At most one PENDING or
+/// DISPUTED request per order (partial unique index in the migration).
+model OrderCompletionRequest {
+  id            String                  @id @default(cuid())
+  orderId       String                  @map("orderId")
+  assignmentId  String                  @map("assignmentId")
+  boosterId     String                  @map("boosterId")
+  status        CompletionRequestStatus @default(PENDING)
+  boosterNote   String?                 @map("boosterNote")
+  autoConfirmAt DateTime                @map("autoConfirmAt")
+  disputeReason String?                 @map("disputeReason")
+  disputedAt    DateTime?               @map("disputedAt")
+  decidedById   String?                 @map("decidedById")
+  decidedAt     DateTime?               @map("decidedAt")
+  adminNote     String?                 @map("adminNote")
+  createdAt     DateTime                @default(now()) @map("createdAt")
+  updatedAt     DateTime                @updatedAt @map("updatedAt")
+
+  order         Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  proofs        OrderCompletionProof[]
+
+  @@index([orderId])
+  @@index([status, autoConfirmAt])
+  @@map("orderCompletionRequest")
+}
+
+/// A proof screenshot, stored in the private Supabase Storage bucket
+/// "order-proofs" (never public; served through the app after an access check).
+model OrderCompletionProof {
+  id          String                 @id @default(cuid())
+  requestId   String                 @map("requestId")
+  orderId     String                 @map("orderId")
+  storagePath String                 @unique @map("storagePath")
+  contentType String                 @map("contentType")
+  sizeBytes   Int                    @map("sizeBytes")
+  createdAt   DateTime               @default(now()) @map("createdAt")
+
+  request     OrderCompletionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([orderId])
+  @@map("orderCompletionProof")
+}
+
+/// Rank reported by the booster during the order (decision 2026-11-17:
+/// replaces Riot tracking on the order page). Rank of the order's own rank
+/// system (catalog tier / division ids) and optional LP / RR.
+model OrderProgressUpdate {
+  id           String   @id @default(cuid())
+  orderId      String   @map("orderId")
+  assignmentId String   @map("assignmentId")
+  boosterId    String   @map("boosterId")
+  rankSystemId String   @map("rankSystemId")
+  tierId       String   @map("tierId")
+  divisionId   String?  @map("divisionId")
+  lp           Int?
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("orderProgressUpdate")
 }

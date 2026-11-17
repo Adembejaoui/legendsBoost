@@ -39,6 +39,10 @@ export type NotificationEventType =
   | "TIP_RECEIVED"
   | "ACCOUNT_DELETION_REQUESTED"
   | "COMPLETION_REVIEW"
+  | "COMPLETION_SUBMITTED"
+  | "COMPLETION_DISPUTED"
+  | "COMPLETION_SENT_BACK"
+  | "PROGRESS_UPDATE_DUE"
   | "CHAT_FLAGGED";
 
 export interface NotificationEventMetadata {
@@ -135,6 +139,10 @@ export const NOTIFICATION_TITLES: Record<NotificationEventType, string> = {
   TIP_RECEIVED: "You Got A Tip",
   ACCOUNT_DELETION_REQUESTED: "Account Deletion Requested",
   COMPLETION_REVIEW: "Completion Needs Review",
+  COMPLETION_SUBMITTED: "Confirm Your Order",
+  COMPLETION_DISPUTED: "Completion Disputed",
+  COMPLETION_SENT_BACK: "Order Sent Back",
+  PROGRESS_UPDATE_DUE: "Update The Rank",
   CHAT_FLAGGED: "Chat Message Flagged",
 };
 
@@ -142,7 +150,10 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
   ORDER_CREATED: () => "Your order has been created and is pending assignment.",
   ORDER_CANCELLED: (meta) => `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} has been cancelled.`,
   ORDER_STARTED: (meta) => `Work has started on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
-  ORDER_PROGRESS_UPDATED: (meta) => `Progress update on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
+  ORDER_PROGRESS_UPDATED: (meta) =>
+    meta?.rank
+      ? `Your booster updated order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}: now ${String(meta.rank)}.`
+      : `Progress update on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
   ORDER_PAUSED_BY_CUSTOMER: (meta) =>
     `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} paused by the customer. Stop boosting immediately. Do not continue playing on the customer's account until the order is resumed.`,
   ORDER_RESUMED_BY_CUSTOMER: (meta) =>
@@ -192,6 +203,14 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
     `A ranked game was played on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} ${meta?.playedBy === "PAUSED" ? "while the order was paused" : "outside a booster session"}.`,
   COMPLETION_REVIEW: (meta) =>
     `The booster marked order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} as complete but it could not be confirmed (${String(meta?.reason ?? "check needed")}). Contact the booster.`,
+  COMPLETION_SUBMITTED: (meta) =>
+    `Your booster finished order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. Check the proof and confirm, or report a problem. It confirms automatically after ${String(meta?.hours ?? 72)} hours.`,
+  COMPLETION_DISPUTED: (meta) =>
+    `The customer reported a problem with the completion of order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. An admin will review it.`,
+  COMPLETION_SENT_BACK: (meta) =>
+    `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} was sent back to the booster${meta?.note ? `: ${String(meta.note)}` : "."}`,
+  PROGRESS_UPDATE_DUE: (meta) =>
+    `No rank update on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} for ${String(meta?.hours ?? 24)} hours. Post the current rank so the customer can follow the progress.`,
   CHAT_FLAGGED: (meta) =>
     `A message on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} contained ${String(meta?.kinds ?? "contact details")}; it was hidden.`,
 };
