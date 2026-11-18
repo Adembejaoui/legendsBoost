@@ -15,6 +15,12 @@ const globalForPrisma = global as unknown as {
  *
  * Pool -> attachDatabasePool() -> PrismaPg -> PrismaClient
  */
+// Without DATABASE_URL, pg silently falls back to 127.0.0.1:5432 and every
+// query fails with "Can't reach database server at 127.0.0.1:5432".
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === "production") {
+  logger.error("DATABASE_URL is not set: add it in the hosting environment variables and redeploy");
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   idleTimeoutMillis: Number(process.env.DATABASE_POOL_IDLE_MS) || 2000,

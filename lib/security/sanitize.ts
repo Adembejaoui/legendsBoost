@@ -1,35 +1,15 @@
-import DOMPurify from "isomorphic-dompurify";
+/**
+ * Text normalisation and simple in-memory rate limits.
+ *
+ * No HTML sanitizer here (2026-11-18): the app never renders user content as
+ * HTML (React escapes all text), and the previous isomorphic-dompurify import
+ * pulled jsdom into every server route that used this file, which crashed on
+ * Vercel ("Failed to load external module jsdom ... ERR_REQUIRE_ESM").
+ * If user HTML must ever be rendered, sanitize it in the browser.
+ */
 
 /** Longest plain-text value accepted from users (chat, tickets). */
 export const MAX_TEXT_LENGTH = 10_000;
-
-let hooked = false;
-function ensureLinkHook() {
-  if (hooked) return;
-  hooked = true;
-  // Links in sanitized HTML always open safely in a new tab.
-  DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-    if (node.tagName === "A" && node.getAttribute("href")) {
-      node.setAttribute("rel", "noopener noreferrer");
-      node.setAttribute("target", "_blank");
-    }
-  });
-}
-
-/**
- * Sanitize user-supplied HTML (only for content that is rendered AS HTML).
- * Keeps basic formatting, links and images; strips scripts, event handlers,
- * inline styles and javascript: URLs.
- */
-export function sanitizeHtml(input: string): string {
-  if (typeof input !== "string" || input === "") return "";
-  ensureLinkHook();
-  return DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: ["b", "i", "em", "strong", "u", "s", "p", "br", "span", "div", "a", "img"],
-    ALLOWED_ATTR: ["class", "id", "href", "src", "alt"],
-    KEEP_CONTENT: true,
-  });
-}
 
 /**
  * Normalize user-supplied PLAIN text (chat messages, ticket subjects and
@@ -38,7 +18,7 @@ export function sanitizeHtml(input: string): string {
  * (that used to turn "a < b" or "<3" into missing or "&lt;" text).
  * Removes control characters (keeps newlines and tabs), normalizes line
  * endings and caps the length. Never render the result with
- * dangerouslySetInnerHTML: use sanitizeHtml for that.
+ * dangerouslySetInnerHTML.
  */
 export function sanitizeText(input: string): string {
   if (typeof input !== "string") return "";

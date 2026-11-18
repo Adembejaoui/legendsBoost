@@ -1,4 +1,4 @@
-# Deploying to Vercel (hoodiz.net)
+# Deploying to Vercel (www.hoodiz.net)
 
 Decisions (2026-11-16): Vercel **Hobby** while testing, **Pro** before taking
 real money; scheduled jobs on **cron-job.org** while on Hobby; Stripe in
@@ -35,8 +35,8 @@ Add them in **Settings → Environment Variables**, scope **Production** (and
 | `DATABASE_URL` | Copy from .env (Supabase pooler, port **6543**) |
 | `DIRECT_URL` | Copy from .env (port 5432). Only used by migrations; harmless here |
 | `AUTH_SECRET` | **New** value: run `openssl rand -base64 32` (or any 32+ random characters). Everyone signs in again once |
-| `NEXTAUTH_URL` | `https://hoodiz.net` (**Production only**) |
-| `APP_URL` | `https://hoodiz.net` (used in emails and Stripe return links) |
+| `NEXTAUTH_URL` | `https://www.hoodiz.net` (**Production only**) |
+| `APP_URL` | `https://www.hoodiz.net` (used in emails and Stripe return links) |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Copy from .env (see step 4) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Copy from .env |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Copy from .env |
@@ -64,8 +64,10 @@ changing one, **redeploy**.
 
 ## 3. Domain
 
-1. Vercel → project → **Settings → Domains** → add `hoodiz.net`, then add
-   `www.hoodiz.net` and choose **Redirect to hoodiz.net**.
+1. Vercel → project → **Settings → Domains**: **`www.hoodiz.net` is the main address** and `hoodiz.net`
+   redirects to it (308). **Every URL you configure anywhere (Stripe webhook, Google, cron-job.org,
+   `APP_URL`, `NEXTAUTH_URL`) must use `https://www.hoodiz.net`**: Stripe and many cron services do not
+   follow redirects, so an address without `www` silently fails.
 2. Vercel shows the DNS records to create. At your domain registrar (where
    you bought hoodiz.net), add exactly what Vercel shows. Usually:
    - `A` record, name `@`, value `76.76.21.21`
@@ -79,15 +81,15 @@ changing one, **redeploy**.
 ## 4. Google sign-in
 
 console.cloud.google.com → **APIs & Services → Credentials** → your OAuth client:
-- **Authorized JavaScript origins:** add `https://hoodiz.net`
-- **Authorized redirect URIs:** add `https://hoodiz.net/api/auth/callback/google`
+- **Authorized JavaScript origins:** add `https://www.hoodiz.net`
+- **Authorized redirect URIs:** add `https://www.hoodiz.net/api/auth/callback/google`
 
 Keep the `localhost` entries for local development.
 
 ## 5. Stripe webhook (test mode)
 
 dashboard.stripe.com → make sure **Test mode** is on → **Developers → Webhooks → Add endpoint**:
-- URL: `https://hoodiz.net/api/webhooks/stripe`
+- URL: `https://www.hoodiz.net/api/webhooks/stripe`
 - Events (select these 12):
   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
   `checkout.session.async_payment_failed`, `checkout.session.expired`,
@@ -103,12 +105,12 @@ Create an account, then **Create cronjob** six times:
 
 | Title | URL | Schedule |
 |---|---|---|
-| close-bidding | `https://hoodiz.net/api/cron/close-bidding` | every 1 minute |
-| outbox-dispatch | `https://hoodiz.net/api/cron/outbox-dispatch` | every 5 minutes |
-| sla-warnings | `https://hoodiz.net/api/cron/sla-warnings` | every 5 minutes |
-| close-stale-holds | `https://hoodiz.net/api/cron/close-stale-holds` | every 15 minutes |
-| auto-confirm | `https://hoodiz.net/api/cron/auto-confirm` | every 15 minutes |
-| tracker-retention | `https://hoodiz.net/api/cron/tracker-retention` | daily 03:30 |
+| close-bidding | `https://www.hoodiz.net/api/cron/close-bidding` | every 1 minute |
+| outbox-dispatch | `https://www.hoodiz.net/api/cron/outbox-dispatch` | every 5 minutes |
+| sla-warnings | `https://www.hoodiz.net/api/cron/sla-warnings` | every 5 minutes |
+| close-stale-holds | `https://www.hoodiz.net/api/cron/close-stale-holds` | every 15 minutes |
+| auto-confirm | `https://www.hoodiz.net/api/cron/auto-confirm` | every 15 minutes |
+| tracker-retention | `https://www.hoodiz.net/api/cron/tracker-retention` | daily 03:30 |
 
 For each one, open **Advanced**:
 - Request method: **GET**
@@ -124,7 +126,7 @@ the customer does not answer never confirm (and the booster is never paid).
 
 ## 7. Check the deployment
 
-On `https://hoodiz.net`:
+On `https://www.hoodiz.net`:
 1. Home page loads, images appear, no errors in the browser console.
 2. Register with email: the confirmation email arrives (from `no-reply@hoodiz.net`).
 3. Sign out, **Forgot password**: the reset email arrives and the link works.

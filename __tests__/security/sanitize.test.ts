@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { sanitizeText, sanitizeHtml } from "@/lib/security/sanitize";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { sanitizeText } from "@/lib/security/sanitize";
 
 // These cases deliberately pass invalid input to check runtime robustness;
 // the cast states that intent instead of widening the production signature.
@@ -40,67 +42,11 @@ describe("XSS Sanitization", () => {
     });
   });
 
-  describe("sanitizeHtml", () => {
-    test("allows safe HTML tags", () => {
-      expect(sanitizeHtml("<p>Hello</p>")).toBe("<p>Hello</p>");
-      expect(sanitizeHtml("<b>Bold</b> and <i>italic</i>")).toBe(
-        "<b>Bold</b> and <i>italic</i>"
-      );
-      expect(sanitizeHtml("<a href='https://example.com'>Link</a>")).toBe(
-        "<a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">Link</a>"
-      );
-    });
-
-    test("strips dangerous tags", () => {
-      expect(sanitizeHtml("<script>alert('xss')</script>")).toBe("");
-      expect(sanitizeHtml("<iframe src='evil.com'></iframe>")).toBe("");
-      expect(sanitizeHtml("<object data='evil.swf'></object>")).toBe("");
-      expect(sanitizeHtml("<embed src='evil.swf'>")).toBe("");
-    });
-
-    test("strips event handlers", () => {
-      expect(sanitizeHtml("<img src=x onerror=alert(1)>")).toBe(
-        "<img src=\"x\">"
-      );
-      expect(sanitizeHtml("<div onclick='alert(1)'>Click</div>")).toBe(
-        "<div>Click</div>"
-      );
-    });
-
-    test("strips javascript: URLs", () => {
-      expect(sanitizeHtml("<a href='javascript:alert(1)'>Click</a>")).toBe(
-        "<a>Click</a>"
-      );
-      expect(sanitizeHtml("<a href='JAVASCRIPT:alert(1)'>Click</a>")).toBe(
-        "<a>Click</a>"
-      );
-    });
-
-    test("returns empty string for null/undefined", () => {
-      expect(sanitizeHtml(invalid(null))).toBe("");
-      expect(sanitizeHtml(invalid(undefined))).toBe("");
-    });
-
-    test("handles empty string", () => {
-      expect(sanitizeHtml("")).toBe("");
-    });
-
-    test("preserves allowed attributes", () => {
-      expect(sanitizeHtml("<p class='text' id='para'>Text</p>")).toBe(
-        "<p class=\"text\" id=\"para\">Text</p>"
-      );
-      expect(sanitizeHtml("<img src='image.png' alt='Image'>")).toBe(
-        "<img src=\"image.png\" alt=\"Image\">"
-      );
-    });
-
-    test("strips disallowed attributes", () => {
-      expect(sanitizeHtml("<img src='x' onload='alert(1)'>")).toBe(
-        "<img src=\"x\">"
-      );
-      expect(sanitizeHtml("<div style='behavior:url(xss.htc)'>XSS</div>")).toBe(
-        "<div>XSS</div>"
-      );
-    });
+  // Regression (2026-11-18): isomorphic-dompurify pulled jsdom into every server
+  // route using this module and crashed on Vercel (ERR_REQUIRE_ESM). The module
+  // must stay free of DOM libraries.
+  test("does not load a DOM library on the server", () => {
+    const src = readFileSync(join(__dirname, "..", "..", "lib", "security", "sanitize.ts"), "utf8");
+    expect(src).not.toMatch(/from [\"'](isomorphic-dompurify|dompurify|jsdom)[\"']/);
   });
 });
