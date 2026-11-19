@@ -13,6 +13,8 @@ interface RankPickerProps {
   description?: string
   icon?: React.ReactNode
   disabled?: boolean
+  /** Shown inside the same box under the divisions (e.g. LP, Server, Queue Type). */
+  children?: React.ReactNode
 }
 
 export function RankPicker({
@@ -23,6 +25,7 @@ export function RankPicker({
   description,
   icon,
   disabled = false,
+  children,
 }: RankPickerProps) {
   const selectedTierId = value?.tierId ?? null
   const selectedDivisionId = value?.divisionId ?? null
@@ -128,6 +131,7 @@ export function RankPicker({
           </div>
         </div>
       ) : null}
+      {children ? <div className="mt-4 border-t border-white/10 pt-4">{children}</div> : null}
     </div>
   )
 }

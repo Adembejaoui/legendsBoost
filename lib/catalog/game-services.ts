@@ -88,6 +88,7 @@ export const gameServices: GameServiceOffer[] = [
         label: 'Game mode',
         description: 'Preferred queue for the wins.',
         required: false,
+        defaultValue: 'ranked-solo',
         options: [
           { label: 'Ranked Solo/Duo', value: 'ranked-solo' },
           { label: 'Ranked Flex', value: 'ranked-flex' },

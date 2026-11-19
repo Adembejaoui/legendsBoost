@@ -61,7 +61,7 @@ export function lpFields(unit: "LP" | "RR"): ConfigField[] {
     {
       type: "select",
       key: LP_GAIN_FIELD,
-      label: `${unit} gain per win`,
+      label: `${unit} Gain`,
       description: `How much ${unit} you gain for a win. Low gains need more games.`,
       // Optional: older orders and API clients omit it (= no adjustment);
       // the configurator always sends its default.

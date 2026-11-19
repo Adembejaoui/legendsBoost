@@ -7,7 +7,7 @@ import { ServiceConfiguratorLayout } from '@/components/service-configurator/Ser
 import { ServicePageHeader } from '@/components/service-configurator/ServicePageHeader'
 import { ServiceNavigationTabs } from '@/components/service-configurator/ServiceNavigationTabs'
 import { RankPicker } from '@/components/service-configurator/RankSelectionCard'
-import { SelectField } from '@/components/service-configurator/SelectField'
+import { InlineSelectField, SelectField } from '@/components/service-configurator/SelectField'
 import { NumberField } from '@/components/service-configurator/NumberField'
 import { CheckoutPanel } from '@/components/checkout/CheckoutPanel'
 import { ChampionPicker } from '@/components/configurator/ChampionPicker'
@@ -17,6 +17,11 @@ import { getRankSystem } from '@/lib/catalog/catalog-utils'
 import { getOffersWithTemplate } from '@/lib/catalog/catalog-utils'
 import { Image } from 'lucide-react'
 import { isTargetAboveCurrent } from '@/lib/catalog/catalog-utils'
+
+/** Fields shown side by side in the current-rank box. */
+const INLINE_FIELD_KEYS = new Set(['currentLp', 'lpGain', 'server', 'queueType', 'gameMode'])
+/** Static class names (Tailwind) for 2, 3 or 4 columns from the small breakpoint. */
+const INLINE_COLS: Record<number, string> = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4' }
 
 interface ServiceConfiguratorNewProps {
   game: any
@@ -59,6 +64,28 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
   // Determine rank fields
   const rankFields = offer.fields.filter((f) => f.type === 'rank-picker')
 
+  // Small dropdowns shown side by side inside the current-rank box, in the
+  // catalog order (client PDFs 2026-11-19). Only when that box exists.
+  const hasCurrentRank = rankFields.some((f) => f.key === 'currentRank')
+  const inlineFields = hasCurrentRank ? offer.fields.filter((f) => f.type === 'select' && INLINE_FIELD_KEYS.has(f.key)) : []
+  const inlineKeys = new Set(inlineFields.map((f) => f.key))
+  const inlineRow =
+    inlineFields.length > 0 ? (
+      <div className={`grid grid-cols-2 gap-3 ${INLINE_COLS[Math.min(inlineFields.length, 4)]}`}>
+        {inlineFields.map((field) => (
+          <InlineSelectField
+            key={field.key}
+            label={(field as any).label}
+            description={(field as any).description}
+            options={(field as any).options || []}
+            value={(values[field.key] as string) ?? null}
+            onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
+            required={(field as any).required}
+          />
+        ))}
+      </div>
+    ) : null
+
   // Build left content
   const leftContent: React.ReactNode[] = []
 
@@ -77,7 +104,9 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
             onChange={(sel) => setValues((v) => ({ ...v, [currentField.key]: sel }))}
             label="Current Rank"
             description={(currentField as any).description || 'Select your current rank and division'}
-          />,
+          >
+            {currentField.key === 'currentRank' ? inlineRow : null}
+          </RankPicker>,
         )
       }
     }
@@ -110,7 +139,9 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
               onChange={(sel) => setValues((v) => ({ ...v, [field.key]: sel }))}
               label={(field as any).label}
               description={(field as any).description}
-            />,
+            >
+              {field.key === 'currentRank' ? inlineRow : null}
+            </RankPicker>,
           )
         }
       }
@@ -120,6 +151,7 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
   // Other fields
   for (const field of offer.fields) {
     if (field.type === 'rank-picker') continue // handled above
+    if (inlineKeys.has(field.key)) continue // in the current-rank box
     if (field.type === 'select') {
       leftContent.push(
         <SelectField
