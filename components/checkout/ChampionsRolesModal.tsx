@@ -15,6 +15,8 @@ interface ChampionsRolesModalProps {
   onClose: () => void
   onConfirm: (config: ChampionsRolesConfig) => void
   initialValue: ChampionsRolesConfig
+  /** OTP Champ Only: pick exactly one champion, no roles. */
+  single?: boolean
 }
 
 /** Same limit as the server (lib/pricing/order-input.ts). */
@@ -25,7 +27,7 @@ export const MAX_CHAMPIONS = 20
  * Dragon), filterable by lane and searchable. Picking lanes also narrows the
  * champion grid to champions played in those lanes (can be turned off).
  */
-export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue }: ChampionsRolesModalProps) {
+export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, single = false }: ChampionsRolesModalProps) {
   const [draftRoles, setDraftRoles] = useState<string[]>(initialValue.roles)
   const [draftChampions, setDraftChampions] = useState<string[]>(initialValue.champions)
   const [query, setQuery] = useState('')
@@ -59,8 +61,12 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue }: 
     else if (laneFilter === roleId) setLaneFilter('all')
   }
 
-  const full = draftChampions.length >= MAX_CHAMPIONS
+  const full = !single && draftChampions.length >= MAX_CHAMPIONS
   const toggleChampion = (champId: string) => {
+    if (single) {
+      setDraftChampions((prev) => (prev[0] === champId ? [] : [champId]))
+      return
+    }
     setDraftChampions((prev) =>
       prev.includes(champId) ? prev.filter((c) => c !== champId) : prev.length >= MAX_CHAMPIONS ? prev : [...prev, champId],
     )
@@ -74,8 +80,10 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue }: 
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-white/10 bg-[#111319] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
-            <h3 className="text-base font-semibold text-white">Champions &amp; Roles</h3>
-            <p className="text-xs text-zinc-500">Tell your booster which lanes and champions to play.</p>
+            <h3 className="text-base font-semibold text-white">{single ? "OTP champion" : "Champions & Roles"}</h3>
+            <p className="text-xs text-zinc-500">
+              {single ? "Your booster will play only this champion for the whole order." : "Tell your booster which lanes and champions to play."}
+            </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:text-white" aria-label="Close">
             <X className="size-5" />
@@ -83,7 +91,7 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue }: 
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          <div>
+          <div className={single ? "hidden" : undefined}>
             <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Roles</p>
             <div className="flex flex-wrap gap-2">
               {LOL_ROLES.map((role) => {

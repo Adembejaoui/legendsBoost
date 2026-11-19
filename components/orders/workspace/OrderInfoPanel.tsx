@@ -108,7 +108,7 @@ export function OrderInfoPanel({ data }: { data: WorkspaceDTO }) {
         {data.progress.kind === "wins" && data.progress.wins && (
           <Row label="Wins" value={`${data.progress.wins.attributed} / ${data.progress.wins.ordered ?? "?"}`} />
         )}
-        <Row label="Games played" value={String(data.matches.total)} />
+        <Row label="Rank updates" value={String(data.updates.list.length)} />
         {viewer.role === "admin" && people.customerEmail && <Row label="Customer email" value={people.customerEmail} />}
         {viewer.role === "admin" && people.boosterEmail && <Row label="Booster email" value={people.boosterEmail} />}
       </dl>
@@ -120,6 +120,23 @@ export function OrderInfoPanel({ data }: { data: WorkspaceDTO }) {
               <Pill key={o}>{o}</Pill>
             ))}
           </div>
+        </div>
+      )}
+      {order.rules.length > 0 && (
+        <div className="mt-2 border-t border-white/[0.06] pt-2">
+          <p className="mb-1.5 text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            {viewer.role === "customer" ? "Your booster follows" : "Booster rules"}
+          </p>
+          <ul className="space-y-1">
+            {order.rules.map((r) => (
+              <li key={r.label} className="flex gap-2 text-xs text-zinc-300">
+                <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--g-accent)]" />
+                <span>
+                  <span className="font-semibold text-white">{r.label}:</span> {r.rule}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </Panel>

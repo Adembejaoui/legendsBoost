@@ -87,6 +87,7 @@ export function workspaceFixture(
       platformLabel: lol ? "Europe West" : null,
       mode: "Solo",
       options: ["Priority", "Stream games"],
+      rules: [],
       price: "89.90",
       currency: "EUR",
       boosterPayout: null,

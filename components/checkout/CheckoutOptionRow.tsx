@@ -1,101 +1,141 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useId, useState } from 'react'
+import {
+  ChevronRight,
+  Crosshair,
+  Drama,
+  EyeOff,
+  Globe,
+  Info,
+  LineChart,
+  Mic,
+  Sparkles,
+  Swords,
+  Trophy,
+  User,
+  Video,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Pencil, X } from 'lucide-react'
 import type { CheckoutMode, CheckoutOption, ChampionsRolesConfig } from '@/lib/config/checkout-options'
 import { champions } from '@/lib/catalog/champions'
 
+const ICONS: Record<string, LucideIcon> = { User, Trophy, Zap, Video, Swords, Globe, EyeOff, Drama, LineChart, Crosshair, Mic }
+
 interface CheckoutOptionRowProps {
   option: CheckoutOption
+  mode: CheckoutMode
   checked: boolean
   onToggle: (checked: boolean) => void
+  /** Server price of this extra ("+$1.96"); undefined while the quote loads. */
+  priceLabel?: string
   disabled?: boolean
   championsRoles?: ChampionsRolesConfig
-  onConfigureChampionsRoles?: () => void
+  /** Opens the champion picker of a configurable extra. */
+  onConfigure?: () => void
 }
 
-const roles = [
-  { id: 'top', label: 'Top' },
-  { id: 'jungle', label: 'Jungle' },
-  { id: 'mid', label: 'Mid' },
-  { id: 'adc', label: 'ADC' },
-  { id: 'support', label: 'Support' },
-]
+const champName = (id: string) => champions.find((c) => c.id === id)?.name ?? id
 
-export function CheckoutOptionRow({
-  option,
-  checked,
-  onToggle,
-  disabled = false,
-  championsRoles,
-  onConfigureChampionsRoles,
-}: CheckoutOptionRowProps) {
-  const badgeStyle =
-    option.badge?.includes('%')
-      ? 'border-orange-400/60 text-orange-400'
-      : option.badge === 'Free'
-        ? 'border-emerald-400/60 text-emerald-400'
-        : 'border-white/15 text-zinc-400'
+/**
+ * One extra in the order summary (client PDFs 2026-11-19): icon, name, info
+ * icon with the hover text, price badge from the server and a switch.
+ */
+export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel, disabled = false, championsRoles, onConfigure }: CheckoutOptionRowProps) {
+  const [tip, setTip] = useState(false)
+  const tipId = useId()
+  const Icon = (option.icon && ICONS[option.icon]) || Sparkles
+  const hover = (mode === 'duo' && option.descriptionDuo) || option.description
+  const free = priceLabel === 'Free'
+  const configurable = option.type === 'configurable-toggle' && !!onConfigure
 
-  const showConfigure = (option as any).type === 'configurable-toggle' && (option as any).configurationType === 'champions-roles' && checked
+  let detail: string | null = null
+  if (checked && option.configurationType === 'champions-roles' && championsRoles) {
+    const roles = championsRoles.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(', ')
+    const champs = championsRoles.champions.map(champName).join(', ')
+    detail = [roles && `Roles: ${roles}`, champs && `Champions: ${champs}`].filter(Boolean).join(' · ') || 'Choose your champions and roles'
+  }
+  if (checked && option.configurationType === 'otp-champion') {
+    detail = championsRoles?.otpChampion ? `Champion: ${champName(championsRoles.otpChampion)}` : 'Choose your champion'
+  }
 
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-white/10 bg-[#0b0c10] p-3">
-      <div className="flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-white">{option.label}</p>
-          {option.badge ? (
-            <span className={cn('rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]', badgeStyle)}>
-              {option.badge}
-            </span>
-          ) : null}
-          {showConfigure && onConfigureChampionsRoles ? (
+    <div className="flex items-center gap-2.5 py-1.5">
+      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-white/[0.05] text-zinc-400">
+        <Icon className="size-3.5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          {configurable ? (
             <button
               type="button"
-              onClick={onConfigureChampionsRoles}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400 hover:text-white"
-              aria-label="Configure champions and roles"
+              onClick={onConfigure}
+              disabled={disabled}
+              className="inline-flex min-w-0 items-center gap-0.5 truncate text-left text-sm font-medium text-white hover:text-zinc-200"
             >
-              <Pencil className="size-3" />
-              Edit
+              {option.label}
+              <ChevronRight className="size-3.5 shrink-0 text-zinc-500" aria-hidden />
             </button>
+          ) : (
+            <span className="truncate text-sm font-medium text-white">{option.label}</span>
+          )}
+          {hover ? (
+            <span className="relative inline-flex">
+              <button
+                type="button"
+                aria-label={`About ${option.label}`}
+                aria-describedby={tip ? tipId : undefined}
+                onMouseEnter={() => setTip(true)}
+                onMouseLeave={() => setTip(false)}
+                onFocus={() => setTip(true)}
+                onBlur={() => setTip(false)}
+                onClick={() => setTip((v) => !v)}
+                className="rounded-full p-0.5 text-zinc-500 hover:text-zinc-200"
+              >
+                <Info className="size-3.5" />
+              </button>
+              {tip ? (
+                <span
+                  id={tipId}
+                  role="tooltip"
+                  className="absolute bottom-full left-1/2 z-30 mb-1.5 w-56 -translate-x-1/2 rounded-md border border-white/10 bg-[#1a1d26] px-2.5 py-1.5 text-[11px] leading-snug text-zinc-200 shadow-xl"
+                >
+                  {hover}
+                </span>
+              ) : null}
+            </span>
           ) : null}
         </div>
-        {showConfigure && championsRoles ? (
-          <p className="mt-1 text-xs text-zinc-500">
-            {championsRoles.roles.length > 0 ? `Roles: ${championsRoles.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(', ')}` : 'Roles: -'}{' '}
-            •{' '}
-            {championsRoles.champions.length > 0
-              ? `Champions: ${championsRoles.champions
-                  .map((c) => champions.find((ch) => ch.id === c)?.name || c)
-                  .join(', ')}`
-              : 'Champions: -'}
-          </p>
-        ) : null}
-        {option.description ? <p className="mt-1 text-xs text-zinc-500">{option.description}</p> : null}
+        {detail ? <p className="truncate text-[11px] text-zinc-500">{detail}</p> : null}
       </div>
+      {priceLabel ? (
+        <span
+          className={cn(
+            'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium tabular-nums',
+            free ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-zinc-300',
+          )}
+        >
+          {priceLabel}
+        </span>
+      ) : null}
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={option.label}
         disabled={disabled}
         onClick={() => {
-          if (disabled) return
-          onToggle(!checked)
+          if (!disabled) onToggle(!checked)
         }}
         className={cn(
-          'relative inline-flex h-6 w-10 items-center rounded-full border transition-all',
-          checked ? 'border-violet-400 bg-violet-500/30' : 'border-white/10 bg-[#111319]',
+          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+          checked ? 'bg-orange-500' : 'bg-white/15',
           disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
         )}
       >
-        <span
-          className={cn(
-            'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
-            checked ? 'translate-x-5' : 'translate-x-1',
-          )}
-        />
+        <span className={cn('inline-block size-4 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[18px]' : 'translate-x-0.5')} />
       </button>
     </div>
   )

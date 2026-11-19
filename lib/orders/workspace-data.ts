@@ -237,7 +237,13 @@ export async function getOrderWorkspace(
   const legacyName = typeof cfg.riotGameName === "string" ? cfg.riotGameName : null;
   const legacyTag = typeof cfg.riotTagline === "string" ? cfg.riotTagline : "";
 
-  const platform = ra?.platform && isRiotPlatform(ra.platform) ? (ra.platform as RiotPlatform) : null;
+  // Region: the saved Riot ID region, else the server chosen at checkout.
+  const platform =
+    ra?.platform && isRiotPlatform(ra.platform)
+      ? (ra.platform as RiotPlatform)
+      : typeof cfg.server === "string" && isRiotPlatform(cfg.server)
+        ? (cfg.server as RiotPlatform)
+        : null;
 
   // Order details: render configuration fields from the offer definition, so
   // labels are real and nothing is invented.
@@ -253,6 +259,14 @@ export async function getOrderWorkspace(
   const options = order.selectedOptions.map(
     (id) => checkout?.options.find((o) => o.id === id)?.label ?? id
   );
+  // Booster rules for the extras the customer bought.
+  const otpId = (order.championsRoles as { otpChampion?: unknown } | null)?.otpChampion;
+  const rules = order.selectedOptions.flatMap((id) => {
+    const o = checkout?.options.find((x) => x.id === id);
+    if (!o?.boosterRule) return [];
+    const champ = id === "otp-champion" && typeof otpId === "string" ? getChampion(otpId)?.name ?? otpId : null;
+    return [{ label: o.label, rule: champ ? `${o.boosterRule} Champion: ${champ}.` : o.boosterRule }];
+  });
   const mode = order.selectedMode
     ? checkout?.modes?.find((m) => m.id === order.selectedMode)?.label ?? order.selectedMode
     : null;
@@ -438,6 +452,7 @@ export async function getOrderWorkspace(
       platformLabel: platform ? RIOT_PLATFORM_LABELS[platform] : null,
       mode,
       options,
+      rules,
       // Boosters never receive the customer price, only their own payout.
       price: access.viewerRole === "booster" ? null : order.price?.toString() ?? null,
       currency: order.currency ?? null,
@@ -501,7 +516,7 @@ export async function getOrderWorkspace(
       canPost: viewerIsWorkingBooster && rankOptions.length > 0,
       pointsLabel: pts,
       rankOptions,
-      selfCheck: selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: ra.platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform: null } : null),
+      selfCheck: selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform } : null),
       stale: staleUpdates,
     },
     progress,

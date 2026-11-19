@@ -39,6 +39,7 @@ export function withFixedQuote(actual: typeof PricingService): typeof PricingSer
           servicePriceId: "price-fixed",
           servicePriceVersion: 1,
           commissionPolicyId: "commission_policy_initial_45_55",
+          optionAmounts: {},
         },
       };
     },

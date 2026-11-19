@@ -20,8 +20,7 @@ import type { CheckoutMode, CheckoutOption, ChampionsRolesConfig } from '@/lib/c
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Loader2, Lock } from 'lucide-react'
-import { CheckoutModeSelector } from './CheckoutModeSelector'
+import { ArrowRight, Loader2, Lock, ShoppingCart, User, UserRound, Users } from 'lucide-react'
 import { CheckoutOptionRow } from './CheckoutOptionRow'
 import { ChampionsRolesModal } from './ChampionsRolesModal'
 import { formatSelection } from '@/lib/catalog/catalog-utils'
@@ -32,7 +31,6 @@ import { evaluateOrderEligibility, NOT_PURCHASABLE_MESSAGE } from '@/lib/orders/
 import { newIdempotencyKey, patchCheckout, readCheckout, type StoredCheckout } from '@/lib/checkout/session-state'
 import { PREFERRED_BOOSTER_KEY } from '@/components/boosters/ChooseBoosterButton'
 import { redirectToStripeCheckout } from '@/lib/checkout/redirect'
-import { RISK_DISCLOSURE_TEXT } from '@/lib/orders/risk-disclosure'
 
 interface CheckoutPanelProps {
   game: { slug: string; name: string; accent?: string }
@@ -54,6 +52,8 @@ type ServerQuote = {
   estimate?: { hours: number; label: string } | null
   discountAmount?: number
   coupon?: { code: string; applied: boolean; reason?: string } | null
+  /** Price of every extra of the selected mode (shown before it is switched on). */
+  optionAmounts?: Record<string, number>
 }
 type QuoteOutcome = { kind: 'ok'; quote: ServerQuote } | { kind: 'error'; error: string } | { kind: 'signin' }
 type QuoteResult = QuoteOutcome & { payloadJson: string }
@@ -91,8 +91,10 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const [couponDraft, setCouponDraft] = useState('')
   const [couponCode, setCouponCode] = useState<string | null>(null)
   const [lastCouponError, setLastCouponError] = useState<string | null>(null)
-  // Risk notice: must be ticked before paying (stored on the order).
-  const [riskAccepted, setRiskAccepted] = useState(false)
+  // No risk checkbox at checkout (client decision 2026-11-19).
+  const [otpModalOpen, setOtpModalOpen] = useState(false)
+  const [discountOpen, setDiscountOpen] = useState(false)
+  const [boosterPickerOpen, setBoosterPickerOpen] = useState(false)
   // Optional preferred booster (exclusive for a short time after payment).
   const [boosters, setBoosters] = useState<{ id: string; displayName: string }[]>([])
   // A booster chosen on their public profile is preselected (if they can do this order).
@@ -137,6 +139,17 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     // Turning on "Champions and Roles Selection" opens its picker right away.
     const option = config?.options.find((o) => o.id === id)
     if (on && option?.configurationType === 'champions-roles') setModalOpen(true)
+    if (option?.configurationType === 'otp-champion') {
+      if (on) setOtpModalOpen(true)
+      else setOtpChampion(undefined)
+    }
+  }
+  const setOtpChampion = (champion: string | undefined) => {
+    setChampionsRolesByMode((prev) => {
+      const next = { ...prev, [mode]: { ...prev[mode], otpChampion: champion } }
+      remember({ championsRoles: next })
+      return next
+    })
   }
 
   // Badges come from the real configured price; an extra with no price is
@@ -193,7 +206,11 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     configuration: values,
     selectedMode: enabledModes.length > 0 ? mode : undefined,
     selectedOptions,
-    championsRoles: championsRolesByMode[mode],
+    championsRoles: (() => {
+      // The OTP champion is only sent while "OTP Champ Only" is selected.
+      const { otpChampion, ...rest } = championsRolesByMode[mode]
+      return selectedOptions.includes('otp-champion') && otpChampion ? { ...rest, otpChampion } : rest
+    })(),
     ...(couponCode ? { couponCode } : {}),
   }
   const payloadJson = JSON.stringify(payload)
@@ -262,7 +279,6 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       body: JSON.stringify({
         ...payload,
         ...(chosenBooster ? { preferredBoosterId: chosenBooster } : {}),
-        riskAccepted: true,
         expectedTotal: { amount: expected.totalAmount, currency: expected.currency },
       }),
     })
@@ -356,203 +372,233 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     : canOrder ? 'Continue to Payment'
     : 'Unavailable'
 
-  const optionLabel = (id: string) => config?.options.find((o) => o.id === id)?.label ?? id
-  const lineLabel = (l: QuoteLine) => {
-    if (l.code === 'BASE') return 'Base price'
-    if (l.code.startsWith('STEPS:')) {
-      const tier = l.code.slice(6)
-      return `${tier.charAt(0).toUpperCase()}${tier.slice(1)} divisions`
-    }
-    if (l.code.startsWith('UNITS:')) return l.label
-    if (l.code.startsWith('MODE:')) return `${enabledModes.find((m) => `MODE:${m.id}` === l.code)?.label ?? l.code.slice(5)} mode`
-    if (l.code.startsWith('OPTION:')) return optionLabel(l.code.slice(7))
-    if (l.code === 'LP:CURRENT') return 'Current LP discount'
-    if (l.code === 'LP:GAIN') return l.amount > 0 ? 'Low LP gain' : 'High LP gain'
-    return l.label
+  // Headline: current rank -> target rank, or the quantity bought.
+  const fieldOf = (key: string) => (offer.fields || []).find((x: { key: string }) => x.key === key)
+  const fromLine = summaryLines.find((l) => l.key === 'currentRank')
+  const toLine =
+    summaryLines.find((l) => l.key === 'targetRank') ??
+    (() => {
+      const unitField = (offer.fields || []).find((x: { type: string; key: string }) => x.type === 'number' && values[x.key] != null && values[x.key] !== '')
+      if (!unitField) return undefined
+      const unit = (fieldOf(unitField.key) as { unit?: string } | undefined)?.unit ?? ''
+      return { key: unitField.key, label: unitField.label, value: `${values[unitField.key]} ${unit}`.trim(), iconSrc: undefined }
+    })()
+
+  const priceLabelFor = (o: CheckoutOption): string | undefined => {
+    const amount = quote?.optionAmounts?.[o.id]
+    if (amount !== undefined && quote) return amount === 0 ? 'Free' : `+${formatMoney(amount, quote.currency)}`
+    return o.badge === 'Free' ? 'Free' : quoteLoading ? undefined : o.badge
   }
+  const mainOptions = visibleOptions.filter((o) => o.group !== 'secondary')
+  const secondaryOptions = visibleOptions.filter((o) => o.group === 'secondary')
+  const modeChoices = priceTags ? enabledModes.filter((m) => m.id in priceTags.modes) : enabledModes
+  const chosenName = boosters.find((b) => b.id === chosenBooster)?.displayName
+  const optionRow = (option: CheckoutOption) => (
+    <CheckoutOptionRow
+      key={`${game.slug}-${offer.serviceSlug}-${option.id}-${mode}`}
+      option={option}
+      mode={mode}
+      checked={extrasByMode[mode]?.[option.id] ?? false}
+      onToggle={(v) => toggleExtra(option.id, Boolean(v))}
+      priceLabel={priceLabelFor(option)}
+      disabled={option.enabled === false || busy}
+      championsRoles={championsRolesByMode[mode]}
+      onConfigure={
+        option.configurationType === 'champions-roles'
+          ? () => setModalOpen(true)
+          : option.configurationType === 'otp-champion'
+            ? () => setOtpModalOpen(true)
+            : undefined
+      }
+    />
+  )
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111319]">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h2 className="text-lg font-semibold text-white">Order summary</h2>
-        <p className="text-xs text-zinc-400">
-          {game.name} · {offer.title ?? offer.serviceSlug}
-        </p>
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#111319]">
+      <div className="flex items-center gap-2 px-4 pt-4">
+        <ShoppingCart className="size-4 text-orange-400" aria-hidden />
+        <h2 className="text-base font-semibold text-white">Order summary</h2>
       </div>
-      <div className="space-y-4 px-5 py-4">
-        <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Configuration</p>
-          {summaryLines.length === 0 ? (
-            <p className="text-sm text-zinc-500">No selections yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {summaryLines.map((l) => (
-                <div key={l.key} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-zinc-400">{l.label}</span>
-                  <div className="flex items-center gap-2 text-right text-white">
-                    {l.iconSrc ? <Image src={l.iconSrc} alt="" width={20} height={20} className="size-5 object-contain" /> : null}
-                    <span>{l.value}</span>
-                  </div>
+
+      <div className="space-y-3 p-4">
+        {fromLine || toLine ? (
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+            {fromLine?.iconSrc ? <Image src={fromLine.iconSrc} alt="" width={36} height={36} className="size-9 object-contain" /> : null}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-white">{fromLine?.value ?? offer.title}</p>
+              <p className="text-[11px] text-zinc-500">{fromLine ? fromLine.label : game.name}</p>
+            </div>
+            {toLine ? (
+              <>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/[0.06] text-zinc-300">
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </span>
+                <div className="flex min-w-0 items-center gap-2 text-right">
+                  {toLine.iconSrc ? <Image src={toLine.iconSrc} alt="" width={36} height={36} className="size-9 object-contain" /> : null}
+                  <p className="truncate text-sm font-bold text-white">{toLine.value}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {enabledModes.length > 0 ? (
-          <CheckoutModeSelector
-            modes={(priceTags ? enabledModes.filter((m) => m.id in priceTags.modes) : enabledModes) as never}
-            tags={priceTags?.modes}
-            value={mode}
-            onChange={(m) => changeMode(m as CheckoutMode)}
-          />
-        ) : null}
-
-        {visibleOptions.length > 0 ? (
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">Extras</p>
-            <div className="space-y-2">
-              {visibleOptions.map((option: CheckoutOption) => (
-                <CheckoutOptionRow
-                  key={`${game.slug}-${offer.serviceSlug}-${option.id}-${mode}`}
-                  option={option}
-                  checked={extrasByMode[mode]?.[option.id] ?? false}
-                  onToggle={(v) => toggleExtra(option.id, Boolean(v))}
-                  disabled={option.enabled === false || busy}
-                  championsRoles={championsRolesByMode[mode]}
-                  onConfigureChampionsRoles={() => setModalOpen(true)}
-                />
-              ))}
-            </div>
+              </>
+            ) : null}
           </div>
         ) : null}
 
-        <div className="border-t border-white/10 pt-4" aria-live="polite">
-          {quote?.lines?.length ? (
-            <div className="mb-3 space-y-1.5">
-              {quote.lines.map((l) => (
-                <div key={l.code} className="flex justify-between text-sm">
-                  <span className="text-zinc-400">{lineLabel(l)}</span>
-                  <span className="text-zinc-200">{formatMoney(l.amount, quote.currency)}</span>
-                </div>
-              ))}
+        {modeChoices.length > 1 ? (
+          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/20 p-1" role="radiogroup" aria-label="Session type">
+            {modeChoices.map((m) => {
+              const active = m.id === mode
+              const Icon = m.id === 'duo' ? Users : User
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => changeMode(m.id as CheckoutMode)}
+                  disabled={busy}
+                  className={
+                    'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:text-[13px] ' +
+                    (active ? 'bg-orange-500 text-white shadow' : 'text-zinc-400 hover:text-white')
+                  }
+                >
+                  <Icon className="size-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{m.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {visibleOptions.length > 0 ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-1">
+            {mainOptions.map(optionRow)}
+            {mainOptions.length > 0 && secondaryOptions.length > 0 ? <div className="my-1 border-t border-white/10" /> : null}
+            {secondaryOptions.map(optionRow)}
+          </div>
+        ) : null}
+
+        {!signInRequired ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
+            <div className="flex items-center gap-3">
+              <span className="grid size-8 place-items-center rounded-full bg-orange-500/15 text-orange-300">
+                <UserRound className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-zinc-500">Handled by</p>
+                <p className="truncate text-sm font-semibold text-white">{chosenName ?? 'Anyone available'}</p>
+              </div>
+              {boosters.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setBoosterPickerOpen((v) => !v)}
+                  aria-expanded={boosterPickerOpen}
+                  className="text-xs font-semibold text-orange-300 hover:text-orange-200"
+                >
+                  Change ›
+                </button>
+              ) : null}
             </div>
-          ) : null}
+            {boosterPickerOpen && boosters.length > 0 ? (
+              <div className="mt-2 space-y-1 border-t border-white/10 pt-2" role="radiogroup" aria-label="Booster">
+                {[{ id: '', displayName: 'Anyone available (fastest)' }, ...boosters].map((b) => (
+                  <button
+                    key={b.id || 'any'}
+                    type="button"
+                    role="radio"
+                    aria-checked={chosenBooster === b.id}
+                    onClick={() => {
+                      setPreferredBoosterId(b.id)
+                      setBoosterPickerOpen(false)
+                    }}
+                    className={
+                      'block w-full rounded-md px-2 py-1.5 text-left text-sm ' +
+                      (chosenBooster === b.id ? 'bg-orange-500/15 text-white' : 'text-zinc-300 hover:bg-white/5')
+                    }
+                  >
+                    {b.displayName}
+                  </button>
+                ))}
+                <p className="px-2 text-[11px] text-zinc-500">Your booster gets the order first for a short time; if they do not take it, anyone can.</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="border-t border-white/10 pt-3" aria-live="polite">
           {quote?.discountAmount && quote.coupon?.applied ? (
-            <div className="mb-3 flex justify-between text-sm">
+            <div className="mb-1 flex justify-between text-xs">
               <span className="text-emerald-300">Discount ({quote.coupon.code})</span>
               <span className="text-emerald-300">-{formatMoney(quote.discountAmount, quote.currency)}</span>
             </div>
           ) : null}
-          <form
-            className="mb-3 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const code = couponDraft.trim().toUpperCase()
-              setLastCouponError(null)
-              setCouponCode(code || null)
-            }}
-          >
-            <input
-              value={couponDraft}
-              onChange={(e) => setCouponDraft(e.target.value)}
-              placeholder="Discount code"
-              maxLength={32}
-              aria-label="Discount code"
-              className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm uppercase text-white outline-none placeholder:normal-case placeholder:text-zinc-500 focus:border-white/30"
-            />
-            {couponCode && quote?.coupon?.applied ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setCouponCode(null)
-                  setCouponDraft('')
-                }}
-                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
-              >
-                Remove
-              </button>
-            ) : (
-              <button type="submit" disabled={!couponDraft.trim() || busy} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50">
-                Apply
-              </button>
-            )}
-          </form>
-          {lastCouponError ? <p role="alert" className="-mt-2 mb-3 text-xs text-amber-300">{lastCouponError}</p> : null}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-400">Total</span>
-            <span className="flex items-center gap-2 text-lg font-semibold text-white">
-              {quoteLoading ? <Loader2 className="size-4 animate-spin text-zinc-400" aria-label="Calculating price" /> : null}
-              {quote ? formatMoney(quote.totalAmount, quote.currency) : '—'}
-            </span>
-          </div>
-          {quote?.estimate ? (
-            <div className="mt-1 flex items-center justify-between text-xs">
-              <span className="text-zinc-400">Estimated completion</span>
-              <span className="text-zinc-200" title="An estimate based on typical games per day, not a guarantee.">
-                {quote.estimate.label}
-              </span>
-            </div>
-          ) : null}
-          <p className="mt-1 text-xs text-zinc-500">
-            {!canOrder
-              ? offer.purchase?.reason === 'unpriced'
-                ? 'Pricing for this service is not available yet.'
-                : 'This service is not available for purchase yet.'
-              : missing.length
-                ? `Complete: ${missing.join(', ')}`
-                : signInRequired
-                  ? 'Sign in to see your price.'
-                  : current?.kind === 'error'
-                    ? current.error
-                    : quote
-                      ? 'Calculated by our server for this exact configuration.'
-                      : 'Calculating your price…'}
+          <p className="text-[11px] text-zinc-500">Total price</p>
+          <p className="flex items-center gap-2 text-3xl font-black tracking-tight text-white">
+            {quoteLoading ? <Loader2 className="size-5 animate-spin text-zinc-400" aria-label="Calculating price" /> : null}
+            {quote ? formatMoney(quote.totalAmount, quote.currency) : '—'}
           </p>
+          {!quote || missing.length || signInRequired || current?.kind === 'error' || !canOrder ? (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {!canOrder
+                ? offer.purchase?.reason === 'unpriced'
+                  ? 'Pricing for this service is not available yet.'
+                  : 'This service is not available for purchase yet.'
+                : missing.length
+                  ? `Complete: ${missing.join(', ')}`
+                  : signInRequired
+                    ? 'Sign in to see your price.'
+                    : current?.kind === 'error'
+                      ? current.error
+                      : 'Calculating your price…'}
+            </p>
+          ) : null}
+
+          {discountOpen || couponCode ? (
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const code = couponDraft.trim().toUpperCase()
+                setLastCouponError(null)
+                setCouponCode(code || null)
+              }}
+            >
+              <input
+                value={couponDraft}
+                onChange={(e) => setCouponDraft(e.target.value)}
+                placeholder="Discount code"
+                maxLength={32}
+                aria-label="Discount code"
+                autoFocus={!couponCode}
+                className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm uppercase text-white outline-none placeholder:normal-case placeholder:text-zinc-500 focus:border-white/30"
+              />
+              {couponCode && quote?.coupon?.applied ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponCode(null)
+                    setCouponDraft('')
+                  }}
+                  className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button type="submit" disabled={!couponDraft.trim() || busy} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50">
+                  Apply
+                </button>
+              )}
+            </form>
+          ) : (
+            <button type="button" onClick={() => setDiscountOpen(true)} className="mt-1 text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-200">
+              Have a discount code?
+            </button>
+          )}
+          {lastCouponError ? <p role="alert" className="mt-1 text-xs text-amber-300">{lastCouponError}</p> : null}
         </div>
 
-        {!signInRequired && boosters.length > 0 ? (
-          <label className="block text-[11px] text-zinc-400">
-            Booster
-            <select
-              value={chosenBooster}
-              onChange={(e) => setPreferredBoosterId(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2 text-sm text-white"
-            >
-              <option value="">Any available booster (fastest)</option>
-              {boosters.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.displayName}
-                </option>
-              ))}
-            </select>
-            {chosenBooster ? (
-              <span className="mt-1 block text-zinc-500">
-                Your booster gets the order first for a short time; if they do not take it, any booster can.
-              </span>
-            ) : null}
-          </label>
-        ) : null}
-        {!signInRequired ? (
-          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-white/10 bg-white/[0.03] p-2.5 text-[11px] leading-relaxed text-zinc-400">
-            <input
-              type="checkbox"
-              checked={riskAccepted}
-              onChange={(e) => setRiskAccepted(e.target.checked)}
-              className="mt-0.5 size-3.5 shrink-0 accent-orange-500"
-            />
-            <span>
-              {RISK_DISCLOSURE_TEXT}{' '}
-              <Link href="/terms" className="text-zinc-300 underline-offset-2 hover:underline" target="_blank">
-                Terms
-              </Link>
-            </span>
-          </label>
-        ) : null}
         {signInRequired ? (
           <Link
             href={loginHref()}
-            className="block w-full rounded-md bg-orange-500 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-orange-400"
+            className="block w-full rounded-xl bg-orange-500 px-4 py-3 text-center text-sm font-bold text-white hover:bg-orange-400"
           >
             Sign in to continue
           </Link>
@@ -561,12 +607,12 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             type="button"
             onClick={() => void continueToPayment()}
             // A quote error does not disable the button: clicking re-requests the quote.
-            disabled={busy || !canOrder || missing.length > 0 || !riskAccepted}
+            disabled={busy || !canOrder || missing.length > 0}
             aria-busy={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Lock className="size-4" aria-hidden />}
-            {buttonLabel}
+            {busy ? buttonLabel : canOrder ? 'Buy now' : 'Unavailable'}
           </button>
         )}
         {errorMsg ? (
@@ -574,10 +620,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             {errorMsg}
           </p>
         ) : null}
-        {testMode ? (
-          <p className="text-center text-xs text-amber-400">Test mode: payments use Stripe test cards and no real money is charged.</p>
-        ) : null}
-        <p className="text-center text-xs text-zinc-500">Secure payment on Stripe · Price calculated by our server</p>
+        {testMode ? <p className="text-center text-xs text-amber-400">Test mode: payments use Stripe test cards and no real money is charged.</p> : null}
+        <p className="text-center text-[11px] text-zinc-500">Secure payment on Stripe</p>
       </div>
 
       <ChampionsRolesModal
@@ -586,11 +630,21 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         initialValue={championsRolesByMode[mode]}
         onConfirm={(cfg) => {
           setChampionsRolesByMode((prev) => {
-            const next = { ...prev, [mode]: cfg }
+            const next = { ...prev, [mode]: { ...cfg, otpChampion: prev[mode].otpChampion } }
             remember({ championsRoles: next })
             return next
           })
           setModalOpen(false)
+        }}
+      />
+      <ChampionsRolesModal
+        single
+        open={otpModalOpen}
+        onClose={() => setOtpModalOpen(false)}
+        initialValue={{ roles: [], champions: championsRolesByMode[mode].otpChampion ? [championsRolesByMode[mode].otpChampion as string] : [] }}
+        onConfirm={(cfg) => {
+          setOtpChampion(cfg.champions[0])
+          setOtpModalOpen(false)
         }}
       />
     </div>

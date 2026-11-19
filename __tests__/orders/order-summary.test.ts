@@ -29,7 +29,7 @@ describe("order summary", () => {
     expect(s.reference).toBe("ABCD1234");
     expect(s.gameName).toBe("League of Legends");
     expect(s.serviceName).toBe("Rank Boost");
-    expect(s.mode).toBe("Duo");
+    expect(s.mode).toBe("Duo (play with a pro)");
     expect(s.ranks?.from?.label).toMatch(/Gold/);
     expect(s.ranks?.to?.label).toMatch(/Platinum/);
     expect(s.ranks?.from?.iconSrc).toBeTruthy();

@@ -15,7 +15,7 @@
  *  - Win boosts / placements: PER_UNIT (per win / per match).
  *  - Champion mastery: FIXED.
  *  - Extras: the percentage on the catalog badge ("+25%") becomes the real
- *    surcharge; "Free" / "Auto" extras are included at 0. Duo mode +40%.
+ *    surcharge; "Free" / "Auto" extras are included at 0. Duo mode +50% (2026-11-19).
  *  - Arena, Normal Matches, VALORANT Unrated: deliberately left unpriced.
  */
 import { gameServices } from "@/lib/catalog/game-services";
@@ -27,7 +27,7 @@ export const MARKET_PRICE_CURRENCY = "USD";
 export const MARKET_PRICE_NOTE = "Market default prices (competitor research 2026-11-14)";
 
 /** Duo (playing together) costs more than solo, as on competitor sites. */
-export const DUO_MODE_BPS = 4000;
+export const DUO_MODE_BPS = 5000;
 
 type Spec =
   | { model: "RANK_STEPS"; stepAmounts: Record<string, number> }

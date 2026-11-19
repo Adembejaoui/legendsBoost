@@ -19,7 +19,8 @@ export function RiotAccountPanel({ data, embedded = false }: { data: WorkspaceDT
   const [editing, setEditing] = useState(!acc && canEdit);
   const [gameName, setGameName] = useState(acc?.gameName ?? "");
   const [tagLine, setTagLine] = useState(acc?.tagLine ?? "");
-  const [platform, setPlatform] = useState(acc?.platform ?? "");
+  // Pre-selected from the server chosen at checkout.
+  const [platform, setPlatform] = useState(acc?.platform ?? data.order.platform ?? "");
   const [busy, setBusy] = useState<"save" | "unlink" | null>(null);
   const [error, setError] = useState<string | null>(null);
   async function call(kind: "save" | "unlink") {

@@ -78,8 +78,11 @@ beforeEach(() => {
 });
 
 describe("risk notice", () => {
-  it("an order cannot be created without accepting it; acceptance is stored with its version", async () => {
-    await expect(order(customer.id, { riskAccepted: undefined })).rejects.toMatchObject({ status: 400 });
+  // Client decision 2026-11-19: no risk checkbox at checkout any more.
+  it("an order can be created without it; an acceptance sent anyway is still stored with its version", async () => {
+    const { order: without } = await order(customer.id, { riskAccepted: undefined });
+    const plain = await prisma.order.findUniqueOrThrow({ where: { id: without.id } });
+    expect(plain.riskDisclosureAcceptedAt).toBeNull();
     const { order: o } = await order(customer.id);
     const row = await prisma.order.findUniqueOrThrow({ where: { id: o.id } });
     expect(row.riskDisclosureAcceptedAt).toBeInstanceOf(Date);

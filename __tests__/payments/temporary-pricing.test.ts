@@ -90,16 +90,24 @@ function domain(f: any): unknown[] {
   }
 }
 
+/** Fields that never change the price: one value is enough (keeps the loop fast). */
+const PRICE_NEUTRAL = new Set(["server", "queueType"]);
+
 function* configurations(fields: any[]): Generator<Record<string, unknown>> {
   if (fields.length === 0) {
     yield {};
     return;
   }
   const [first, ...rest] = fields;
-  for (const v of domain(first)) for (const tail of configurations(rest)) yield v === undefined ? tail : { [first.key]: v, ...tail };
+  const values = PRICE_NEUTRAL.has(first.key) ? [first.options?.[0]?.value] : domain(first);
+  for (const v of values) for (const tail of configurations(rest)) yield v === undefined ? tail : { [first.key]: v, ...tail };
 }
 
 /** Option selections to try per mode: none, each enabled option alone, all enabled together. */
+/** OTP Champ Only needs its champion (client PDFs 2026-11-19). */
+const otpFor = (selectedOptions: string[]) =>
+  selectedOptions.includes("otp-champion") ? { championsRoles: { roles: [], champions: [], otpChampion: champions[0].id } } : {};
+
 function optionSets(checkout: any, mode: string | null): string[][] {
   const ids = checkout.options.filter((o: any) => o.enabled && (!mode || !o.availableModes || o.availableModes.includes(mode))).map((o: any) => o.id);
   return [[], ...ids.map((id: string) => [id]), ...(ids.length > 1 ? [ids] : [])];
@@ -165,7 +173,7 @@ describe("temporary prices: every selectable configuration", () => {
     for (const configuration of configurations(offer.fields)) {
       for (const mode of modes.length ? modes : [null]) {
         for (const selectedOptions of optionSets(checkout, mode)) {
-          const v = validateOrderInput(offer, checkout, { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode ?? undefined, selectedOptions });
+          const v = validateOrderInput(offer, checkout, { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode ?? undefined, selectedOptions, ...otpFor(selectedOptions) });
           if (!v.ok) {
             rejected++;
             continue;
@@ -207,7 +215,7 @@ describe("routes: quote -> order -> Stripe Checkout preparation (test mode, no p
     }
     const mode = (checkout.modes ?? []).find((m) => m.enabled)?.id;
     const selectedOptions = optionSets(checkout, mode ?? null).at(-1)!;
-    return { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode, selectedOptions, riskAccepted: true as const };
+    return { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode, selectedOptions, riskAccepted: true as const, ...otpFor(selectedOptions) };
   }
 
   beforeAll(async () => {

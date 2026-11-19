@@ -4,6 +4,7 @@
  * Catches duplicate option keys, inverted division order, orphan configs and
  * services the admin form could never make purchasable.
  */
+import { champions } from "@/lib/catalog/champions";
 import { describe, it, expect } from "vitest";
 import { games } from "@/lib/catalog/games";
 import { gameServices } from "@/lib/catalog/game-services";
@@ -88,6 +89,10 @@ describe.each(services)("%s", (_key, offer) => {
         configuration,
         selectedMode: mode ?? undefined,
         selectedOptions: enabledOptionsFor(checkout, mode),
+        // OTP Champ Only needs its champion.
+        ...(enabledOptionsFor(checkout, mode).includes("otp-champion")
+          ? { championsRoles: { roles: [], champions: [], otpChampion: champions.find((c) => c.name === "Jinx")!.id } }
+          : {}),
       });
       expect(r, JSON.stringify(r)).toMatchObject({ ok: true });
     }

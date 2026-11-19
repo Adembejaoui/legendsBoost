@@ -54,6 +54,19 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ protocol: "https", hostname: "ddragon.leagueoflegends.com" }],
   },
+  // Short page addresses (client PDFs 2026-11-19). The browser keeps the short
+  // address; the old /games/... links keep working.
+  async rewrites() {
+    const lol = (slug: string) => `/games/league-of-legends/services/${slug}`;
+    return [
+      { source: "/league-of-legends-rank-boost", destination: lol("rank-boost") },
+      { source: "/lol-boosting", destination: lol("win-boost") },
+      { source: "/lol-placement-boost", destination: lol("placement-boost") },
+      { source: "/lol-arena-boost", destination: lol("arena-boost") },
+      { source: "/champion-mastery", destination: lol("champion-mastery") },
+      { source: "/normal-games", destination: lol("normal-matches") },
+    ];
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

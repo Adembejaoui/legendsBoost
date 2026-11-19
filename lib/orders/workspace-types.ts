@@ -167,6 +167,8 @@ export interface WorkspaceDTO {
     platformLabel: string | null;
     mode: string | null;
     options: string[];
+    /** What the booster must follow for each bought extra (client PDFs 2026-11-19). */
+    rules: { label: string; rule: string }[];
     /** What the customer paid. Null for boosters (they never see it). */
     price: string | null;
     currency: string | null;

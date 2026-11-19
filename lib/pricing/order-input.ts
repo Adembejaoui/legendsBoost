@@ -40,6 +40,8 @@ export const orderRequestSchema = z
       .object({
         roles: z.array(z.string().min(1).max(32)).max(5),
         champions: z.array(z.string().min(1).max(64)).max(20),
+        /** "OTP Champ Only" extra: the one champion the booster must play. */
+        otpChampion: z.string().min(1).max(64).optional(),
       })
       .strict()
       .optional(),
@@ -58,7 +60,7 @@ export interface NormalizedOrderInput {
   configuration: Record<string, unknown>;
   selectedMode: "solo" | "duo" | null;
   selectedOptions: string[];
-  championsRoles: { roles: string[]; champions: string[] } | null;
+  championsRoles: { roles: string[]; champions: string[]; otpChampion?: string } | null;
   /** Upper-case coupon code; absent when none (keeps older request hashes stable). */
   couponCode?: string;
 }
@@ -191,7 +193,7 @@ export function validateOrderInput(
   }
 
   // Champions & roles: only real lanes and real champions (current ids).
-  let championsRoles: { roles: string[]; champions: string[] } | null = null;
+  let championsRoles: { roles: string[]; champions: string[]; otpChampion?: string } | null = null;
   if (input.championsRoles) {
     const roles = [...new Set(input.championsRoles.roles)];
     for (const r of roles) if (!LOL_ROLE_IDS.has(r)) errors.push(`Unknown role: ${r}`);
@@ -201,7 +203,16 @@ export function validateOrderInput(
       if (!id) errors.push(`Unknown champion: ${c}`);
       else if (!champs.includes(id)) champs.push(id);
     }
-    championsRoles = { roles, champions: champs };
+    let otp: string | undefined;
+    if (input.championsRoles.otpChampion) {
+      otp = normalizeChampionId(input.championsRoles.otpChampion) ?? undefined;
+      if (!otp) errors.push(`Unknown champion: ${input.championsRoles.otpChampion}`);
+    }
+    championsRoles = { roles, champions: champs, ...(otp ? { otpChampion: otp } : {}) };
+  }
+  // OTP Champ Only needs its champion.
+  if (input.selectedOptions.includes("otp-champion") && !championsRoles?.otpChampion) {
+    errors.push("Choose the champion for OTP Champ Only.");
   }
 
   if (errors.length) return { ok: false, errors };

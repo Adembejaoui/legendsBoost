@@ -45,9 +45,6 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
   if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
     throw new OrderCreationError("A valid Idempotency-Key header is required.", 400);
   }
-  if (request.riskAccepted !== true) {
-    throw new OrderCreationError("Please read and accept the risk notice before paying.", 400);
-  }
   const user = await prisma.user.findUnique({ where: { id: customerId }, select: { role: true } });
   if (!user || (user.role ?? "CUSTOMER") !== "CUSTOMER") {
     throw new OrderCreationError("Only customer accounts can place orders.", 403);
@@ -109,8 +106,10 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
           currency: quote.currency,
           creationIdempotencyKey: idempotencyKey,
           creationRequestHash: hash,
-          riskDisclosureAcceptedAt: new Date(),
-          riskDisclosureVersion: RISK_DISCLOSURE_VERSION,
+          // The checkout no longer shows a risk checkbox (client decision
+          // 2026-11-19): recorded only when the request still carries it.
+          riskDisclosureAcceptedAt: request.riskAccepted === true ? new Date() : null,
+          riskDisclosureVersion: request.riskAccepted === true ? RISK_DISCLOSURE_VERSION : null,
           isPriority: isPriorityOrder(input.selectedOptions),
           preferredBoosterId,
         },

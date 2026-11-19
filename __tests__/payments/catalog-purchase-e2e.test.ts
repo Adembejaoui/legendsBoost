@@ -50,6 +50,11 @@ import { POST as quoteRoute } from "@/app/api/orders/quote/route";
 import { POST as createOrderRoute } from "@/app/api/orders/route";
 import { POST as checkoutRoute } from "@/app/api/orders/[orderId]/checkout/route";
 import { getAvailableOrders, claimOrder } from "@/lib/assignments/service";
+import { champions as championList } from "@/lib/catalog/champions";
+
+/** OTP Champ Only needs its champion (client PDFs 2026-11-19). */
+const otpFor = (selectedOptions: string[]) =>
+  selectedOptions.includes("otp-champion") ? { championsRoles: { roles: [], champions: [], otpChampion: championList[0].id } } : {};
 
 let prisma: Awaited<ReturnType<typeof getTestPrisma>>;
 let admin: { id: string };
@@ -80,7 +85,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
     // 0. Not purchasable while unpriced (no silent fallback price).
     const { configuration, steps, units } = validConfiguration(offer);
     const options = enabledOptionsFor(checkout, mode);
-    const request = { ...base, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const };
+    const request = { ...base, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const, ...otpFor(options) };
     const unpriced = await quoteRoute(json("http://t/q", request));
     expect(unpriced.status).toBe(403);
     expect((await unpriced.json()).error).toBe("No price is configured for this service yet.");
@@ -93,7 +98,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
     // 2. Quote returns the server price for every mode with every option of that mode.
     for (const m of modes.length ? modes : [null]) {
       const opts = enabledOptionsFor(checkout, m);
-      const res = await quoteRoute(json("http://t/q", { ...request, selectedMode: m ?? undefined, selectedOptions: opts }));
+      const res = await quoteRoute(json("http://t/q", { ...request, selectedMode: m ?? undefined, selectedOptions: opts, ...otpFor(opts) }));
       const body = await res.json();
       expect(res.status, JSON.stringify(body)).toBe(200);
       expect(body.quote).toMatchObject({ currency: "EUR", totalAmount: expectedTotal(offer, steps, units, m !== null, opts.length) });
@@ -174,7 +179,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
     const { configuration, steps, units } = validConfiguration(offer);
     const options = enabledOptionsFor(checkout, mode);
     const total = expectedTotal(offer, steps, units, mode !== null, options.length);
-    const request = { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const };
+    const request = { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const, ...otpFor(options) };
 
     const newOrder = async () => {
       const key = uid("idem-key-catalog-edge");

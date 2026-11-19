@@ -2,6 +2,20 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-19 · League order pages, step 1: extras, Duo +50%, new order summary
+
+Client PDFs (Rank Boost, Net Wins, Placements, Arena, Champion Mastery, Normal Games). Decisions: Terms checkbox removed completely; under the extras only discount, total and Buy; short page addresses; Duo +50% on all games; Arena placeholder icons; FAQ text from the client; Champion & Role priced as in the tables; extras the app cannot check are shown to the booster as rules.
+
+- **Extras catalog** (\`EXTRAS\` in \`lib/config/checkout-options.ts\`): Solo Queue Only +30%, +1 Bonus Win +7.5%, Priority Order +25%, Live Streaming +20%, Specific Champion and Role / VPN / Appear Offline free, Undercover Winrate +25%, Moderate KDA +25%, OTP Champ Only +35%, Voice Chat +20%, Hidden Duo +50%; each with hover text (Duo variant where the PDF differs), a booster rule and an icon. Rank Boost: 10 Solo / 6 Duo; Net Wins and Placements: 8 Solo / 4 Duo, in the PDF order per mode. Placements can now be bought in Duo.
+- **Duo +50%** (was +40%) on every game. Extras and Duo are both calculated on the service price.
+- **Fields:** Server (all regions, default EUW) on Rank Boost, Net Wins and Placements; Queue Type on Rank Boost and Placements; LP Gain on Net Wins; LP on Placements; Net Wins limited to 1–3 wins. The chosen server becomes the order's region (order page, OP.GG link, Riot ID box).
+- **OTP Champ Only:** single-champion picker; the server requires a real champion when it is selected.
+- **Order summary:** rank → target headline, Solo/Duo buttons without price badge, extras with icon, info tooltip, price from the server (\`optionAmounts\` in the quote, shown before switching on) and switch, "Handled by: Anyone available / Change", total, "Have a discount code?", Buy now. Removed: price breakdown, estimate, Terms checkbox (the server no longer requires it; recorded only if sent).
+- **Order page:** "Booster rules" lists what each bought extra requires (e.g. VPN, KDA, OTP champion).
+- **Short addresses:** /league-of-legends-rank-boost, /lol-boosting, /lol-placement-boost, /lol-arena-boost, /champion-mastery, /normal-games.
+- **Prices:** \`scripts/apply-extras-prices.ts\` writes the next price version for each service (extras re-priced on the three redesigned pages, Duo +50% everywhere), keeping the admin's base / division / unit prices.
+- Still to do: page layouts (step 2), Arena, Champion Mastery and Normal Games (steps 3–4), FAQ blocks.
+
 ## 2026-11-17 · Fix: completing with screenshots; booster balance cards
 
 - **Fix:** "Complete" with screenshots failed with `violates check constraint "orderBoosterAssignment_active_order_check"`. That database rule (written before the `SUBMITTED` assignment status) only let active statuses keep the order link. Migration `20261120120000_assignment_submitted_check` (applied) adds `SUBMITTED` to it; no data change. The rule was missing from the test database snapshot, so tests did not catch it; the migration now adds it there too.

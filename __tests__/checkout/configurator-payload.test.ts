@@ -66,12 +66,8 @@ const click = async (el: Element | null | undefined, what: string) => {
   });
 };
 const buttonByText = (scope: ParentNode, text: string) => [...scope.querySelectorAll("button")].find((b) => b.textContent?.trim() === text);
-/** The pay button. Ticks the required risk notice first, as a customer must. */
-const cta = () => {
-  const risk = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
-  if (risk && !risk.checked) act(() => risk.click());
-  return buttonByText(container, "Continue to Payment") as HTMLButtonElement | undefined;
-};
+/** The pay button ("Buy now"; no risk checkbox since the client PDFs 2026-11-19). */
+const cta = () => buttonByText(container, "Buy now") as HTMLButtonElement | undefined;
 const rankCard = (heading: string) => [...container.querySelectorAll("h3")].find((x) => x.textContent === heading)?.closest(".rounded-xl");
 
 type Call = { url: string; method: string; body: any; headers: Record<string, string> };
@@ -143,9 +139,10 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
     expect(cta()?.disabled).toBe(needsInput);
     await fillRequired(offer);
 
-    // Live price from the server quote API, shown with its breakdown.
+    // Live total from the server quote API (no breakdown since the client PDFs 2026-11-19).
     await waitFor(() => container.textContent!.includes("$10.00") && !container.textContent!.includes("Calculating your price"), "live quote");
-    expect(container.textContent).toContain("Base price");
+    expect(container.textContent).toContain("Total price");
+    expect(container.textContent).not.toContain("Base price");
     expect(container.textContent).not.toContain("Missing required field");
     const quoteBody = quoteCalls(calls).at(-1)!.body;
     const parsed = orderRequestSchema.safeParse(quoteBody);
@@ -164,7 +161,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
     expect(order.headers["Idempotency-Key"]).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
     const { expectedTotal, riskAccepted, ...orderRequest } = order.body;
     expect(expectedTotal).toEqual({ amount: 1000, currency: "USD" });
-    expect(riskAccepted).toBe(true); // the customer ticked the risk notice
+    expect(riskAccepted).toBeUndefined(); // no risk checkbox at checkout any more
     expect(orderRequest).toEqual(quoteBody); // exactly the quoted configuration
     expect(orderRequestSchema.safeParse(order.body).success).toBe(true);
     expect(checkoutCalls(calls).map((c) => [c.url, c.method])).toEqual([["/api/orders/order_1/checkout", "POST"]]);

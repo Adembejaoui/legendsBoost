@@ -1,5 +1,6 @@
 import type { GameServiceOffer } from '@/types/catalog'
 import { lpFields } from '@/lib/pricing/lp-modifiers'
+import { queueTypeField, serverField } from '@/lib/catalog/order-fields'
 
 // Helper to build rank-picker fields shared across ranked offers.
 function rankField(
@@ -47,6 +48,9 @@ export const gameServices: GameServiceOffer[] = [
       },
       // Current LP/RR and LP/RR gain change the price (lib/pricing/lp-modifiers.ts).
       ...lpFields('LP'),
+      // Client PDF 2026-11-19: Current LP, LP Gain, Server and Queue Type together.
+      serverField(),
+      queueTypeField(),
     ],
   },
   {
@@ -62,17 +66,19 @@ export const gameServices: GameServiceOffer[] = [
     orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
-       rankField('currentRank', 'Current rank', 'lol-ranked', true, 'Your rank before the boost starts.'),
-      
+      rankField('currentRank', 'Current rank', 'lol-ranked', true, 'Your rank before the boost starts.'),
+      // Client PDF 2026-11-19: Server and LP Gains under the division.
+      lpFields('LP')[1],
+      serverField(),
       {
         type: 'number',
         key: 'wins',
         label: 'Number of wins',
-        description: 'How many wins should be played.',
+        description: 'How many wins should be played (up to 3 per order).',
         required: true,
         defaultValue: 1,
         min: 1,
-        max: 100,
+        max: 3,
         step: 1,
         unit: 'wins',
       },
@@ -102,7 +108,11 @@ export const gameServices: GameServiceOffer[] = [
     orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
-
+      rankField('currentRank', 'Current rank', 'lol-ranked', false, 'Your rank before placements, if known.'),
+      // Client PDF 2026-11-19: LP, Queue Type and Server under the division.
+      lpFields('LP')[0],
+      queueTypeField(),
+      serverField(),
       {
         type: 'number',
         key: 'placementsRemaining',
@@ -115,7 +125,6 @@ export const gameServices: GameServiceOffer[] = [
         step: 1,
         unit: 'matches',
       },
-      rankField('currentRank', 'Current rank', 'lol-ranked', false, 'Your rank before placements, if known.'),
     ],
   },
   {

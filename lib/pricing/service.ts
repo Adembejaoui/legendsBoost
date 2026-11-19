@@ -153,5 +153,6 @@ export function publicQuote(q: Quote) {
     discountAmount: q.discountAmount,
     taxAmount: q.taxAmount,
     totalAmount: q.totalAmount,
+    optionAmounts: q.optionAmounts,
   };
 }

@@ -53,14 +53,21 @@ describe("market default prices", () => {
     for (const i of inputs) expect(validateServicePriceAgainstCatalog(i)).toEqual([]);
   });
 
-  it("extras charge the percentage their badge shows; Free/Auto are included; duo is +40%", () => {
+  it("extras charge the percentage their badge shows; Free/Auto are included; duo is +50%", () => {
     expect(badgeToAdjustment("+25%")).toEqual({ type: "bps", bps: 2500 });
     expect(badgeToAdjustment("Free")).toEqual({ type: "fixed", amount: 0 });
     expect(badgeToAdjustment("Auto")).toEqual({ type: "fixed", amount: 0 });
+    expect(badgeToAdjustment("+7.5%")).toEqual({ type: "bps", bps: 750 });
     const lolRank = buildMarketPriceInput("league-of-legends", "rank-boost")!;
     expect(lolRank.optionPricing["priority-completion"]).toEqual({ type: "bps", bps: 2500 });
-    expect(lolRank.optionPricing["stream-games"]).toEqual({ type: "bps", bps: 1500 });
+    // Client PDFs 2026-11-19.
+    expect(lolRank.optionPricing["stream-games"]).toEqual({ type: "bps", bps: 2000 });
+    expect(lolRank.optionPricing["solo-only-queue"]).toEqual({ type: "bps", bps: 3000 });
+    expect(lolRank.optionPricing["bonus-win"]).toEqual({ type: "bps", bps: 750 });
+    expect(lolRank.optionPricing["hidden-duo"]).toEqual({ type: "bps", bps: 5000 });
+    expect(lolRank.optionPricing.vpn).toEqual({ type: "fixed", amount: 0 });
     expect(lolRank.modePricing.duo).toEqual({ type: "bps", bps: DUO_MODE_BPS });
+    expect(DUO_MODE_BPS).toBe(5000);
   });
 });
 
@@ -94,7 +101,10 @@ describe("rank boost pricing", () => {
       selectedOptions: ["priority-completion"],
     });
     const service = 1200 + 360;
-    expect(q.totalAmount).toBe(service + Math.round(service * 0.4) + Math.round(service * 0.25));
+    expect(q.totalAmount).toBe(service + Math.round(service * 0.5) + Math.round(service * 0.25));
+    // Every extra of the mode is priced on the service amount (shown before it is switched on).
+    expect(q.optionAmounts["voice-chat"]).toBe(Math.round(service * 0.2));
+    expect(q.optionAmounts["solo-only-queue"]).toBeUndefined(); // Solo only
     expect(q.commission.platformFeeAmount + q.commission.boosterShareAmount).toBe(q.totalAmount);
   });
 
@@ -110,7 +120,7 @@ describe("rank boost pricing", () => {
 
 describe("per-unit services", () => {
   it("win boost is priced per win", () => {
-    expect(quote("league-of-legends", "win-boost", { currentRank: { tierId: "gold", divisionId: "iv" }, wins: 5 }).totalAmount).toBe(5 * 450);
+    expect(quote("league-of-legends", "win-boost", { currentRank: { tierId: "gold", divisionId: "iv" }, wins: 3 }).totalAmount).toBe(3 * 450);
   });
   it("placements are priced per match", () => {
     expect(quote("league-of-legends", "placement-boost", { placementsRemaining: 5 }).totalAmount).toBe(5 * 400);

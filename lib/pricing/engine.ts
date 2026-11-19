@@ -29,6 +29,11 @@ export interface Quote {
   servicePriceId: string;
   servicePriceVersion: number;
   commissionPolicyId: string;
+  /**
+   * Price of every priced extra of the selected mode, selected or not, so the
+   * order summary can show "+$1.96" before an extra is switched on.
+   */
+  optionAmounts: Record<string, number>;
 }
 
 export type QuoteResult = { ok: true; quote: Quote } | { ok: false; reason: string };
@@ -155,6 +160,14 @@ export function calculateQuote(
     lines.push({ code: `OPTION:${id}`, label: id, amount: applyAdjustment(adj, serviceAmount) });
   }
 
+  const optionAmounts: Record<string, number> = {};
+  const mode = input.selectedMode ?? "solo";
+  for (const o of checkout.options ?? []) {
+    if (o.availableModes && !o.availableModes.includes(mode)) continue;
+    const adj = price.optionPricing[o.id];
+    if (adj && o.enabled !== false) optionAmounts[o.id] = applyAdjustment(adj, serviceAmount);
+  }
+
   const subtotalAmount = lines.reduce((a, l) => a + l.amount, 0);
   if (subtotalAmount <= 0) return { ok: false, reason: "This service is not available for purchase yet." };
   if (subtotalAmount > MAX_AMOUNT) return { ok: false, reason: "Order amount is too large." };
@@ -182,6 +195,7 @@ export function calculateQuote(
       servicePriceId: price.id,
       servicePriceVersion: price.version,
       commissionPolicyId: commissionPolicy.id,
+      optionAmounts,
     },
   };
 }
