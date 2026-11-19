@@ -19,15 +19,15 @@ export function ServiceConfiguratorLayout({
 }: ServiceConfiguratorLayoutProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div className="mb-6">{header}</div>
-      <div className="mb-8">{tabs}</div>
-      <div className="grid gap-6 lg:grid-cols-[60%_1fr] lg:gap-8">
-        <div className="space-y-6">{left}</div>
+      <div className="mb-3">{header}</div>
+      <div className="mb-4">{tabs}</div>
+      <div className="grid gap-4 lg:grid-cols-[60%_1fr] lg:gap-6">
+        <div className="space-y-3">{left}</div>
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          <div className="space-y-6">{right}</div>
+          <div className="space-y-3">{right}</div>
         </aside>
       </div>
-      {footer ? <div className="mt-8">{footer}</div> : null}
+      {footer ? <div className="mt-5 lg:w-[60%]">{footer}</div> : null}
     </div>
   )
 }

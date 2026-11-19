@@ -54,8 +54,8 @@ export function RankPicker({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#111319] p-5">
-      <div className="mb-4 flex items-start gap-3">
+    <div className="rounded-xl border border-white/10 bg-[#111319] p-4">
+      <div className="mb-3 flex items-start gap-3">
         <div className="grid size-9 place-items-center rounded-full bg-[#0b0c10] border border-white/10" aria-hidden>
           {icon}
         </div>
@@ -65,7 +65,7 @@ export function RankPicker({
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         {rankSystem.tiers.map((t) => {
           const selected = t.id === selectedTierId
           return (
@@ -131,7 +131,7 @@ export function RankPicker({
           </div>
         </div>
       ) : null}
-      {children ? <div className="mt-4 border-t border-white/10 pt-4">{children}</div> : null}
+      {children ? <div className="mt-3 border-t border-white/10 pt-3">{children}</div> : null}
     </div>
   )
 }

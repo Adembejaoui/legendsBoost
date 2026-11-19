@@ -10,6 +10,8 @@ import { RankPicker } from '@/components/service-configurator/RankSelectionCard'
 import { InlineSelectField, SelectField } from '@/components/service-configurator/SelectField'
 import { NumberField } from '@/components/service-configurator/NumberField'
 import { CheckoutPanel } from '@/components/checkout/CheckoutPanel'
+import { ServiceFaq } from '@/components/service-configurator/ServiceFaq'
+import { faqFor } from '@/lib/content/faqAC'
 import { ChampionPicker } from '@/components/configurator/ChampionPicker'
 import { MultiSelectField } from '@/components/configurator/SelectField'
 import { CheckboxField } from '@/components/configurator/CheckboxField'
@@ -243,11 +245,12 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
       header={<ServicePageHeader game={game} offer={offer} template={template} />}
       tabs={<ServiceNavigationTabs gameSlug={game.slug} activeServiceSlug={offer.serviceSlug} offers={allOffers} />}
       left={
-        <div className="space-y-6">
+        <div className="space-y-3">
           {leftContent}
           {rankError ? <p className="text-xs text-rose-400">{rankError}</p> : null}
         </div>
       }
+      footer={<ServiceFaq title={offer.title ?? template.title} items={faqFor(game.slug, offer.serviceSlug)} />}
       right={
         <CheckoutPanel
           game={{ slug: game.slug, name: game.name, accent: game.accent }}

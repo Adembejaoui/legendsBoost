@@ -29,7 +29,7 @@ export function ServicePageHeader({ game, offer, template }: ServicePageHeaderPr
   const Icon = iconMap[offer.serviceSlug] ?? Trophy
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <Breadcrumb
         items={[
           { label: 'Games', href: '/games' },
@@ -37,19 +37,19 @@ export function ServicePageHeader({ game, offer, template }: ServicePageHeaderPr
           { label: title },
         ]}
       />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="flex items-center gap-3">
         <div
-          className="grid size-14 shrink-0 place-items-center rounded-full border border-white/10"
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10"
           style={{ backgroundColor: `${game.accent}22`, color: game.accent }}
           aria-hidden
         >
-          <Icon className="size-7" />
+          <Icon className="size-5" />
         </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+        <div className="min-w-0 space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
             {title}
           </h1>
-          <p className="max-w-2xl text-sm text-zinc-400">
+          <p className="max-w-2xl text-xs text-zinc-400 sm:text-sm">
             {offer.description ?? template.description}
           </p>
         </div>
