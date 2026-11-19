@@ -44,6 +44,19 @@ export const rankSystems: RankSystem[] = [
     ],
   },
   {
+    // LoL Arena (client PDF 2026-11-19): five ranks, no divisions.
+    id: 'lol-arena',
+    gameSlug: 'league-of-legends',
+    name: 'League of Legends Arena',
+    tiers: [
+      tier('wood', 'Wood', 1, undefined, '/images/ranks/arena/wood.webp'),
+      tier('bronze', 'Bronze', 2, undefined, '/images/ranks/arena/bronze.webp'),
+      tier('silver', 'Silver', 3, undefined, '/images/ranks/arena/silver.webp'),
+      tier('gold', 'Gold', 4, undefined, '/images/ranks/arena/gold.webp'),
+      tier('gladiator', 'Gladiator', 5, undefined, '/images/ranks/arena/gladiator.webp'),
+    ],
+  },
+  {
     id: 'valorant-competitive',
     gameSlug: 'valorant',
     name: 'VALORANT Competitive',

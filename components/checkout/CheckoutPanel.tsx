@@ -24,6 +24,7 @@ import { ArrowRight, Loader2, Lock, ShoppingCart, User, UserRound, Users } from 
 import { CheckoutOptionRow } from './CheckoutOptionRow'
 import { ChampionsRolesModal } from './ChampionsRolesModal'
 import { formatSelection } from '@/lib/catalog/catalog-utils'
+import { champions as championCatalog } from '@/lib/catalog/champions'
 import { getTier } from '@/lib/catalog/rank-systems'
 import { getCheckoutConfig, getCheckoutOptionsForMode } from '@/lib/config/checkout-options'
 import { formatMoney } from '@/lib/money'
@@ -374,13 +375,24 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
 
   // Headline: current rank -> target rank, or the quantity bought.
   const fieldOf = (key: string) => (offer.fields || []).find((x: { key: string }) => x.key === key)
-  const fromLine = summaryLines.find((l) => l.key === 'currentRank')
+  // Champion Mastery: "Jinx" -> "Level 4 -> Level 6" (client PDF 2026-11-19).
+  const masteryChampion = typeof values.champion === 'string' ? championCatalog.find((c) => c.id === values.champion) : undefined
+  const levels =
+    typeof values.currentLevel === 'number' && typeof values.targetLevel === 'number'
+      ? `Level ${values.currentLevel} → Level ${values.targetLevel}`
+      : null
+  const fromLine = masteryChampion
+    ? { key: 'champion', label: 'Champion', value: masteryChampion.name, iconSrc: masteryChampion.iconSrc }
+    : summaryLines.find((l) => l.key === 'currentRank')
   const toLine =
+    (levels ? { key: 'levels', label: 'Mastery', value: levels, iconSrc: undefined } : undefined) ??
     summaryLines.find((l) => l.key === 'targetRank') ??
     (() => {
       const unitField = (offer.fields || []).find((x: { type: string; key: string }) => x.type === 'number' && values[x.key] != null && values[x.key] !== '')
       if (!unitField) return undefined
-      const unit = (fieldOf(unitField.key) as { unit?: string } | undefined)?.unit ?? ''
+      const plural = (fieldOf(unitField.key) as { unit?: string } | undefined)?.unit ?? ''
+      // "1 win", "3 wins"
+      const unit = Number(values[unitField.key]) === 1 && plural.endsWith('s') ? plural.slice(0, -1) : plural
       return { key: unitField.key, label: unitField.label, value: `${values[unitField.key]} ${unit}`.trim(), iconSrc: undefined }
     })()
 

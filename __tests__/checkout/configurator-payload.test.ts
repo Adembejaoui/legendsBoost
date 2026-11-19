@@ -120,7 +120,7 @@ async function fillRequired(offer: (typeof gameServices)[number]) {
       await click(rankCard(heading)?.querySelector(`button[aria-label="${tier.name}"]`), `${f.key} tier`);
       if (tier.divisions?.length) await click(buttonByText(rankCard(heading)!, tier.divisions[0].label), `${f.key} division`);
     } else if (f.type === "champion-picker") {
-      await click(container.querySelector(`[role="group"][aria-label="${f.label}"] button`), "champion");
+      await click(container.querySelector(`[role="listbox"][aria-label="${f.label}"] [role="option"]`), "champion");
     }
   }
 }

@@ -2,6 +2,14 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-20 · League order pages, step 3: Arena, Champion Mastery, win sliders
+
+- **Champion Mastery:** champion card with the chosen champion's portrait, a search box and every champion in a scrollable grid; Server under it. "Mastery Level" box with Current and Desired Mastery (Level 1–10); the desired level must be higher. Order summary: "Jinx → Level 4 → Level 6". Solo only, extras Priority +25%, Stream Games +15%, Appear Offline free. Priced per level gained (`range:currentLevel:targetLevel`, $6 per level by default).
+- **Arena:** Arena ranks (Wood, Bronze, Silver, Gold, Gladiator) with the client's icons (`public/images/ranks/arena/*.webp`), Server, Win Amounts 1–3 with a slider; Solo/Duo extras from the PDF (Duo: Your Champions and Roles +10%, Hidden Duo +25%). Default price $10 per win.
+- **Net Wins and Placements:** 1–5 games, chosen with a slider (progress bar and clickable numbers).
+- **Prices:** `scripts/apply-extras-prices.ts` also covers Arena and Champion Mastery (Mastery switches from a fixed price to a price per level).
+- Order summary says "1 win" instead of "1 wins".
+
 ## 2026-11-19 · League order pages, step 1: extras, Duo +50%, new order summary
 
 Client PDFs (Rank Boost, Net Wins, Placements, Arena, Champion Mastery, Normal Games). Decisions: Terms checkbox removed completely; under the extras only discount, total and Buy; short page addresses; Duo +50% on all games; Arena placeholder icons; FAQ text from the client; Champion & Role priced as in the tables; extras the app cannot check are shown to the booster as rules.

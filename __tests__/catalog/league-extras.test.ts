@@ -1,7 +1,8 @@
 // @vitest-environment node
 /**
  * League pages follow the client PDFs (2026-11-19): extras per mode with
- * their prices, Server / Queue Type fields, 1-3 wins, OTP champion.
+ * their prices, Server / Queue Type fields, 1-5 wins, OTP champion,
+ * Arena (1-3 wins) and Champion Mastery (Level 1-10, price per level).
  */
 import { describe, it, expect } from "vitest";
 import { getCheckoutConfig, getCheckoutOptionsForMode } from "@/lib/config/checkout-options";
@@ -56,9 +57,11 @@ describe("Net Wins and Placements extras", () => {
     ]);
     expect(labels(service, "duo")).toEqual(["Priority Order +25%", "Voice Chat +20%", "Moderate KDA +25%", "Hidden Duo +50%"]);
   });
-  it("Net Wins accepts 1 to 3 wins; Placements has LP, Queue Type and Server", () => {
-    const wins = getGameServiceOffer("league-of-legends", "win-boost")!.fields.find((f) => f.key === "wins") as { max?: number };
-    expect(wins.max).toBe(3);
+  it("Net Wins and Placements go up to 5 games with a slider; Placements has LP, Queue Type and Server", () => {
+    const field = (service: string, key: string) =>
+      getGameServiceOffer("league-of-legends", service)!.fields.find((f) => f.key === key) as { min?: number; max?: number; display?: string };
+    expect(field("win-boost", "wins")).toMatchObject({ min: 1, max: 5, display: "slider" });
+    expect(field("placement-boost", "placementsRemaining")).toMatchObject({ max: 5, display: "slider" });
     const keys = getGameServiceOffer("league-of-legends", "placement-boost")!.fields.map((f) => f.key);
     expect(keys).toEqual(expect.arrayContaining(["currentLp", "queueType", "server"]));
   });
@@ -94,8 +97,53 @@ describe("order input", () => {
     expect(ok.ok, JSON.stringify(ok)).toBe(true);
     if (ok.ok) expect(ok.value.championsRoles?.otpChampion).toBeTruthy();
   });
-  it("more than 3 wins and an unknown server are refused", () => {
-    expect(validateOrderInput(offer, lol("win-boost"), { ...base, configuration: { ...base.configuration, wins: 4 }, selectedOptions: [] }).ok).toBe(false);
+  it("more than 5 wins and an unknown server are refused", () => {
+    expect(validateOrderInput(offer, lol("win-boost"), { ...base, configuration: { ...base.configuration, wins: 5 }, selectedOptions: [] }).ok).toBe(true);
+    expect(validateOrderInput(offer, lol("win-boost"), { ...base, configuration: { ...base.configuration, wins: 6 }, selectedOptions: [] }).ok).toBe(false);
     expect(validateOrderInput(offer, lol("win-boost"), { ...base, configuration: { ...base.configuration, server: "MOON1" }, selectedOptions: [] }).ok).toBe(false);
+  });
+});
+
+describe("Arena", () => {
+  const offer = getGameServiceOffer("league-of-legends", "arena-boost")!;
+  const base = {
+    gameSlug: "league-of-legends",
+    serviceSlug: "arena-boost",
+    configuration: { currentRank: { tierId: "gold" }, arenaWins: 3, server: "EUW1" },
+    selectedMode: "solo" as const,
+    selectedOptions: [],
+  };
+  it("uses the Arena ranks with their icons and 1 to 3 wins", () => {
+    const rank = offer.fields.find((f) => f.key === "currentRank") as { rankSystemId?: string };
+    expect(rank.rankSystemId).toBe("lol-arena");
+    expect(validateOrderInput(offer, lol("arena-boost"), base).ok).toBe(true);
+    expect(validateOrderInput(offer, lol("arena-boost"), { ...base, configuration: { ...base.configuration, arenaWins: 4 } }).ok).toBe(false);
+  });
+  it("Solo and Duo extras of the PDF", () => {
+    expect(lol("arena-boost").modes?.map((m) => m.id)).toEqual(["solo", "duo"]);
+    expect(labels("arena-boost", "duo")).toEqual(expect.arrayContaining(["Your Champions and Roles +10%", "Hidden Duo +25%"]));
+  });
+});
+
+describe("Champion Mastery", () => {
+  const offer = getGameServiceOffer("league-of-legends", "champion-mastery")!;
+  const base = {
+    gameSlug: "league-of-legends",
+    serviceSlug: "champion-mastery",
+    configuration: { champion: JINX, currentLevel: 4, targetLevel: 6, server: "EUW1" },
+    selectedMode: "solo" as const,
+    selectedOptions: [],
+  };
+  it("levels go from 1 to 10 and the desired level must be higher", () => {
+    expect(validateOrderInput(offer, lol("champion-mastery"), base).ok).toBe(true);
+    expect(validateOrderInput(offer, lol("champion-mastery"), { ...base, configuration: { ...base.configuration, targetLevel: 11 } }).ok).toBe(false);
+  });
+  it("is priced per level gained and is Solo only", () => {
+    expect(buildMarketPriceInput("league-of-legends", "champion-mastery")).toMatchObject({
+      pricingModel: "PER_UNIT",
+      unitFieldKey: "range:currentLevel:targetLevel",
+      unitAmount: 600,
+    });
+    expect(labels("champion-mastery", "solo")).toEqual(["Priority Order +25%", "Stream Games +15%", "Appear Offline Free"]);
   });
 });

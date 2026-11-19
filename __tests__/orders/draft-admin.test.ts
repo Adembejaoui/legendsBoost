@@ -168,6 +168,6 @@ describe("validateOrderConfiguration", () => {
       ...base,
       configuration: { currentRank: { tierId: "gold", divisionId: "iv" }, wins: 500 },
     });
-    expect(errs.join(" ")).toMatch(/at most 3/); // Net Wins: 1-3 wins per order (client PDF 2026-11-19)
+    expect(errs.join(" ")).toMatch(/at most 5/); // Net Wins: 1-5 wins per order (client PDF 2026-11-19)
   });
 });

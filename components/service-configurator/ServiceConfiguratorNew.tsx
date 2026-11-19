@@ -69,7 +69,9 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
   // Small dropdowns shown side by side inside the current-rank box, in the
   // catalog order (client PDFs 2026-11-19). Only when that box exists.
   const hasCurrentRank = rankFields.some((f) => f.key === 'currentRank')
-  const inlineFields = hasCurrentRank ? offer.fields.filter((f) => f.type === 'select' && INLINE_FIELD_KEYS.has(f.key)) : []
+  const hasChampionCard = offer.fields.some((f) => f.type === 'champion-picker')
+  const inlineFields =
+    hasCurrentRank || hasChampionCard ? offer.fields.filter((f) => f.type === 'select' && INLINE_FIELD_KEYS.has(f.key)) : []
   const inlineKeys = new Set(inlineFields.map((f) => f.key))
   const inlineRow =
     inlineFields.length > 0 ? (
@@ -151,6 +153,7 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
   }
 
   // Other fields
+  const renderedGroups = new Set<string>()
   for (const field of offer.fields) {
     if (field.type === 'rank-picker') continue // handled above
     if (inlineKeys.has(field.key)) continue // in the current-rank box
@@ -167,20 +170,37 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
         />,
       )
     } else if (field.type === 'number') {
-      leftContent.push(
+      const numberField = (bare: boolean, nf: typeof field) => (
         <NumberField
-          key={field.key}
-          label={(field as any).label}
-          description={(field as any).description}
-          value={(values[field.key] as number) ?? null}
-          onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
-          min={(field as any).min}
-          max={(field as any).max}
-          step={(field as any).step}
-          unit={(field as any).unit}
-          required={(field as any).required}
-        />,
+          key={nf.key}
+          label={nf.label}
+          description={nf.description}
+          value={(values[nf.key] as number) ?? null}
+          onChange={(val) => setValues((v) => ({ ...v, [nf.key]: val }))}
+          min={nf.min}
+          max={nf.max}
+          step={nf.step}
+          unit={nf.unit}
+          required={nf.required}
+          display={nf.display}
+          optionLabel={nf.optionLabel}
+          bare={bare}
+        />
       )
+      if (field.group) {
+        // One box per group, rendered at its first field.
+        if (renderedGroups.has(field.group)) continue
+        renderedGroups.add(field.group)
+        const members = offer.fields.filter((x): x is typeof field => x.type === 'number' && x.group === field.group)
+        leftContent.push(
+          <div key={`group-${field.group}`} className="rounded-xl border border-white/10 bg-[#111319] p-4">
+            <h3 className="mb-3 text-base font-semibold text-white">{field.group}</h3>
+            <div className="grid grid-cols-2 gap-3">{members.map((m) => numberField(true, m))}</div>
+          </div>,
+        )
+      } else {
+        leftContent.push(numberField(false, field))
+      }
     } else if (field.type === 'champion-picker') {
       // Champion Mastery's required champion: without this picker the
       // field could never be filled and the service could never be ordered.
@@ -193,7 +213,9 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
           value={(values[field.key] as string) ?? null}
           onChange={(val) => setValues((v) => ({ ...v, [field.key]: val }))}
           required={field.required}
-        />,
+        >
+          {inlineRow}
+        </ChampionPicker>,
       )
     } else if (field.type === 'multi-select') {
       leftContent.push(
@@ -236,6 +258,10 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
         }
       }
     }
+  }
+
+  if (typeof values.currentLevel === 'number' && typeof values.targetLevel === 'number' && values.targetLevel <= values.currentLevel) {
+    rankError = 'Desired mastery must be above your current mastery.'
   }
 
   const canRequest = true // allow draft creation even if pending review

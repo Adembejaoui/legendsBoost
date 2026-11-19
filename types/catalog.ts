@@ -49,6 +49,8 @@ export interface ConfigFieldBase {
   required?: boolean
   defaultValue?: unknown
   visibleWhen?: VisibilityCondition | VisibilityCondition[]
+  /** Consecutive fields with the same group are shown together in one box with this title. */
+  group?: string
 }
 
 export interface RankPickerField extends ConfigFieldBase {
@@ -72,6 +74,10 @@ export interface NumberField extends ConfigFieldBase {
   max?: number
   step?: number
   unit?: string
+  /** How the form shows it: number box (default), slider with a progress bar, or dropdown. */
+  display?: 'input' | 'slider' | 'select'
+  /** Dropdown option label, e.g. "Level {n}". */
+  optionLabel?: string
 }
 
 export interface CheckboxField extends ConfigFieldBase {

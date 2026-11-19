@@ -49,7 +49,7 @@ const lol = (cur: [string, string], tgt: [string, string], lp: Record<string, st
 describe("market default prices", () => {
   it("are valid against the catalog for every priced service", () => {
     const inputs = allMarketPriceInputs();
-    expect(inputs.length).toBe(11);
+    expect(inputs.length).toBe(12);
     for (const i of inputs) expect(validateServicePriceAgainstCatalog(i)).toEqual([]);
   });
 

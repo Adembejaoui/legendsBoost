@@ -25,7 +25,18 @@ const REPRICED_EXTRAS = new Set([
   "league-of-legends:rank-boost",
   "league-of-legends:win-boost",
   "league-of-legends:placement-boost",
+  "league-of-legends:arena-boost",
+  "league-of-legends:champion-mastery",
 ]);
+
+/**
+ * Services whose pricing model changes with the redesign (2026-11-20):
+ * Champion Mastery goes from a fixed price to a price per level gained.
+ * Amounts in USD cents; the admin can change them afterwards.
+ */
+const MODEL_OVERRIDES: Record<string, { pricingModel: "PER_UNIT"; unitFieldKey: string; unitAmount: number }> = {
+  "league-of-legends:champion-mastery": { pricingModel: "PER_UNIT", unitFieldKey: "range:currentLevel:targetLevel", unitAmount: 600 },
+};
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -66,20 +77,37 @@ async function main() {
           .filter((m) => m.enabled)
           .map((m) => [m.id, m.id === "duo" ? { type: "bps" as const, bps: DUO_MODE_BPS } : { type: "fixed" as const, amount: 0 }])
       );
-      const input: Input = {
-        gameSlug: row.gameSlug,
-        serviceSlug: row.serviceSlug,
-        currency: current.currency,
-        pricingModel: current.pricingModel,
-        baseAmount: current.baseAmount,
-        ...(current.stepAmounts ? { stepAmounts: current.stepAmounts } : {}),
-        ...(current.unitFieldKey ? { unitFieldKey: current.unitFieldKey } : {}),
-        ...(current.unitAmount != null ? { unitAmount: current.unitAmount } : {}),
-        optionPricing,
-        modePricing,
-        note: "Extras and Duo +50% (client PDFs 2026-11-19)",
-      };
+      const override = MODEL_OVERRIDES[`${row.gameSlug}:${row.serviceSlug}`];
+      const modelChanges =
+        !!override && (current.pricingModel !== override.pricingModel || current.unitFieldKey !== override.unitFieldKey);
+      const input: Input = modelChanges
+        ? {
+            gameSlug: row.gameSlug,
+            serviceSlug: row.serviceSlug,
+            currency: current.currency,
+            pricingModel: override.pricingModel,
+            baseAmount: 0,
+            unitFieldKey: override.unitFieldKey,
+            unitAmount: override.unitAmount,
+            optionPricing,
+            modePricing,
+            note: "Price per mastery level and extras (client PDFs 2026-11-19)",
+          }
+        : {
+            gameSlug: row.gameSlug,
+            serviceSlug: row.serviceSlug,
+            currency: current.currency,
+            pricingModel: current.pricingModel,
+            baseAmount: current.baseAmount,
+            ...(current.stepAmounts ? { stepAmounts: current.stepAmounts } : {}),
+            ...(current.unitFieldKey ? { unitFieldKey: current.unitFieldKey } : {}),
+            ...(current.unitAmount != null ? { unitAmount: current.unitAmount } : {}),
+            optionPricing,
+            modePricing,
+            note: "Extras and Duo +50% (client PDFs 2026-11-19)",
+          };
       const same =
+        !modelChanges &&
         JSON.stringify(Object.entries(current.optionPricing).sort()) === JSON.stringify(Object.entries(optionPricing).sort()) &&
         JSON.stringify(Object.entries(current.modePricing).sort()) === JSON.stringify(Object.entries(modePricing).sort());
       const errors = validateServicePriceAgainstCatalog(input);
@@ -90,6 +118,7 @@ async function main() {
         `  ${same ? "=" : "→"} ${row.gameSlug}/${row.serviceSlug} v${row.version}${same ? " (unchanged)" : ""}${errors.length ? `  INVALID: ${errors.join("; ")}` : ""}`
       );
       if (!same) console.log(`      duo ${modePricing.duo ? "+50%" : "-"} | ${extras || "no extras"}`);
+      if (modelChanges) console.log(`      model: ${current.pricingModel} -> ${input.pricingModel} (${input.unitFieldKey}, ${(input.unitAmount ?? 0) / 100} per unit)`);
       if (!same && !errors.length) plans.push(input);
     }
 

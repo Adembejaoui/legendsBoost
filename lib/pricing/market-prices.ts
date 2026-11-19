@@ -44,7 +44,9 @@ export const MARKET_PRICE_SPECS: Record<string, Spec> = {
   "league-of-legends:rank-boost": { model: "RANK_STEPS", stepAmounts: LOL_STEPS },
   "league-of-legends:win-boost": { model: "PER_UNIT", unitFieldKey: "wins", unitAmount: 450 },
   "league-of-legends:placement-boost": { model: "PER_UNIT", unitFieldKey: "placementsRemaining", unitAmount: 400 },
-  "league-of-legends:champion-mastery": { model: "FIXED", baseAmount: 1500 },
+  // Client PDF 2026-11-19: price per mastery level gained (Level 4 -> 6 = 2 levels).
+  "league-of-legends:champion-mastery": { model: "PER_UNIT", unitFieldKey: "range:currentLevel:targetLevel", unitAmount: 600 },
+  "league-of-legends:arena-boost": { model: "PER_UNIT", unitFieldKey: "arenaWins", unitAmount: 1000 },
   "valorant:rank-boost": { model: "RANK_STEPS", stepAmounts: VALORANT_STEPS },
   "valorant:win-boost": { model: "PER_UNIT", unitFieldKey: "wins", unitAmount: 500 },
   "valorant:placement-boost": { model: "PER_UNIT", unitFieldKey: "placementsRemaining", unitAmount: 450 },

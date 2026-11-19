@@ -9,6 +9,7 @@ import { getRankSystem } from "@/lib/catalog/rank-systems";
 import { assertAmount, bpsOfRounded, MAX_AMOUNT, splitCommission, type CommissionSplit } from "@/lib/money";
 import type { NormalizedOrderInput } from "./order-input";
 import type { PriceAdjustment, ServicePriceConfig } from "./price-config";
+import { unitsFor } from "./units";
 import { CURRENT_LP_DISCOUNT_BPS, CURRENT_LP_FIELD, LP_GAIN_ADJUSTMENT_BPS, LP_GAIN_FIELD } from "./lp-modifiers";
 
 export interface QuoteLine {
@@ -136,13 +137,10 @@ export function calculateQuote(
     if (!price.unitFieldKey || price.unitAmount == null) {
       return { ok: false, reason: "This service is not available for purchase yet." };
     }
-    const units = input.configuration[price.unitFieldKey];
-    if (typeof units !== "number" || !Number.isInteger(units) || units < 1) {
-      // The price is configured; the customer left the priced quantity out
-      // (possible when that field is optional in the catalog).
-      const label = offer.fields.find((f) => f.key === price.unitFieldKey)?.label ?? price.unitFieldKey;
-      return { ok: false, reason: `Enter a value for "${label}" to calculate the price.` };
-    }
+    // A numeric field, or a range of two (Champion Mastery levels).
+    const counted = unitsFor(price.unitFieldKey, input.configuration, offer.fields);
+    if (!counted.ok) return { ok: false, reason: counted.reason };
+    const units = counted.units;
     lines.push({ code: `UNITS:${price.unitFieldKey}`, label: `${units} x unit price`, amount: units * price.unitAmount });
   }
 

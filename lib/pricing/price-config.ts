@@ -11,6 +11,7 @@ import { MAX_AMOUNT, normalizeCurrency } from "@/lib/money";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem } from "@/lib/catalog/rank-systems";
+import { unitKeyFields } from "./units";
 
 const amount = z.number().int().min(0).max(MAX_AMOUNT);
 
@@ -124,8 +125,11 @@ export function validateServicePriceAgainstCatalog(input: ServicePriceInput): st
     }
     if (input.unitFieldKey !== undefined || input.unitAmount !== undefined) errors.push("Unit pricing is only for PER_UNIT.");
   } else if (input.pricingModel === "PER_UNIT") {
-    const field = offer.fields.find((f) => f.key === input.unitFieldKey);
-    if (!field || field.type !== "number") errors.push("PER_UNIT pricing needs unitFieldKey to name a numeric field of this service.");
+    // A numeric field, or "range:<from>:<to>" over two numeric fields (lib/pricing/units.ts).
+    const keys = input.unitFieldKey ? unitKeyFields(input.unitFieldKey) : [];
+    if (keys.length === 0 || keys.some((k) => offer.fields.find((f) => f.key === k)?.type !== "number")) {
+      errors.push("PER_UNIT pricing needs unitFieldKey to name a numeric field of this service.");
+    }
     if (input.unitAmount === undefined || input.unitAmount <= 0) errors.push("PER_UNIT pricing needs a positive unitAmount.");
     if (input.stepAmounts !== undefined) errors.push("Step prices are only for RANK_STEPS.");
   } else {
