@@ -242,6 +242,8 @@ model Order {
   /// the order is never listed to or claimable by boosters, whatever its
   /// status. Existing orders are NULL: they are not assumed to be paid.
   paymentVerifiedAt DateTime?  @map("paymentVerifiedAt")
+  /// Last "Poke booster" email sent by the customer (at most one per hour).
+  boosterPokedAt DateTime?     @map("boosterPokedAt")
   createdAt      DateTime      @default(now()) @map("createdAt")
   updatedAt      DateTime      @updatedAt @map("updatedAt")
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -253,6 +255,7 @@ model Order {
   riotAccount    OrderRiotAccount?
   accountCredential OrderAccountCredential?
   cancellationRequests OrderCancellationRequest[]
+  boosterChangeRequests OrderBoosterChangeRequest[]
   bids                 OrderBid[]
   sessions             OrderSession[]
   credentialReveals    OrderCredentialReveal[]
@@ -1287,6 +1290,30 @@ model OrderCancellationRequest {
   @@index([orderId])
   @@index([status, createdAt])
   @@map("orderCancellationRequest")
+}
+
+/// Customer asks for a different booster (client PDF 2026-11-21). An admin
+/// approves (the booster is released and the order goes back to the
+/// marketplace) or rejects with a note. One open request per order.
+model OrderBoosterChangeRequest {
+  id           String                    @id @default(cuid())
+  orderId      String                    @map("orderId")
+  customerId   String                    @map("customerId")
+  assignmentId String                    @map("assignmentId")
+  boosterId    String                    @map("boosterId")
+  reason       String
+  status       CancellationRequestStatus @default(REQUESTED)
+  adminNote    String?                   @map("adminNote")
+  decidedById  String?                   @map("decidedById")
+  decidedAt    DateTime?                 @map("decidedAt")
+  createdAt    DateTime                  @default(now()) @map("createdAt")
+  updatedAt    DateTime                  @updatedAt @map("updatedAt")
+
+  order        Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("orderBoosterChangeRequest")
 }
 
 /// What a booster may work on, per game [plan Phase 2]. The rank ceiling is

@@ -302,4 +302,15 @@ export interface WorkspaceDTO {
       refundAmount: number | null;
     } | null;
   };
+  /** Customer header actions (client PDF 2026-11-21). Null for boosters and admins. */
+  customerActions: {
+    /** A booster holds the order (Change booster / Poke apply). */
+    hasBooster: boolean;
+    boosterChange: {
+      canRequest: boolean;
+      latest: { status: "REQUESTED" | "APPROVED" | "REJECTED" | "WITHDRAWN"; adminNote: string | null; createdAt: string } | null;
+    };
+    /** ISO time the customer may poke again; null = now. */
+    nextPokeAt: string | null;
+  } | null;
 }

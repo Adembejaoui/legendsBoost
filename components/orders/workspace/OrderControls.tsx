@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ImagePlus, LogOut, Pause, Play, X } from "lucide-react";
+import { BellRing, CheckCircle2, Coins, ImagePlus, LogOut, Pause, Play, UserRoundCog, X } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,21 @@ import { shrinkImage } from "./shrink-image";
 
 const MAX_PROOFS = 3;
 
-type Dialog = "pause" | "complete" | "abandon" | "cancel-request" | "not-confirmed" | null;
+type Dialog = "pause" | "complete" | "abandon" | "tip" | "booster-change" | "not-confirmed" | null;
+
+const TIP_PRESETS = [300, 500, 1000];
+
+function money(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency}`;
+  }
+}
+
+function timeOf(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
 const btn =
   "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
@@ -34,7 +48,9 @@ async function post(url: string, body?: unknown) {
 /**
  * Order-management controls for the workspace header.
  *
- *  - Customer: Pause / Resume only (in-progress orders with a booster).
+ *  - Customer (client PDF 2026-11-21): Tip, Pause / Resume, Change booster
+ *    (admin-reviewed) and Poke booster (email, once per hour), always shown
+ *    side by side and greyed out with a hint when they do not apply.
  *    Customers cannot cancel; cancellations go through support / admin.
  *  - Booster:  Start (claimed order), then Complete / Abandon. Both disabled while the customer has the
  *    order paused. Claiming happens in the marketplace.
@@ -52,6 +68,19 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
   const [notConfirmed, setNotConfirmed] = useState<{ message: string; reason: string; current: string | null; target: string | null } | null>(null);
   const { access, order, viewer, assignment } = data;
   const paused = order.status === "PAUSED";
+  const [tip, setTip] = useState<number>(TIP_PRESETS[1]);
+  // Poke cooldown: the later of the server's time and the last poke from
+  // this page; "now" ticks once when it ends so the button comes back.
+  const [localPokeAt, setLocalPokeAt] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const serverPokeAt = data.customerActions?.nextPokeAt ?? null;
+  const pokeAt = [serverPokeAt, localPokeAt].filter((x): x is string => !!x).sort().pop() ?? null;
+  const pokedUntil = pokeAt && new Date(pokeAt).getTime() > now ? pokeAt : null;
+  useEffect(() => {
+    if (!pokedUntil) return;
+    const t = setTimeout(() => setNow(Date.now()), new Date(pokedUntil).getTime() - Date.now() + 50);
+    return () => clearTimeout(t);
+  }, [pokedUntil]);
   // Booster completion: 1-3 screenshots of the final rank + optional note.
   const [proofs, setProofs] = useState<File[]>([]);
   const previews = useMemo(() => proofs.map((p) => URL.createObjectURL(p)), [proofs]);
@@ -117,6 +146,18 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
             : "Your booster can continue boosting.",
       });
       router.refresh();
+    });
+
+  const poke = () =>
+    run("poke", async () => {
+      const res = await fetch(`/api/orders/${order.id}/poke`, { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; nextPokeAt?: string | null };
+      if (body.nextPokeAt) {
+        setLocalPokeAt(body.nextPokeAt);
+        setNow(Date.now());
+      }
+      if (!res.ok) throw new Error(body.error || "Could not poke your booster.");
+      toast({ type: "success", title: "Booster poked", description: "We emailed your booster to check the order chat." });
     });
 
   const complete = () =>
@@ -195,49 +236,68 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
   const controls: React.ReactNode[] = [];
 
   if (viewer.role === "customer") {
-    if (access.canPauseOrder) {
-      controls.push(
+    const ca = data.customerActions;
+    const noBooster = "Available once a booster is assigned";
+    const outline = "border border-white/10 text-zinc-200 hover:bg-white/[0.06]";
+    const canTip = data.feedback.canTip;
+    const change = ca?.boosterChange;
+    const changeOpen = change?.latest?.status === "REQUESTED";
+    controls.push(
+      <button
+        key="tip"
+        type="button"
+        className={cn(btn, outline)}
+        onClick={() => open("tip")}
+        disabled={!canTip || busy !== null}
+        title={canTip ? "Send a tip to your booster" : "You can tip once the order is completed"}
+      >
+        <Coins className="size-4" /> Tip
+      </button>,
+      paused && access.canResumeOrder ? (
+        <button key="resume" type="button" className={cn(btn, primary)} onClick={() => void resume()} disabled={busy !== null}>
+          <Play className="size-4" /> {busy === "resume" ? "Resuming…" : "Resume order"}
+        </button>
+      ) : (
         <button
           key="pause"
           type="button"
-          className={cn(
-            btn,
-            "border border-amber-400/40 text-amber-200 hover:bg-amber-400/10",
-          )}
+          className={cn(btn, "border border-amber-400/40 text-amber-200 hover:bg-amber-400/10")}
           onClick={() => open("pause")}
-          disabled={busy !== null}
+          disabled={!access.canPauseOrder || busy !== null}
+          title={access.canPauseOrder ? "Put the order on hold until you resume it" : "You can pause once your booster is playing"}
         >
           <Pause className="size-4" /> Pause order
-        </button>,
-      );
-    }
-    if (access.canResumeOrder) {
-      controls.push(
-        <button
-          key="resume"
-          type="button"
-          className={cn(btn, primary)}
-          onClick={() => void resume()}
-          disabled={busy !== null}
-        >
-          <Play className="size-4" />{" "}
-          {busy === "resume" ? "Resuming…" : "Resume order"}
-        </button>,
-      );
-    }
-    if (data.cancellation.canRequest) {
-      controls.push(
-        <button
-          key="cancel-request"
-          type="button"
-          className={cn(btn, "border border-white/10 text-zinc-300 hover:bg-white/[0.06]")}
-          onClick={() => open("cancel-request")}
-          disabled={busy !== null}
-        >
-          Request cancellation
-        </button>,
-      );
-    }
+        </button>
+      ),
+      <button
+        key="booster-change"
+        type="button"
+        className={cn(btn, outline)}
+        onClick={() => open("booster-change")}
+        disabled={!change?.canRequest || busy !== null}
+        title={
+          changeOpen
+            ? "Your request is being reviewed by our team"
+            : !ca?.hasBooster
+              ? noBooster
+              : change?.latest?.status === "REJECTED" && change.latest.adminNote
+                ? `Last request declined: ${change.latest.adminNote}`
+                : "Ask our team for a different booster"
+        }
+      >
+        <UserRoundCog className="size-4" /> {changeOpen ? "Change requested" : "Change booster"}
+      </button>,
+      <button
+        key="poke"
+        type="button"
+        className={cn(btn, outline)}
+        onClick={() => void poke()}
+        disabled={!ca?.hasBooster || !!pokedUntil || busy !== null}
+        title={!ca?.hasBooster ? noBooster : pokedUntil ? `You can poke again at ${timeOf(pokedUntil)}` : "Email your booster to check the order chat"}
+      >
+        <BellRing className="size-4" /> {busy === "poke" ? "Poking…" : "Poke booster"}
+      </button>,
+    );
   }
 
   if (viewer.role === "admin" && data.adminCompletion) {
@@ -349,31 +409,80 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
         </ConfirmDialog>
       )}
 
-      {data.cancellation.canRequest && (
+      {data.feedback.canTip && (
         <ConfirmDialog
-          open={dialog === "cancel-request"}
-          title="Request a cancellation?"
-          confirmLabel="Send request"
-          busyLabel="Sending…"
-          cancelLabel="Keep my order"
-          tone="danger"
-          busy={busy === "cancel-request"}
+          open={dialog === "tip"}
+          title="Tip your booster"
+          confirmLabel={`Tip ${money(tip, order.currency ?? "EUR")}`}
+          busyLabel="Opening payment…"
+          busy={busy === "tip"}
+          confirmDisabled={tip < 100}
           error={error}
           onConfirm={() =>
-            void run("cancel-request", async () => {
-              await post(`/api/orders/${order.id}/cancellation-request`, { reason: reason.trim() });
-              toast({ type: "success", title: "Request sent", description: "Our team will review it and get back to you." });
+            void run("tip", async () => {
+              const r = await post(`/api/orders/${order.id}/tip`, { amount: tip });
+              window.location.assign(String(r.url));
+              return true;
+            })
+          }
+          onClose={() => setDialog(null)}
+        >
+          <p>The tip goes to the booster who completed your order. You pay it securely with Stripe.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {TIP_PRESETS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => setTip(a)}
+                aria-pressed={tip === a}
+                className={cn(btn, tip === a ? "bg-[var(--g-accent)] text-[#0A0E14]" : "bg-white/10 text-white")}
+              >
+                {money(a, order.currency ?? "EUR")}
+              </button>
+            ))}
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              Other
+              <input
+                type="number"
+                min={1}
+                step={1}
+                aria-label="Tip amount"
+                onChange={(e) => {
+                  const v = Math.round(Number(e.target.value) * 100);
+                  if (Number.isFinite(v) && v > 0) setTip(v);
+                }}
+                className="h-9 w-24 rounded-md border border-white/10 bg-black/30 px-2 text-sm text-white outline-none"
+              />
+            </label>
+          </div>
+        </ConfirmDialog>
+      )}
+
+      {data.customerActions?.boosterChange.canRequest && (
+        <ConfirmDialog
+          open={dialog === "booster-change"}
+          title="Ask for a different booster?"
+          confirmLabel="Send request"
+          busyLabel="Sending…"
+          cancelLabel="Keep my booster"
+          busy={busy === "booster-change"}
+          confirmDisabled={reason.trim().length < 10}
+          error={error}
+          onConfirm={() =>
+            void run("booster-change", async () => {
+              await post(`/api/orders/${order.id}/booster-change`, { reason: reason.trim() });
+              toast({ type: "success", title: "Request sent", description: "Our team will review it shortly." });
               router.refresh();
             })
           }
           onClose={() => setDialog(null)}
         >
           <p>
-            Our team reviews every request. If it is approved, the order is cancelled and you are refunded for the
-            part that was not done yet. You can also simply pause the order instead.
+            Our team reviews every request. Your current booster keeps the order until then. If it is approved, a new booster
+            takes over and your progress is kept.
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs text-zinc-400">Why do you want to cancel? (required)</span>
+            <span className="mb-1 block text-xs text-zinc-400">Why do you want a different booster? (required)</span>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -381,7 +490,7 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
               minLength={10}
               maxLength={1000}
               rows={3}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-rose-400/50"
+              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-[var(--g-accent)]/50"
             />
           </label>
         </ConfirmDialog>

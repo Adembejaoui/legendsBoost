@@ -35,7 +35,9 @@ export type OutboxMessage =
   /** "Order confirmed" email to the customer (once per paid order). */
   | { type: "EMAIL_ORDER_CONFIRMED"; payload: { orderId: string } }
   /** "Please confirm" email when a booster completes with proof. */
-  | { type: "EMAIL_COMPLETION_SUBMITTED"; payload: { requestId: string } };
+  | { type: "EMAIL_COMPLETION_SUBMITTED"; payload: { requestId: string } }
+  /** "Your customer needs your attention" email to the booster (Poke booster). */
+  | { type: "EMAIL_BOOSTER_POKE"; payload: { orderId: string; boosterId: string } };
 
 export async function enqueueOutbox(
   tx: Prisma.TransactionClient,
@@ -72,6 +74,10 @@ const handlers: Record<OutboxMessage["type"], Handler> = {
   EMAIL_COMPLETION_SUBMITTED: (async (p: { requestId: string }) => {
     const { sendCompletionSubmittedEmail } = await import("@/lib/email/completion-submitted");
     await sendCompletionSubmittedEmail(p.requestId);
+  }) as Handler,
+  EMAIL_BOOSTER_POKE: (async (p: { orderId: string; boosterId: string }) => {
+    const { sendBoosterPokeEmail } = await import("@/lib/email/booster-poke");
+    await sendBoosterPokeEmail(p.orderId, p.boosterId);
   }) as Handler,
   POOL_SIGNAL: (async (p: Extract<OutboxMessage, { type: "POOL_SIGNAL" }>["payload"]) => {
     const { signalPool } = await import("@/lib/realtime/live");

@@ -2,6 +2,17 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-21 · Customer dashboard: header buttons, poke, booster change, chat sound
+
+Client PDF "Customer dashboard changes". Decisions: Change Booster is reviewed by an admin; Tip stays for completed orders; Poke at most once per hour; the four buttons are always shown, greyed out with a hint when they do not apply.
+
+- **Order header (customer):** Tip, Pause order / Resume order, Change booster, Poke booster side by side. "Request cancellation" removed from the header (the request flow and admin page still exist).
+- **Change booster:** the customer gives a reason; admins decide on the new **Booster Changes** page. Approve releases the booster and puts the order back on the marketplace (the replaced booster can never take it again); reject keeps the booster and shows the note to the customer. One open request per order. Table `orderBoosterChangeRequest` (migration `20261121120000_booster_change_and_poke`, applied).
+- **Poke booster:** emails the booster "Your customer needs your attention on order #…" with an "Open order chat" button (`/dashboard/<order>?view=chat`). At most once per hour per order (`order.boosterPokedAt`, conditional update); the button shows when it can be used again.
+- **Chat sound:** the customer hears a short ding when the booster writes, also while the chat is open (after the first click on the page, a browser rule).
+- **Sidebar (customer):** Support and Become a Booster links removed.
+- **Account tab first:** the first time a customer opens an order, the details card opens on Account (remembered per browser).
+
 ## 2026-11-20 · League order pages, step 3: Arena, Champion Mastery, win sliders
 
 - **Champion Mastery:** champion card with the chosen champion's portrait, a search box and every champion in a scrollable grid; Server under it. "Mastery Level" box with Current and Desired Mastery (Level 1–10); the desired level must be higher. Order summary: "Jinx → Level 4 → Level 6". Solo only, extras Priority +25%, Stream Games +15%, Appear Offline free. Priced per level gained (`range:currentLevel:targetLevel`, $6 per level by default).

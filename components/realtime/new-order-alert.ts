@@ -136,3 +136,30 @@ export function playNewOrderSound(opts: { force?: boolean } = {}): void {
     }
   }, 550);
 }
+
+/**
+ * Short "new message" ding for the customer when their booster writes in the
+ * order chat (client PDF 2026-11-21), including while the chat is open.
+ * Silent until the page has had a click or key press (browser rule). Never throws.
+ */
+export function playMessageSound(): void {
+  try {
+    if (!unlocked) return;
+    const ac = audioContext();
+    if (!ac) return;
+    const t = ac.currentTime + 0.02;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1046.5, t);
+    osc.frequency.exponentialRampToValueAtTime(784, t + 0.18);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.3, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.37);
+  } catch {
+    /* sound is best effort */
+  }
+}

@@ -196,12 +196,23 @@ describe("order actions", () => {
     expect(container.querySelector('[role="alert"]')!.textContent).toContain("Paused by the customer");
   });
 
-  it.each(["COMPLETED", "CANCELLED", "PENDING"])("%s order: no pause / complete / abandon", (status) => {
-    for (const role of ["customer", "booster"] as const) {
-      render(workspaceFixture({ role, status }));
-      const labels = buttons().map((b) => b.label);
-      expect(labels.some((l) => /pause|resume|complete|abandon/i.test(l))).toBe(false);
-    }
+  it.each(["COMPLETED", "CANCELLED", "PENDING"])("%s order: no usable pause / complete / abandon", (status) => {
+    // Booster: none of the buttons. Customer (client PDF 2026-11-21): the four
+    // header buttons are always shown; Pause is greyed out here.
+    render(workspaceFixture({ role: "booster", status }));
+    expect(buttons().some((b) => /pause|resume|complete|abandon/i.test(b.label))).toBe(false);
+    render(workspaceFixture({ role: "customer", status }));
+    const usable = buttons().filter((b) => !b.disabled).map((b) => b.label);
+    expect(usable.some((l) => /pause|resume|complete|abandon/i.test(l))).toBe(false);
+    expect(buttons().find((b) => b.label === "Pause order")?.disabled).toBe(true);
+  });
+
+  it("customer header: Tip, Pause, Change booster and Poke side by side; no cancellation button", () => {
+    render(workspaceFixture({ role: "customer", status: "IN_PROGRESS" }));
+    const group = container.querySelector('[role="group"][aria-label="Order actions"]')!;
+    const labels = Array.from(group.querySelectorAll("button")).map((b) => b.textContent?.trim());
+    expect(labels).toEqual(["Tip", "Pause order", "Change booster", "Poke booster"]);
+    expect(container.textContent).not.toContain("Request cancellation");
   });
 });
 

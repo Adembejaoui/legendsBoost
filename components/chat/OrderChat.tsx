@@ -66,6 +66,7 @@ export function OrderChat({
   currentUserName,
   currentUserImage,
   initialMessages,
+  isCustomer,
   participant,
   fill = false,
   onOrderEvent,
@@ -111,6 +112,7 @@ export function OrderChat({
     currentUserId,
     getCursor: () => latestConfirmedTimestamp(messagesRef.current),
     onMessages: handleIncoming,
+    soundOnIncoming: isCustomer,
     onRead: (p) => {
       if (p.readerId === currentUserId) return;
       setMessages((prev) => applyReadReceipt(prev, p.messageIds, p.readAt));

@@ -44,6 +44,8 @@ import {
 import type { RiotPlatform } from "@/lib/services/games/league-of-legends/riot.types";
 import { getMessages, getOrCreateConversation } from "@/lib/chat/service";
 import { canRequestCancellation } from "./cancellation-request.service";
+import { HELD_ASSIGNMENT_STATUSES } from "./booster-change.service";
+import { nextPokeAt } from "./poke.service";
 import { credentialPermissions, getCredentialStatus } from "./account-credentials.service";
 import { credentialsConfigured } from "@/lib/security/account-credentials";
 import { getOpenSession, listSessions, SESSION_RULES } from "./sessions.service";
@@ -404,6 +406,23 @@ export async function getOrderWorkspace(
           }
         : null,
   };
+  // Customer header actions: Change booster (admin-reviewed) and Poke booster.
+  let customerActions: WorkspaceDTO["customerActions"] = null;
+  if (access.viewerRole === "customer") {
+    const held = order.assignments.some((a) => (HELD_ASSIGNMENT_STATUSES as readonly string[]).includes(a.status));
+    const latestChange = await prisma.orderBoosterChangeRequest.findFirst({ where: { orderId }, orderBy: { createdAt: "desc" } });
+    const next = nextPokeAt(order.boosterPokedAt);
+    customerActions = {
+      hasBooster: held,
+      boosterChange: {
+        canRequest: held && !!order.paymentVerifiedAt && latestChange?.status !== "REQUESTED",
+        latest: latestChange
+          ? { status: latestChange.status, adminNote: latestChange.adminNote, createdAt: latestChange.createdAt.toISOString() }
+          : null,
+      },
+      nextPokeAt: next ? next.toISOString() : null,
+    };
+  }
   const credStatus = await getCredentialStatus(orderId);
   // Riot tracking is off (decision 2026-11-17): no Riot profile on the page.
   const riotProfile = null;
@@ -559,6 +578,7 @@ export async function getOrderWorkspace(
       rules: [...SESSION_RULES],
     },
     cancellation,
+    customerActions,
     completion: await completionFor(orderId, access.viewerRole),
   };
 }

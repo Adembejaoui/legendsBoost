@@ -1,5 +1,6 @@
 "use client";
 
+import { armSoundUnlock, playMessageSound } from "@/components/realtime/new-order-alert";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/chat/message-sync";
 import {
@@ -20,6 +21,8 @@ interface UseOrderChatRealtimeOptions {
   onMessages: (messages: ChatMessage[]) => void;
   onRead: (payload: ReadReceiptPayload) => void;
   onOrderEvent?: (event: OrderLifecycleEvent, payload: { orderId: string; newStatus?: string }) => void;
+  /** Play a ding when the other participant sends a message (customer side). */
+  soundOnIncoming?: boolean;
 }
 
 const READ_SYNC_DEBOUNCE_MS = 1_500;
@@ -41,6 +44,7 @@ export function useOrderChatRealtime({
   onMessages,
   onRead,
   onOrderEvent,
+  soundOnIncoming = false,
 }: UseOrderChatRealtimeOptions) {
   const [state, setState] = useState<ChatConnectionState>(
     HAS_REALTIME_ENV ? "connecting" : "unavailable"
@@ -48,10 +52,14 @@ export function useOrderChatRealtime({
   const syncRef = useRef<OrderChatSync | null>(null);
 
   // Keep the latest callbacks without re-running the subscription effect.
-  const cb = useRef({ getCursor, onMessages, onRead, onOrderEvent, currentUserId });
+  const cb = useRef({ getCursor, onMessages, onRead, onOrderEvent, currentUserId, soundOnIncoming });
   useLayoutEffect(() => {
-    cb.current = { getCursor, onMessages, onRead, onOrderEvent, currentUserId };
+    cb.current = { getCursor, onMessages, onRead, onOrderEvent, currentUserId, soundOnIncoming };
   });
+  // Browsers allow sound only after a click or key press on the page.
+  useEffect(() => {
+    if (soundOnIncoming) armSoundUnlock();
+  }, [soundOnIncoming]);
 
   useEffect(() => {
     const isVisible = () =>
@@ -82,6 +90,15 @@ export function useOrderChatRealtime({
       onOrderEvent: (event, payload) => cb.current.onOrderEvent?.(event, payload),
       onState: setState,
       onIncoming: (message) => {
+        // Ding for a message from the other participant, chat open or not.
+        if (
+          cb.current.soundOnIncoming &&
+          message.senderId &&
+          message.senderId !== cb.current.currentUserId &&
+          message.messageType === "text"
+        ) {
+          playMessageSound();
+        }
         // A message from the other participant arrived while the chat is open:
         // a debounced catch-up marks it read on the server (which broadcasts
         // the read receipt to the sender) and double-checks consistency.

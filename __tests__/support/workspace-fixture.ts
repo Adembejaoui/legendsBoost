@@ -157,6 +157,10 @@ export function workspaceFixture(
     abandonment: null,
     conversationId: opts.chat === false ? null : "conv-1",
     cancellation: { canRequest: false, latest: null },
+    customerActions:
+      role === "customer"
+        ? { hasBooster: true, boosterChange: { canRequest: true, latest: null }, nextPokeAt: null }
+        : null,
     credentials: {
       configured: true,
       saved: false,

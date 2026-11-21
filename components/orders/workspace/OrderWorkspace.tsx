@@ -138,6 +138,21 @@ type DetailsTab = "order" | "account";
 function DetailsCard({ data, className }: { data: WorkspaceDTO; className?: string }) {
   // Boosters mostly need the account (login, Riot ID); customers the order.
   const [tab, setTab] = useState<DetailsTab>(data.viewer.role === "booster" ? "account" : "order");
+  // Client PDF 2026-11-21: the first time a customer opens a paid order, show
+  // the Account tab (where they add their login). Remembered per browser.
+  useEffect(() => {
+    if (data.viewer.role !== "customer") return;
+    const key = `lb.orderSeen.${data.order.id}`;
+    try {
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, "1");
+    } catch {
+      return;
+    }
+    // After mount (the server render always starts on Order).
+    const t = setTimeout(() => setTab("account"), 0);
+    return () => clearTimeout(t);
+  }, [data.viewer.role, data.order.id]);
   const hasPrefs = data.preferences.roles.length > 0 || data.preferences.champions.length > 0;
   const tabs: { id: DetailsTab; label: string; icon: React.ReactNode }[] = [
     { id: "order", label: "Order", icon: <ClipboardList className="size-3.5" /> },
@@ -198,6 +213,12 @@ export default function OrderWorkspace({
   initialMessages: RawServerMessage[];
 }) {
   const [view, setView] = useState<View>("progress");
+  // "Open order chat" links (poke email) land on the chat on phones.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") !== "chat") return;
+    const t = setTimeout(() => setView("chat"), 0);
+    return () => clearTimeout(t);
+  }, []);
   const router = useRouter();
   const { toast } = useToast();
   useLiveOrderRefresh(data.order.id);
