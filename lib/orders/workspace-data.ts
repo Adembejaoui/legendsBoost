@@ -46,6 +46,7 @@ import { getMessages, getOrCreateConversation } from "@/lib/chat/service";
 import { canRequestCancellation } from "./cancellation-request.service";
 import { HELD_ASSIGNMENT_STATUSES } from "./booster-change.service";
 import { nextPokeAt } from "./poke.service";
+import { TIPPABLE_ORDER } from "@/lib/tips/service";
 import { credentialPermissions, getCredentialStatus } from "./account-credentials.service";
 import { credentialsConfigured } from "@/lib/security/account-credentials";
 import { getOpenSession, listSessions, SESSION_RULES } from "./sessions.service";
@@ -74,7 +75,8 @@ async function feedbackFor(orderId: string, status: string, role: string, viewer
     canReview: isCustomer && completed && !review,
     canReply: isBooster && !!review && review.boosterId === viewerId && !review.reply,
     canHide: role === "admin" && !!review,
-    canTip: isCustomer && completed,
+    // Processing or Completed (client PDF 2026-11-22).
+    canTip: isCustomer && (TIPPABLE_ORDER as readonly string[]).includes(status),
     tipped: (isCustomer || isBooster) && tippedAmount > 0 ? { amount: tippedAmount, currency: mine[0].currency } : null,
   };
 }
@@ -423,6 +425,9 @@ export async function getOrderWorkspace(
       nextPokeAt: next ? next.toISOString() : null,
     };
   }
+  // Client PDF 2026-11-22: once the order is Completed the booster no longer
+  // gets the customer's Riot ID or OP.GG link (not sent at all, even on reopen).
+  const hideAccountFromBooster = access.viewerRole === "booster" && order.status === "COMPLETED";
   const credStatus = await getCredentialStatus(orderId);
   // Riot tracking is off (decision 2026-11-17): no Riot profile on the page.
   const riotProfile = null;
@@ -488,7 +493,9 @@ export async function getOrderWorkspace(
       ? { id: access.activeAssignment.id, status: access.activeAssignment.status }
       : null,
     riot: {
-      account: ra
+      account: hideAccountFromBooster
+        ? null
+        : ra
         ? {
             gameName: ra.gameName,
             tagLine: ra.tagLine,
@@ -535,7 +542,7 @@ export async function getOrderWorkspace(
       canPost: viewerIsWorkingBooster && rankOptions.length > 0,
       pointsLabel: pts,
       rankOptions,
-      selfCheck: selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform } : null),
+      selfCheck: hideAccountFromBooster ? null : selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform } : null),
       stale: staleUpdates,
     },
     progress,
@@ -589,7 +596,8 @@ async function completionFor(orderId: string, role: string): Promise<WorkspaceDT
   const open = request?.status === "PENDING" || request?.status === "DISPUTED";
   return {
     request,
-    canConfirm: role === "customer" && open,
+    // No customer confirmation since 2026-11-22: an admin marks the order Completed.
+    canConfirm: false,
     canDispute: role === "customer" && request?.status === "PENDING",
     canDecide: role === "admin" && open,
     autoConfirmHours: await getConfig("auto_confirm_hours"),

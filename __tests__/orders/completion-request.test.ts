@@ -1,10 +1,11 @@
 // @vitest-environment node
 /* eslint-disable @typescript-eslint/no-explicit-any -- route/mocks plumbing */
 /**
- * Completion with proof + customer confirmation (decision 2026-11-16)
+ * Completion with proof, decided by an admin (client PDFs 2026-11-22)
  * against an in-memory PostgreSQL (all migrations): booster submits
- * screenshots, customer confirms / reports a problem, admin decides,
- * auto-confirm after the waiting time, Riot confirmation, access rules.
+ * screenshots, the customer sees them and may report a problem, an admin
+ * marks the order Completed (payout Frozen -> Available) or sends it back.
+ * No customer confirmation, no auto-confirm, Riot never completes alone.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 
@@ -47,14 +48,11 @@ import { setProofStoreForTest, sniffImageType, validateProofFiles } from "@/lib/
 import {
   adminAcceptCompletion,
   adminSendBack,
-  autoConfirmDue,
-  confirmByCustomer,
   disputeByCustomer,
   submitCompletion,
 } from "@/lib/orders/completion-request.service";
 import { loadBoosterForPool } from "@/lib/pool/service";
 import { boosterBalances } from "@/lib/finance/queries";
-import { approveEarning } from "@/lib/finance/earnings";
 import { resolveWorkspaceAccess, WORKSPACE_ACCESS_SELECT } from "@/lib/orders/workspace-access";
 import { dispatchOutbox } from "@/lib/payments/outbox";
 import { POST as completeRoute } from "@/app/api/booster/orders/[orderId]/complete/route";
@@ -119,17 +117,12 @@ describe("proof files", () => {
 });
 
 describe("booster submits a completion", () => {
-  it("waits for the customer: order AWAITING_CONFIRMATION, booster freed, customer notified and emailed", async () => {
+  it("waits for an admin: order AWAITING_CONFIRMATION, booster freed, customer and admins told", async () => {
     const w = await working();
     await expect(submitCompletion({ ...w, boosterId: w.booster.id, files: [], riotCheck: noRiot })).rejects.toThrow(/at least one/);
 
-    const before = Date.now();
     const r = await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG(), JPG()], note: "Reached Gold I", riotCheck: noRiot });
     expect(r.status).toBe("PENDING");
-    // 72 h by default.
-    expect(r.autoConfirmAt.getTime() - before).toBeGreaterThan(71.9 * 3_600_000);
-    expect(r.autoConfirmAt.getTime() - before).toBeLessThan(72.1 * 3_600_000);
-
     expect(await statusOf(w.orderId)).toBe("AWAITING_CONFIRMATION");
     const a = await prisma.orderBoosterAssignment.findUniqueOrThrow({ where: { id: w.assignmentId } });
     expect(a.status).toBe("SUBMITTED");
@@ -142,28 +135,27 @@ describe("booster submits a completion", () => {
     // The booster can take another order while waiting.
     expect((await loadBoosterForPool(w.booster.id)).activeCount).toBe(0);
 
-    // Booster: chat yes, actions no. Customer: not read-only.
     const order = await prisma.order.findUniqueOrThrow({ where: { id: w.orderId }, select: WORKSPACE_ACCESS_SELECT });
     const ba = resolveWorkspaceAccess({ id: w.booster.id, role: "BOOSTER" }, order)!;
     expect(ba).toMatchObject({ canChat: true, canCompleteOrder: false, canAbandonOrder: false });
     expect(resolveWorkspaceAccess({ id: w.customer.id, role: "CUSTOMER" }, order)).toMatchObject({ readOnly: false, canPauseOrder: false });
 
     await dispatchOutbox({ limit: 50 });
-    const note = await prisma.notification.findFirst({ where: { userId: w.customer.id, type: "COMPLETION_SUBMITTED" } });
-    expect(note).not.toBeNull();
-    const mail = h.emails.find((e) => e.to === `${w.customer.id}@t.test` && /please confirm/.test(e.subject));
+    expect(await prisma.notification.findFirst({ where: { userId: w.customer.id, type: "COMPLETION_SUBMITTED" } })).not.toBeNull();
+    expect(await prisma.notification.count({ where: { userId: admin.id, type: "COMPLETION_REVIEW", orderId: w.orderId } })).toBe(1);
+    const mail = h.emails.find((e) => e.to === `${w.customer.id}@t.test` && /is done$/.test(e.subject));
     expect(mail?.action?.url).toBe(`https://app.test/dashboard/${w.orderId}`);
+    expect(mail?.text).not.toMatch(/automatically/);
 
     // A second submission is refused.
     await expect(submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot })).rejects.toMatchObject({ status: 409 });
   });
 
-  it("completes at once when Riot confirms the target", async () => {
+  it("Riot never completes the order on its own: an admin decides", async () => {
     const w = await working();
     const r = await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: async () => true });
-    expect(r.status).toBe("RIOT_CONFIRMED");
-    expect(await statusOf(w.orderId)).toBe("COMPLETED");
-    expect((await prisma.orderCompletionRequest.findUniqueOrThrow({ where: { id: r.requestId } })).status).toBe("RIOT_CONFIRMED");
+    expect(r.status).toBe("PENDING");
+    expect(await statusOf(w.orderId)).toBe("AWAITING_CONFIRMATION");
   });
 
   it("another booster cannot submit", async () => {
@@ -173,40 +165,29 @@ describe("booster submits a completion", () => {
   });
 });
 
-describe("customer answers", () => {
-  it("confirm completes the order once and allocates the booster's earning", async () => {
+describe("admin decides", () => {
+  it("Mark Completed completes the order once and releases the payout at once", async () => {
     const w = await working();
-    await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
-    await confirmByCustomer(w.orderId, w.customer.id);
+    const r = await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
+    await adminAcceptCompletion(r.requestId, admin.id);
     expect(await statusOf(w.orderId)).toBe("COMPLETED");
     const a = await prisma.orderBoosterAssignment.findUniqueOrThrow({ where: { id: w.assignmentId } });
     expect(a).toMatchObject({ status: "COMPLETED", activeOrderId: null });
     const earning = await prisma.boosterEarning.findFirstOrThrow({ where: { orderId: w.orderId } });
-    expect(earning).toMatchObject({ status: "PENDING", boosterId: w.booster.id });
-    await expect(confirmByCustomer(w.orderId, w.customer.id)).rejects.toMatchObject({ status: 404 });
+    expect(earning).toMatchObject({ status: "AVAILABLE", boosterId: w.booster.id });
+    await expect(adminAcceptCompletion(r.requestId, admin.id)).rejects.toMatchObject({ status: 409 });
   });
 
-  it("only the order's customer can confirm", async () => {
-    const w = await working();
-    await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
-    const other = await seedUser("CUSTOMER");
-    await expect(confirmByCustomer(w.orderId, other.id)).rejects.toMatchObject({ status: 404 });
-    expect(await statusOf(w.orderId)).toBe("AWAITING_CONFIRMATION");
-  });
-
-  it("a reported problem stops auto-confirm; the admin sends it back, then completes the next try", async () => {
+  it("a reported problem goes to the admin, who sends it back, then completes the next try", async () => {
     const w = await working();
     const first = await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
     await expect(disputeByCustomer(w.orderId, w.customer.id, "short")).rejects.toMatchObject({ status: 400 });
+    const other = await seedUser("CUSTOMER");
+    await expect(disputeByCustomer(w.orderId, other.id, "The account is still Gold III, not Gold I.")).rejects.toMatchObject({ status: 404 });
     await disputeByCustomer(w.orderId, w.customer.id, "The account is still Gold III, not Gold I.");
     expect((await prisma.orderCompletionRequest.findUniqueOrThrow({ where: { id: first.requestId } })).status).toBe("DISPUTED");
     await dispatchOutbox({ limit: 50 });
     expect(await prisma.notification.count({ where: { userId: admin.id, type: "COMPLETION_DISPUTED", orderId: w.orderId } })).toBe(1);
-
-    // Even after the waiting time, a disputed completion is not auto-confirmed.
-    await prisma.orderCompletionRequest.update({ where: { id: first.requestId }, data: { autoConfirmAt: new Date(Date.now() - 1000) } });
-    await autoConfirmDue();
-    expect(await statusOf(w.orderId)).toBe("AWAITING_CONFIRMATION");
 
     await expect(adminSendBack(first.requestId, admin.id, "no")).rejects.toMatchObject({ status: 400 });
     await adminSendBack(first.requestId, admin.id, "Play until Gold I and send a new screenshot.");
@@ -222,54 +203,42 @@ describe("customer answers", () => {
 });
 
 describe("booster dashboard balances", () => {
-  it("waiting for the customer -> pending approval -> balance after the admin release", async () => {
+  it("the payout is Frozen from the claim to the admin's Completed, then Available", async () => {
     const w = await working();
-    await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
-    let b = await boosterBalances(w.booster.id);
-    expect(b.awaitingConfirmation).toBe(1);
-    expect(b.pending).toEqual({});
+    const assignment = await prisma.orderBoosterAssignment.findUniqueOrThrow({
+      where: { id: w.assignmentId },
+      include: { order: { include: { pricingSnapshot: true } } },
+    });
+    const payout = assignment.payoutAmount ?? assignment.order.boosterPayoutAmount ?? assignment.order.pricingSnapshot!.boosterShareAmount;
+    const cur = assignment.order.pricingSnapshot!.currency;
 
-    await confirmByCustomer(w.orderId, w.customer.id);
-    b = await boosterBalances(w.booster.id);
-    expect(b.awaitingConfirmation).toBe(0);
-    const earning = await prisma.boosterEarning.findFirstOrThrow({ where: { orderId: w.orderId } });
-    expect(b.pending).toEqual({ [earning.currency]: earning.grossAmount - earning.reversedAmount });
+    let b = await boosterBalances(w.booster.id);
+    expect(b.frozen).toEqual({ [cur]: payout });
     expect(b.available).toEqual({});
 
-    await approveEarning(admin.id, earning.id);
+    const r = await submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
     b = await boosterBalances(w.booster.id);
-    expect(b.pending).toEqual({});
-    expect(b.available).toEqual({ [earning.currency]: earning.grossAmount - earning.reversedAmount });
+    expect(b.waitingForReview).toBe(1);
+    expect(b.frozen).toEqual({ [cur]: payout });
+
+    await adminAcceptCompletion(r.requestId, admin.id);
+    b = await boosterBalances(w.booster.id);
+    const earning = await prisma.boosterEarning.findFirstOrThrow({ where: { orderId: w.orderId } });
+    expect(b.waitingForReview).toBe(0);
     expect(b.frozen).toEqual({});
-  });
-});
-
-describe("auto-confirm job", () => {
-  it("confirms only pending completions whose waiting time is over", async () => {
-    const due = await working();
-    const notYet = await working();
-    const d = await submitCompletion({ ...due, boosterId: due.booster.id, files: [PNG()], riotCheck: noRiot });
-    await submitCompletion({ ...notYet, boosterId: notYet.booster.id, files: [PNG()], riotCheck: noRiot });
-    await prisma.orderCompletionRequest.update({ where: { id: d.requestId }, data: { autoConfirmAt: new Date(Date.now() - 1000) } });
-
-    const r = await autoConfirmDue();
-    expect(r.confirmed).toBeGreaterThanOrEqual(1);
-    expect(await statusOf(due.orderId)).toBe("COMPLETED");
-    expect((await prisma.orderCompletionRequest.findUniqueOrThrow({ where: { id: d.requestId } })).status).toBe("AUTO_CONFIRMED");
-    expect(await statusOf(notYet.orderId)).toBe("AWAITING_CONFIRMATION");
+    expect(b.available).toEqual({ [earning.currency]: earning.grossAmount - earning.reversedAmount });
   });
 });
 
 describe("routes", () => {
   const params = (orderId: string) => ({ params: Promise.resolve({ orderId }) });
 
-  it("booster uploads with a form; proofs are visible to the order's people only; customer confirms", async () => {
+  it("booster uploads with a form; proofs are visible to the order's people only; no customer confirmation", async () => {
     const w = await working();
     h.getSessionUser.mockResolvedValue({ id: w.booster.id, role: "BOOSTER" });
     const form = new FormData();
     form.set("assignmentId", w.assignmentId);
     form.append("proof", new File([await PNG().arrayBuffer()], "rank.png", { type: "image/png" }));
-    // Riot data access is off in tests (no key), so this waits for the customer.
     const res = await completeRoute(new Request("http://t/x", { method: "POST", body: form }), params(w.orderId));
     expect(res.status).toBe(200);
     expect((await res.json()).completion.status).toBe("PENDING");
@@ -286,14 +255,14 @@ describe("routes", () => {
     const stranger = await seedUser("CUSTOMER");
     expect((await get(stranger.id, "CUSTOMER")).status).toBe(404);
 
-    // The booster cannot answer for the customer.
-    h.getSessionUser.mockResolvedValue({ id: w.booster.id, role: "BOOSTER" });
     const post = (body: unknown) => completionRoute(new Request("http://t/x", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), params(w.orderId));
-    expect((await post({ action: "confirm" })).status).toBe(403);
+    h.getSessionUser.mockResolvedValue({ id: w.booster.id, role: "BOOSTER" });
+    expect((await post({ action: "dispute", reason: "The rank is not reached yet." })).status).toBe(403);
     h.getSessionUser.mockResolvedValue({ id: w.customer.id, role: "CUSTOMER" });
+    expect((await post({ action: "confirm" })).status).toBe(400); // confirmation removed
+    expect(await statusOf(w.orderId)).toBe("AWAITING_CONFIRMATION");
     expect((await post({ action: "dispute", reason: "short" })).status).toBe(400);
-    expect((await post({ action: "confirm" })).status).toBe(200);
-    expect(await statusOf(w.orderId)).toBe("COMPLETED");
+    expect((await post({ action: "dispute", reason: "The rank is not reached yet." })).status).toBe(200);
   });
 
   it("a booster form without screenshots is refused", async () => {

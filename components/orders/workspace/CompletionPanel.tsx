@@ -10,10 +10,6 @@ import { cn } from "@/lib/utils";
 const btn =
   "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
-function when(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
 async function post(url: string, body: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -42,8 +38,9 @@ function Proofs({ proofs }: { proofs: { id: string; url: string }[] }) {
 }
 
 /**
- * Completion with proof (decision 2026-11-16): the booster's screenshots,
- * and what each side can do while the order waits for confirmation.
+ * Completion with proof: the booster's screenshots on the order page, while
+ * an admin reviews them (client PDFs 2026-11-22: no customer confirmation)
+ * and after the order is Completed.
  */
 export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
   const router = useRouter();
@@ -58,7 +55,8 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
   if (!r) return null;
   const waiting = order.status === "AWAITING_CONFIRMATION" && (r.status === "PENDING" || r.status === "DISPUTED");
   const sentBack = r.status === "SENT_BACK" && order.status === "IN_PROGRESS";
-  if (!waiting && !sentBack) return null;
+  const done = order.status === "COMPLETED" && r.proofs.length > 0;
+  if (!waiting && !sentBack && !done) return null;
 
   async function act(kind: string, fn: () => Promise<void>, done: { title: string; description: string; type: "success" | "warning" | "info" }) {
     setBusy(kind);
@@ -76,12 +74,6 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
     }
   }
 
-  const confirm = () =>
-    act("confirm", () => post(`/api/orders/${order.id}/completion`, { action: "confirm" }), {
-      type: "success",
-      title: "Order confirmed",
-      description: "Thank you! You can now leave a review for your booster.",
-    });
   const dispute = () =>
     act("dispute", () => post(`/api/orders/${order.id}/completion`, { action: "dispute", reason: text.trim() }), {
       type: "warning",
@@ -113,6 +105,20 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
     );
   }
 
+  if (done) {
+    return (
+      <section aria-label="Order completion" className="space-y-2 rounded-xl border border-emerald-400/25 bg-emerald-500/[0.06] px-4 py-3.5 text-sm">
+        <p className="flex items-center gap-2 font-semibold text-white">
+          <CheckCircle2 className="size-5 text-emerald-300" /> Completed
+        </p>
+        <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-400">
+          <ImageIcon className="size-3.5" /> Final screenshots
+        </p>
+        <Proofs proofs={r.proofs} />
+      </section>
+    );
+  }
+
   const disputed = r.status === "DISPUTED";
   const tone = disputed ? "border-amber-400/30 bg-amber-500/[0.08]" : "border-[rgba(var(--g-rgb),0.35)] bg-[rgba(var(--g-rgb),0.07)]";
 
@@ -120,29 +126,19 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
   let line: React.ReactNode;
   if (viewer.role === "customer") {
     title = disputed ? "You reported a problem" : "Your booster finished the order";
-    line = disputed ? (
-      "Our team is reviewing the screenshots and will get back to you. If everything is fine after all, you can still confirm."
-    ) : (
-      <>
-        Check the screenshots below. Confirm if the result is right, or report a problem. Without an answer, the order confirms
-        automatically on <b>{when(r.autoConfirmAt)}</b>.
-      </>
-    );
+    line = disputed
+      ? "Our team is reviewing the screenshots and your message, and will get back to you."
+      : "Here are the screenshots of the result. Our team checks them and marks the order Completed. Something wrong? Report a problem.";
   } else if (viewer.role === "booster") {
-    title = disputed ? "The customer reported a problem" : "Waiting for the customer to confirm";
-    line = disputed ? (
-      "An admin will review your screenshots and contact you if needed."
-    ) : (
-      <>
-        Do not play on the account anymore. The order confirms automatically on <b>{when(r.autoConfirmAt)}</b> if the customer does
-        not answer.
-      </>
-    );
+    title = disputed ? "The customer reported a problem" : "Waiting for review";
+    line = disputed
+      ? "An admin will review your screenshots and contact you if needed."
+      : "Do not play on the account anymore. An admin checks your screenshots and marks the order Completed; your payout then becomes available.";
   } else {
-    title = disputed ? "Completion disputed by the customer" : "Waiting for the customer to confirm";
-    line = disputed ? "Review the screenshots and the customer's reason, then complete the order or send it back." : (
-      <>Auto-confirms on {when(r.autoConfirmAt)}.</>
-    );
+    title = disputed ? "Problem reported by the customer" : "Waiting for review";
+    line = disputed
+      ? "Review the screenshots and the customer's reason, then mark the order Completed or send it back."
+      : "Check the screenshots, then mark the order Completed or send it back.";
   }
 
   return (
@@ -178,7 +174,7 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
         ) : null}
       </div>
 
-      {(completion.canConfirm || completion.canDecide) && (
+      {(completion.canDispute || completion.canDecide) && (
         <div className="space-y-2 sm:pl-8">
           {mode !== "idle" && (
             <label className="block">
@@ -197,11 +193,6 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
           )}
           {error ? <p role="alert" className="text-xs text-rose-400">{error}</p> : null}
           <div className="flex flex-wrap gap-2">
-            {completion.canConfirm && mode === "idle" && (
-              <button type="button" onClick={() => void confirm()} disabled={busy !== null} className={cn(btn, "bg-[var(--g-accent)] font-semibold text-[var(--g-on)] hover:bg-[var(--g-hover)]")}>
-                <CheckCircle2 className="size-4" /> {busy === "confirm" ? "Confirming…" : "Confirm, all good"}
-              </button>
-            )}
             {completion.canDispute && mode === "idle" && (
               <button type="button" onClick={() => setMode("dispute")} disabled={busy !== null} className={cn(btn, "border border-amber-400/40 text-amber-200 hover:bg-amber-400/10")}>
                 <AlertTriangle className="size-4" /> Report a problem
@@ -210,7 +201,7 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
             {completion.canDecide && mode === "idle" && (
               <>
                 <button type="button" onClick={() => void accept()} disabled={busy !== null} className={cn(btn, "bg-emerald-500 font-semibold text-black hover:bg-emerald-400")}>
-                  <CheckCircle2 className="size-4" /> {busy === "accept" ? "Completing…" : "Complete order"}
+                  <CheckCircle2 className="size-4" /> {busy === "accept" ? "Completing…" : "Mark Completed"}
                 </button>
                 <button type="button" onClick={() => setMode("send_back")} disabled={busy !== null} className={cn(btn, "border border-amber-400/40 text-amber-200 hover:bg-amber-400/10")}>
                   <Undo2 className="size-4" /> Send back to booster

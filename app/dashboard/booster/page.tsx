@@ -163,18 +163,15 @@ export default async function BoosterDashboardPage() {
             <Snowflake className="size-4 text-sky-300" /> Frozen balance
           </div>
           <div className="mt-1 text-2xl font-bold text-white">{money(balances.frozen)}</div>
-          <div className="mt-1 text-xs text-sky-200/60">Held while a customer dispute is open</div>
+          <div className="mt-1 text-xs text-sky-200/60">Payout of your claimed orders · released when an admin marks them Completed</div>
         </div>
         <div className="rounded-xl border border-amber-400/25 bg-gradient-to-br from-amber-500/[0.12] to-amber-500/[0.03] p-4">
           <div className="flex items-center gap-2 text-sm text-amber-200/80">
-            <Clock className="size-4 text-amber-300" /> Pending approval
+            <Clock className="size-4 text-amber-300" /> Waiting for review
           </div>
-          <div className="mt-1 text-2xl font-bold text-white">{money(balances.pending)}</div>
+          <div className="mt-1 text-2xl font-bold text-white">{balances.waitingForReview}</div>
           <div className="mt-1 text-xs text-amber-200/60">
-            Completed orders waiting for our team
-            {balances.awaitingConfirmation > 0
-              ? ` · ${balances.awaitingConfirmation} order${balances.awaitingConfirmation === 1 ? "" : "s"} waiting for the customer`
-              : ""}
+            Order{balances.waitingForReview === 1 ? "" : "s"} sent with screenshots · an admin marks {balances.waitingForReview === 1 ? "it" : "them"} Completed
           </div>
         </div>
       </div>
@@ -189,7 +186,7 @@ export default async function BoosterDashboardPage() {
           <div className="mt-1 text-2xl font-bold text-white">{claimed}</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-4">
-          <div className="text-sm text-zinc-400">In Progress</div>
+          <div className="text-sm text-zinc-400">Processing</div>
           <div className="mt-1 text-2xl font-bold text-violet-400">{inProgress}</div>
         </div>
         <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-4">

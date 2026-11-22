@@ -54,7 +54,7 @@ export function CompletionDecision({ requestId }: { requestId: string }) {
         {!back ? (
           <>
             <button type="button" disabled={busy} onClick={() => void decide("accept")} className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-50">
-              {busy ? "Saving…" : "Complete order"}
+              {busy ? "Saving…" : "Mark Completed"}
             </button>
             <button type="button" disabled={busy} onClick={() => setBack(true)} className="rounded-md border border-amber-400/40 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-400/10 disabled:opacity-50">
               Send back to booster

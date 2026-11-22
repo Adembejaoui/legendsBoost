@@ -10,29 +10,48 @@ const add = (m: CurrencyMap, c: string, v: number) => {
   m[c] = (m[c] ?? 0) + v;
 };
 
+/** Assignment statuses in which the booster holds an order (claimed until completed). */
+const HELD = ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] as const;
+
 /**
- * Booster dashboard cards (decision 2026-11-17): what can be cashed out now
- * (AVAILABLE), what is frozen by a dispute / chargeback (ON_HOLD), and what
- * waits for an admin release (PENDING) plus the orders still waiting for the
- * customer's confirmation. Net of reversals, per currency.
+ * Booster dashboard cards (client PDFs 2026-11-22):
+ *  - Available: can be cashed out now (AVAILABLE earnings);
+ *  - Frozen: the payout of every order the booster holds, from the claim
+ *    until an admin marks it Completed, plus completed earnings an admin
+ *    still has to release (PENDING) or that a dispute froze (ON_HOLD).
+ *    A booster who leaves an order loses its payout from Frozen;
+ *  - waitingForReview: orders sent with screenshots, waiting for an admin.
+ * Net of reversals, per currency. The ledger only moves at completion.
  */
 export async function boosterBalances(boosterId: string) {
-  const [rows, awaitingConfirmation] = await Promise.all([
+  const [rows, held] = await Promise.all([
     prisma.boosterEarning.groupBy({
       by: ["status", "currency"],
       where: { boosterId, status: { in: ["AVAILABLE", "ON_HOLD", "PENDING"] } },
       _sum: { grossAmount: true, reversedAmount: true },
     }),
-    prisma.orderBoosterAssignment.count({ where: { boosterId, status: "SUBMITTED" } }),
+    prisma.orderBoosterAssignment.findMany({
+      where: { boosterId, status: { in: [...HELD] } },
+      select: {
+        status: true,
+        payoutAmount: true,
+        order: { select: { currency: true, boosterPayoutAmount: true, pricingSnapshot: { select: { boosterShareAmount: true, currency: true } } } },
+      },
+    }),
   ]);
   const available: CurrencyMap = {};
   const frozen: CurrencyMap = {};
-  const pending: CurrencyMap = {};
   for (const r of rows) {
     const net = (r._sum.grossAmount ?? 0) - (r._sum.reversedAmount ?? 0);
-    add(r.status === "AVAILABLE" ? available : r.status === "ON_HOLD" ? frozen : pending, r.currency, net);
+    add(r.status === "AVAILABLE" ? available : frozen, r.currency, net);
   }
-  return { available, frozen, pending, awaitingConfirmation };
+  for (const a of held) {
+    // Same amount the booster sees on the order page.
+    const amount = a.payoutAmount ?? a.order.boosterPayoutAmount ?? a.order.pricingSnapshot?.boosterShareAmount ?? 0;
+    add(frozen, a.order.pricingSnapshot?.currency ?? a.order.currency ?? "EUR", amount);
+  }
+  const waitingForReview = held.filter((a) => a.status === "SUBMITTED").length;
+  return { available, frozen, waitingForReview, activeOrders: held.length - waitingForReview };
 }
 
 export async function boosterFinance(boosterId: string) {

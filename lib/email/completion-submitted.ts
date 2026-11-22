@@ -1,7 +1,8 @@
 // Server-only module.
 /**
- * "Your boost is done, please confirm" email to the customer, sent once per
- * completion request by the outbox (EMAIL_COMPLETION_SUBMITTED).
+ * "Your boost is done" email to the customer, sent once per completion
+ * request by the outbox (EMAIL_COMPLETION_SUBMITTED). Since 2026-11-22 an
+ * admin marks the order Completed; the customer only checks the screenshots.
  */
 import prisma from "@/lib/prisma";
 import { buildOrderSummary } from "@/lib/orders/order-summary";
@@ -17,18 +18,17 @@ export function completionSubmittedEmail(p: {
   autoConfirmAt: Date;
 }): EmailMessage {
   const theme = gameTheme(p.gameSlug);
-  const when = p.autoConfirmAt.toUTCString().replace(/:\d\d GMT$/, " UTC");
   return {
     to: p.to,
-    subject: `Your order #${p.reference} is done: please confirm`,
+    subject: `Your order #${p.reference} is done`,
     text: [
       `Good news! Your booster has finished your ${p.serviceName} (order #${p.reference}) and uploaded screenshots of the result.`,
-      `Please check them and confirm, or tell us if something is wrong. If we do not hear from you, the order is confirmed automatically on ${when}.`,
+      `You can see them on your order page. Our team checks them and marks the order Completed. If something is wrong, tell us from the order page.`,
       `Your booster no longer has access to your account login. You can change your password now if you wish.`,
     ].join("\n\n"),
     accent: theme.accent,
     onAccent: theme.onAccent,
-    action: { label: "Review and confirm", url: `${appUrl()}/dashboard/${p.orderId}` },
+    action: { label: "See the screenshots", url: `${appUrl()}/dashboard/${p.orderId}` },
   };
 }
 

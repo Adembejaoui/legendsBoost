@@ -1,6 +1,6 @@
 "use client";
 
-import { armSoundUnlock, playMessageSound } from "@/components/realtime/new-order-alert";
+import { armSoundUnlock } from "@/components/realtime/new-order-alert";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/chat/message-sync";
 import {
@@ -21,7 +21,7 @@ interface UseOrderChatRealtimeOptions {
   onMessages: (messages: ChatMessage[]) => void;
   onRead: (payload: ReadReceiptPayload) => void;
   onOrderEvent?: (event: OrderLifecycleEvent, payload: { orderId: string; newStatus?: string }) => void;
-  /** Play a ding when the other participant sends a message (customer side). */
+  /** Allow sound on the first click (the chat plays a ding for incoming messages). */
   soundOnIncoming?: boolean;
 }
 
@@ -90,15 +90,6 @@ export function useOrderChatRealtime({
       onOrderEvent: (event, payload) => cb.current.onOrderEvent?.(event, payload),
       onState: setState,
       onIncoming: (message) => {
-        // Ding for a message from the other participant, chat open or not.
-        if (
-          cb.current.soundOnIncoming &&
-          message.senderId &&
-          message.senderId !== cb.current.currentUserId &&
-          message.messageType === "text"
-        ) {
-          playMessageSound();
-        }
         // A message from the other participant arrived while the chat is open:
         // a debounced catch-up marks it read on the server (which broadcasts
         // the read receipt to the sender) and double-checks consistency.

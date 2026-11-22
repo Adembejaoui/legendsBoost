@@ -13,6 +13,7 @@ export type NotificationEventType =
   | "BOOSTER_REASSIGNED"
   | "BOOSTER_REMOVED"
   | "BOOSTER_ABANDONED"
+  | "BOOSTER_CHANGE_REQUESTED"
   | "NEW_MESSAGE"
   | "SUPPORT_REPLY"
   | "SUPPORT_STATUS_UPDATED"
@@ -87,6 +88,7 @@ export interface NotificationRecipientRule {
 const NOTIFICATION_STORED_AS = {
   ORDER_PAUSED_BY_CUSTOMER: "ORDER_PROGRESS_UPDATED",
   ORDER_RESUMED_BY_CUSTOMER: "ORDER_PROGRESS_UPDATED",
+  BOOSTER_CHANGE_REQUESTED: "BOOSTER_REASSIGNED",
 } as const;
 
 /** Event types that exist as database NotificationType values. */
@@ -113,6 +115,7 @@ export const NOTIFICATION_TITLES: Record<NotificationEventType, string> = {
   BOOSTER_REASSIGNED: "Booster Reassigned",
   BOOSTER_REMOVED: "Booster Removed",
   BOOSTER_ABANDONED: "Booster Abandoned Order",
+  BOOSTER_CHANGE_REQUESTED: "Booster Change Requested",
   NEW_MESSAGE: "New Message",
   SUPPORT_REPLY: "Support Reply",
   SUPPORT_STATUS_UPDATED: "Support Ticket Status Updated",
@@ -138,8 +141,8 @@ export const NOTIFICATION_TITLES: Record<NotificationEventType, string> = {
   REVIEW_RECEIVED: "New Review",
   TIP_RECEIVED: "You Got A Tip",
   ACCOUNT_DELETION_REQUESTED: "Account Deletion Requested",
-  COMPLETION_REVIEW: "Completion Needs Review",
-  COMPLETION_SUBMITTED: "Confirm Your Order",
+  COMPLETION_REVIEW: "Completion To Review",
+  COMPLETION_SUBMITTED: "Your Order Is Done",
   COMPLETION_DISPUTED: "Completion Disputed",
   COMPLETION_SENT_BACK: "Order Sent Back",
   PROGRESS_UPDATE_DUE: "Update The Rank",
@@ -166,6 +169,8 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
   BOOSTER_REASSIGNED: (meta) => `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} has been reassigned to a new booster.`,
   BOOSTER_REMOVED: (meta) => `The booster has been removed from order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
   BOOSTER_ABANDONED: (meta) => `The booster has abandoned order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
+  BOOSTER_CHANGE_REQUESTED: (meta) =>
+    `The customer of order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} asked for a different booster. Open the order to decide.`,
   NEW_MESSAGE: (meta) => `New message from ${meta?.senderName ?? "the other party"} on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}.`,
   SUPPORT_REPLY: (meta) => `New reply on your support ticket "${meta?.ticketSubject ?? ""}".`,
   SUPPORT_STATUS_UPDATED: (meta) => `Your support ticket "${meta?.ticketSubject ?? ""}" status changed to ${meta?.newStatus ?? ""}.`,
@@ -202,9 +207,9 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
   GAME_ANOMALY: (meta) =>
     `A ranked game was played on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} ${meta?.playedBy === "PAUSED" ? "while the order was paused" : "outside a booster session"}.`,
   COMPLETION_REVIEW: (meta) =>
-    `The booster marked order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} as complete but it could not be confirmed (${String(meta?.reason ?? "check needed")}). Contact the booster.`,
+    `The booster sent the completion screenshots for order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. Check them and mark the order Completed.`,
   COMPLETION_SUBMITTED: (meta) =>
-    `Your booster finished order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. Check the proof and confirm, or report a problem. It confirms automatically after ${String(meta?.hours ?? 72)} hours.`,
+    `Your booster finished order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. See the screenshots on your order page; our team is checking them. Something wrong? Report a problem.`,
   COMPLETION_DISPUTED: (meta) =>
     `The customer reported a problem with the completion of order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""}. An admin will review it.`,
   COMPLETION_SENT_BACK: (meta) =>

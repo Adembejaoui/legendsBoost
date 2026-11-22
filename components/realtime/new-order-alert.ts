@@ -163,3 +163,12 @@ export function playMessageSound(): void {
     /* sound is best effort */
   }
 }
+
+/** Admin alert (booster change request, booster abandoned): the two-note chime only. Never throws. */
+export function playAlertSound(): void {
+  try {
+    if (unlocked) chime();
+  } catch {
+    /* sound is best effort */
+  }
+}

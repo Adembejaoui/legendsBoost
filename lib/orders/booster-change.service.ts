@@ -15,7 +15,7 @@ import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { releaseAssignment } from "@/lib/assignments/service";
-import { enqueueOutbox, notifyAdmins, dispatchOutbox } from "@/lib/payments/outbox";
+import { enqueueOutbox, dispatchOutbox } from "@/lib/payments/outbox";
 
 export class BoosterChangeError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -27,11 +27,13 @@ export class BoosterChangeError extends Error {
 /** Assignment statuses in which a booster holds the order. */
 export const HELD_ASSIGNMENT_STATUSES = ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED"] as const;
 
+/** Optional since 2026-11-22 (client PDF): the customer may leave it empty. */
 export const boosterChangeReasonSchema = z
   .string()
   .trim()
-  .min(10, "Please explain why (10 characters minimum).")
-  .max(1000, "Please keep it under 1000 characters.");
+  .max(1000, "Please keep it under 1000 characters.")
+  .optional()
+  .transform((v) => v || "No reason given");
 
 export async function requestBoosterChange(customerId: string, orderId: string, rawReason: unknown) {
   const parsed = boosterChangeReasonSchema.safeParse(rawReason);
@@ -59,7 +61,13 @@ export async function requestBoosterChange(customerId: string, orderId: string, 
       await tx.orderEvent.create({
         data: { orderId, type: "BOOSTER_CHANGE_REQUESTED", message: "Customer asked for a different booster", metadata: { requestId: created.id } },
       });
-      await enqueueOutbox(tx, [notifyAdmins(`booster-change:${created.id}`, "a customer asked for a different booster", orderId, customerId)]);
+      await enqueueOutbox(tx, [
+        {
+          type: "NOTIFY",
+          dedupeKey: `booster-change:${created.id}`,
+          payload: { notification: "BOOSTER_CHANGE_REQUESTED", recipients: "ADMINS", orderId, actorId: customerId },
+        },
+      ]);
       return created;
     });
     await dispatchOutbox({ limit: 5 });

@@ -19,6 +19,7 @@ import {
 } from "@/lib/chat/message-sync";
 import type { ChatConnectionState, OrderLifecycleEvent } from "@/lib/chat/realtime-sync";
 import { useOrderChatRealtime } from "./useOrderChatRealtime";
+import { playMessageSound } from "@/components/realtime/new-order-alert";
 
 interface OrderChatProps {
   orderId: string;
@@ -67,6 +68,7 @@ export function OrderChat({
   currentUserImage,
   initialMessages,
   isCustomer,
+  isBooster,
   participant,
   fill = false,
   onOrderEvent,
@@ -95,16 +97,15 @@ export function OrderChat({
   // ------------------------------------------------------------ realtime
   const handleIncoming = useCallback(
     (incoming: ChatMessage[]) => {
-      if (!nearBottomRef.current) {
-        const known = new Set(messagesRef.current.map((m) => m.id));
-        const fresh = incoming.filter(
-          (m) => !known.has(m.id) && m.senderId !== currentUserId
-        ).length;
-        if (fresh) setUnseenCount((c) => c + fresh);
-      }
+      const known = new Set(messagesRef.current.map((m) => m.id));
+      const fresh = incoming.filter((m) => !known.has(m.id) && m.senderId && m.senderId !== currentUserId);
+      if (!nearBottomRef.current && fresh.length) setUnseenCount((c) => c + fresh.length);
+      // Client PDFs 2026-11-22: customer and booster each hear a ding when the
+      // other writes, chat open or not, live or caught up after a reconnect.
+      if ((isCustomer || isBooster) && fresh.some((m) => m.messageType === "text")) playMessageSound();
       setMessages((prev) => mergeMessages(prev, incoming));
     },
-    [currentUserId]
+    [currentUserId, isCustomer, isBooster]
   );
 
   const { connectionState, resync } = useOrderChatRealtime({
@@ -112,7 +113,7 @@ export function OrderChat({
     currentUserId,
     getCursor: () => latestConfirmedTimestamp(messagesRef.current),
     onMessages: handleIncoming,
-    soundOnIncoming: isCustomer,
+    soundOnIncoming: isCustomer || isBooster,
     onRead: (p) => {
       if (p.readerId === currentUserId) return;
       setMessages((prev) => applyReadReceipt(prev, p.messageIds, p.readAt));

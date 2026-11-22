@@ -38,7 +38,7 @@ export const faqAC: Record<string, FaqItem[]> = {
     {
       question: 'What if I am not happy with the result?',
       answer:
-        'When your booster finishes, you get screenshots of the final rank. Confirm the result, or report a problem and our team will review it. You can also request a cancellation; approved requests are refunded for the part that was not done.',
+        'When your booster finishes, the screenshots of the final rank appear on your order page and our team checks them before marking the order Completed. If something is wrong, report a problem and our team will review it.',
     },
   ],
   'league-of-legends:arena-boost': [
@@ -65,7 +65,7 @@ export const faqAC: Record<string, FaqItem[]> = {
     {
       question: 'What happens when the wins are done?',
       answer:
-        'Your booster completes the order with screenshots. You confirm the result or report a problem to our team. Without an answer, the order confirms automatically after 72 hours.',
+        'Your booster completes the order with screenshots, which you see on your order page. Our team checks them and marks the order Completed. If something is wrong, report a problem.',
     },
   ],
 }

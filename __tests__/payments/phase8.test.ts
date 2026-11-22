@@ -32,6 +32,7 @@ import { completeAssignment } from "@/lib/assignments/service";
 import { createReview, ratingSummary, replyToReview, setReviewHidden } from "@/lib/reviews/service";
 import { getPublicBooster, listPublicBoosters } from "@/lib/boosters/public-profile";
 import { createTipCheckout, splitTip } from "@/lib/tips/service";
+import { getOrderWorkspace } from "@/lib/orders/workspace-data";
 
 let prisma: Awaited<ReturnType<typeof getTestPrisma>>;
 let admin: { id: string };
@@ -124,7 +125,16 @@ describe("tips", () => {
     expect(splitTip(333, 5500)).toEqual({ boosterAmount: 183, platformFeeAmount: 150 });
   });
 
-  it("only on a completed order, within limits", async () => {
+  it("while the order is Processing, to the booster holding it (client PDF 2026-11-22)", async () => {
+    const b = await seedUser("BOOSTER");
+    const { orderId } = await createPaidOrder(customer.id);
+    await claimAndStart(orderId, b.id);
+    const r = await createTipCheckout(customer.id, orderId, 500);
+    expect(r.url).toBeTruthy();
+    expect(await prisma.orderTip.findUniqueOrThrow({ where: { id: r.tipId } })).toMatchObject({ boosterId: b.id, amount: 500 });
+  });
+
+  it("only once a booster has the order (Processing or Completed), within limits", async () => {
     const { orderId: open } = await createPaidOrder(customer.id);
     await expect(createTipCheckout(customer.id, open, 500)).rejects.toMatchObject({ status: 409 });
     const { orderId } = await completedOrder();
@@ -179,5 +189,19 @@ describe("tips", () => {
       })
     );
     expect((await prisma.orderTip.findUniqueOrThrow({ where: { id: tipId } })).status).toBe("PENDING");
+  });
+});
+
+describe("account details after completion (client PDF 2026-11-22)", () => {
+  it("the booster no longer gets the Riot ID or the OP.GG link once the order is Completed; the customer still does", async () => {
+    const { booster, orderId } = await completedOrder();
+    await prisma.orderRiotAccount.create({ data: { orderId, gameName: "Faker", tagLine: "KR1", platform: "kr" } });
+    const asBooster = await getOrderWorkspace(orderId, { id: booster.id, role: "BOOSTER" } as any);
+    expect(asBooster).not.toBeNull();
+    expect(asBooster!.riot.account).toBeNull();
+    expect(asBooster!.updates.selfCheck).toBeNull();
+    expect(JSON.stringify(asBooster)).not.toContain("Faker");
+    const asCustomer = await getOrderWorkspace(orderId, { id: customer.id, role: "CUSTOMER" } as any);
+    expect(asCustomer!.riot.account).toMatchObject({ gameName: "Faker", tagLine: "KR1" });
   });
 });

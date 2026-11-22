@@ -2,6 +2,20 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-22 · How orders work: admin completion, Frozen payout, alerts, sounds
+
+Client PDFs "How orders work", "Booster / Admin / Customer dashboard changes". Decisions: the 72 h auto-confirm is removed (admin only); the admin's Completed releases the payout at once; "customer abandons" = Change booster without a reason; admin alerts open the admin order editor; tips while Processing and after completion; the customer can still report a problem; a booster who leaves an order loses its payout from Frozen (the admin can split it as before); "Processing" everywhere.
+
+- **Processing:** claimed and in-progress orders show as Processing for everyone; orders with screenshots show as Waiting for review. The customer's Active tab now includes them.
+- **Completion:** the booster sends 1-3 screenshots; the customer sees them on the order page (and still after completion) and can report a problem; admins get a notification and decide on the Completions page or in the order editor (**Mark Completed** / Send back). The customer's Confirm button, the 72 h auto-confirm job (now a no-op) and Riot auto-completion are gone. The order page switches to Completed live.
+- **Booster money:** Frozen = the payout of every claimed order until the admin's Completed, plus completed earnings still held; Mark Completed releases the earning to Available at once (an open dispute or pending refund still keeps it for Finance). The third card is now **Waiting for review** (orders sent with screenshots).
+- **Account details:** once an order is Completed the booster no longer receives the customer's Riot ID or OP.GG link (server side, also on reopen).
+- **Tip:** allowed while the order is Processing (to the booster holding it) and after completion.
+- **Change booster:** the reason is optional ("No reason given").
+- **Admin alert:** a pop-up with a sound on every admin page when a customer asks for a different booster or a booster abandons; **Open order** goes to the admin order editor, which now has an **Order actions** panel (booster, change request approve/reject, completion screenshots with Mark Completed / Send back). Admin notification clicks open the editor too.
+- **Chat sound:** customer and booster both hear a ding for each new message from the other, live or caught up after a reconnect (the old ding only fired for live pushes, so it could be missed); on other dashboard pages too.
+- Emails, notifications and FAQ texts no longer mention confirming or the 72 hours.
+
 ## 2026-11-21 · Customer dashboard: header buttons, poke, booster change, chat sound
 
 Client PDF "Customer dashboard changes". Decisions: Change Booster is reviewed by an admin; Tip stays for completed orders; Poke at most once per hour; the four buttons are always shown, greyed out with a hint when they do not apply.

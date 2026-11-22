@@ -11,7 +11,6 @@ import { closeStaleCheckoutHolds } from "@/lib/payments/checkout.service";
 import { closeDueBidding } from "@/lib/pool/service";
 import { runInactivityWarnings, runSlaWarnings } from "@/lib/pool/sla";
 import { purgeOldTrackerData } from "@/lib/services/games/league-of-legends/retention";
-import { autoConfirmDue } from "@/lib/orders/completion-request.service";
 import { runProgressReminders } from "@/lib/orders/progress-updates.service";
 import { acquireLease, releaseLease, type RawDb } from "./lease";
 
@@ -42,10 +41,10 @@ export const JOBS: Record<string, JobDefinition> = {
     leaseMs: 4 * 60_000,
     run: async () => ({ ...(await runSlaWarnings()), ...(await runInactivityWarnings()), ...(await runProgressReminders()) }),
   },
-  /** Confirm completions the customer did not answer within auto_confirm_hours. */
+  /** Removed 2026-11-22: an admin completes every order (kept so old cron calls answer). */
   "auto-confirm": {
-    leaseMs: 4 * 60_000,
-    run: async () => autoConfirmDue(),
+    leaseMs: 60_000,
+    run: async () => ({ skipped: "completions are decided by an admin" }),
   },
   /** Delete match and rank history N days after an order ends (config match_retention_days). */
   "tracker-retention": {

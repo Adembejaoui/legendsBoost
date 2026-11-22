@@ -2,8 +2,9 @@
 /**
  * Tips (Phase 8, decisions 2026-11-16).
  *
- *  - The customer of a COMPLETED order tips its booster through Stripe
- *    Checkout (1 to 500 in the order currency).
+ *  - The customer tips the booster through Stripe Checkout (1 to 500 in the
+ *    order currency): while the order is Processing (the booster holding it,
+ *    client PDF 2026-11-22) or once it is COMPLETED (the booster who completed it).
  *  - Split like an order (same commission policy): platform commission +
  *    booster share. Ledger on payment: CUSTOMER_PAYMENTS = PLATFORM_REVENUE +
  *    BOOSTER_PAYABLE. The booster share becomes a PENDING earning, released by
@@ -39,6 +40,11 @@ export function splitTip(amount: number, boosterShareBps: number) {
   return { boosterAmount, platformFeeAmount: amount - boosterAmount };
 }
 
+/** Order statuses in which the customer can tip (Processing and Completed). */
+export const TIPPABLE_ORDER = ["CLAIMED", "IN_PROGRESS", "PAUSED", "AWAITING_CONFIRMATION", "COMPLETED"] as const;
+/** Assignment statuses of the booster holding a Processing order. */
+const TIPPABLE_ASSIGNMENT = ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] as const;
+
 export async function createTipCheckout(customerId: string, orderId: string, amount: number): Promise<{ url: string; tipId: string }> {
   if (!Number.isSafeInteger(amount) || amount < TIP_MIN || amount > TIP_MAX) {
     throw new TipError(`Choose a tip between ${TIP_MIN / 100} and ${TIP_MAX / 100}.`, 400);
@@ -50,12 +56,20 @@ export async function createTipCheckout(customerId: string, orderId: string, amo
       status: true,
       currency: true,
       pricingSnapshot: { select: { currency: true } },
-      assignments: { where: { status: "COMPLETED" }, select: { boosterId: true } },
+      assignments: {
+        where: { status: { in: ["COMPLETED", ...TIPPABLE_ASSIGNMENT] } },
+        select: { boosterId: true, status: true },
+      },
     },
   });
   if (!order || order.userId !== customerId) throw new TipError("Order not found.", 404);
-  if (order.status !== "COMPLETED") throw new TipError("You can tip once the order is completed.", 409);
-  const boosterId = order.assignments[0]?.boosterId;
+  if (!(TIPPABLE_ORDER as readonly string[]).includes(order.status)) {
+    throw new TipError("You can tip once a booster is working on your order.", 409);
+  }
+  const boosterId =
+    order.status === "COMPLETED"
+      ? order.assignments.find((a) => a.status === "COMPLETED")?.boosterId
+      : order.assignments.find((a) => (TIPPABLE_ASSIGNMENT as readonly string[]).includes(a.status))?.boosterId;
   if (!boosterId) throw new TipError("This order has no booster to tip.", 409);
   const policy = await getActiveCommissionPolicy();
   if (!policy) throw new TipError("Tips are not available right now.", 503);

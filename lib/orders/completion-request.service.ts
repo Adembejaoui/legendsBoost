@@ -1,21 +1,22 @@
 // Server-only module.
 /**
- * Completion with proof + customer confirmation (decision 2026-11-16).
+ * Completion with proof, decided by an admin (client PDFs 2026-11-22; the
+ * customer confirmation and the 72 h auto-confirm are gone).
  *
  *   booster "Complete" + 1-3 end screenshots
- *     -> Riot confirms the target (LoL, approved key)  -> COMPLETED (RIOT_CONFIRMED)
- *     -> otherwise: order AWAITING_CONFIRMATION, assignment SUBMITTED
- *          customer "Confirm"                         -> COMPLETED (CONFIRMED)
- *          no answer within auto_confirm_hours (72)    -> COMPLETED (AUTO_CONFIRMED, job)
- *          customer "Report a problem"                 -> request DISPUTED, admins decide:
- *              admin "Complete"                        -> COMPLETED (ADMIN_ACCEPTED)
- *              admin "Send back"                       -> order IN_PROGRESS, assignment IN_PROGRESS
+ *     -> order AWAITING_CONFIRMATION ("waiting for review"), assignment SUBMITTED;
+ *        the customer sees the screenshots on the order page, admins are told
+ *          customer "Report a problem" (optional)  -> request DISPUTED (shown to the admin)
+ *          admin "Complete"                        -> COMPLETED (ADMIN_ACCEPTED); the
+ *                                                     booster's payout becomes AVAILABLE
+ *          admin "Send back"                       -> order IN_PROGRESS, assignment IN_PROGRESS
  *
  * While waiting, the booster keeps the workspace and chat (activeOrderId is
  * kept) but has no login access (credentials need IN_PROGRESS) and the
  * order does not count toward their order limit (SUBMITTED is not active).
- * Booster earnings follow the normal completion (allocated, then released
- * by an admin).
+ * Booster earnings: allocated at completion and released at once when the
+ * admin completes (single booster, no dispute, no pending refund); otherwise
+ * they wait for an admin in Finance.
  */
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -26,6 +27,7 @@ import { enqueueOutbox, dispatchOutbox } from "@/lib/payments/outbox";
 import { broadcastToOrder } from "@/lib/realtime/broadcast";
 import { afterOrderCompleted, closeSessions, completeOrderInTx, verifyBoosterEligibility } from "@/lib/assignments/service";
 import { proofPath, proofStore, validateProofFiles } from "@/lib/storage/order-proofs";
+import { approveEarning } from "@/lib/finance/earnings";
 
 export class CompletionFlowError extends Error {
   constructor(message: string, public readonly status = 409) {
@@ -69,7 +71,7 @@ export async function submitCompletion(p: {
   note?: string | null;
   /** Tests: override the Riot check. */
   riotCheck?: (orderId: string) => Promise<boolean>;
-}): Promise<{ requestId: string; status: "PENDING" | "RIOT_CONFIRMED"; autoConfirmAt: Date }> {
+}): Promise<{ requestId: string; status: "PENDING"; autoConfirmAt: Date }> {
   await verifyBoosterEligibility(p.boosterId);
   const note = p.note?.trim() ? p.note.trim().slice(0, 1000) : null;
 
@@ -99,6 +101,7 @@ export async function submitCompletion(p: {
     throw e;
   }
 
+  // Riot never completes an order on its own any more; the result is only recorded for the admin.
   const riotOk = await (p.riotCheck ?? riotConfirms)(p.orderId);
 
   let request: { id: string; customerId: string };
@@ -131,16 +134,19 @@ export async function submitCompletion(p: {
           metadata: { assignmentId: p.assignmentId, requestId: req.id, riotConfirmed: riotOk },
         },
       });
-      if (!riotOk) {
-        await enqueueOutbox(tx, [
-          {
-            type: "NOTIFY",
-            dedupeKey: `completion-submitted:${req.id}`,
-            payload: { notification: "COMPLETION_SUBMITTED", recipients: [order.userId], orderId: p.orderId, actorId: p.boosterId, metadata: { hours } },
-          },
-          { type: "EMAIL_COMPLETION_SUBMITTED", dedupeKey: `completion-submitted-email:${req.id}`, payload: { requestId: req.id } },
-        ]);
-      }
+      await enqueueOutbox(tx, [
+        {
+          type: "NOTIFY",
+          dedupeKey: `completion-submitted:${req.id}`,
+          payload: { notification: "COMPLETION_SUBMITTED", recipients: [order.userId], orderId: p.orderId, actorId: p.boosterId },
+        },
+        {
+          type: "NOTIFY",
+          dedupeKey: `completion-review:${req.id}`,
+          payload: { notification: "COMPLETION_REVIEW", recipients: "ADMINS", orderId: p.orderId, actorId: p.boosterId },
+        },
+        { type: "EMAIL_COMPLETION_SUBMITTED", dedupeKey: `completion-submitted-email:${req.id}`, payload: { requestId: req.id } },
+      ]);
       return { id: req.id, customerId: order.userId };
     });
   } catch (e) {
@@ -153,11 +159,6 @@ export async function submitCompletion(p: {
 
   // The booster stops playing: end the open play session.
   await closeSessions(p.orderId, "COMPLETED");
-
-  if (riotOk) {
-    await finalizeCompletion(request.id, "RIOT_CONFIRMED", p.boosterId);
-    return { requestId: request.id, status: "RIOT_CONFIRMED", autoConfirmAt };
-  }
 
   await dispatchOutbox({ limit: 5 });
   await broadcastToOrder({
@@ -216,7 +217,24 @@ export async function finalizeCompletion(requestId: string, outcome: Outcome, ac
     previousStatus: "AWAITING_CONFIRMATION",
     completedAt: result.completedAt,
   });
+  if (outcome === "ADMIN_ACCEPTED") await releaseCompletedPayout(result.orderId, actorId);
   return { orderId: result.orderId, outcome };
+}
+
+/**
+ * Admin completed the order: the booster's payout goes from Frozen to
+ * Available at once (client PDF 2026-11-22). Uses the normal release, so an
+ * open dispute or a pending refund still keeps it for an admin in Finance.
+ */
+async function releaseCompletedPayout(orderId: string, adminId: string) {
+  const pending = await prisma.boosterEarning.findMany({ where: { orderId, status: "PENDING" }, select: { id: true } });
+  for (const e of pending) {
+    try {
+      await approveEarning(adminId, e.id);
+    } catch (err) {
+      logger.warn("Completion: payout not released automatically", { orderId, earningId: e.id, error: err instanceof Error ? err.message : "unknown" });
+    }
+  }
 }
 
 async function openRequestFor(orderId: string) {
@@ -229,12 +247,6 @@ async function openRequestFor(orderId: string) {
 /* ------------------------------------------------------------------ */
 /* Customer                                                            */
 /* ------------------------------------------------------------------ */
-
-export async function confirmByCustomer(orderId: string, customerId: string) {
-  const req = await openRequestFor(orderId);
-  if (!req || req.order.userId !== customerId) throw new CompletionFlowError("There is nothing to confirm on this order.", 404);
-  return finalizeCompletion(req.id, "CONFIRMED", customerId);
-}
 
 export async function disputeByCustomer(orderId: string, customerId: string, reason: string) {
   const text = reason.trim();
@@ -328,32 +340,6 @@ export async function adminSendBack(requestId: string, adminId: string, note: st
     },
   });
   return { orderId: r.orderId };
-}
-
-/* ------------------------------------------------------------------ */
-/* Job                                                                 */
-/* ------------------------------------------------------------------ */
-
-/** Confirm pending completions whose customer did not answer in time. */
-export async function autoConfirmDue(now = new Date(), limit = 50) {
-  const due = await prisma.orderCompletionRequest.findMany({
-    where: { status: "PENDING", autoConfirmAt: { lte: now } },
-    orderBy: { autoConfirmAt: "asc" },
-    take: limit,
-    select: { id: true },
-  });
-  let confirmed = 0;
-  let failed = 0;
-  for (const r of due) {
-    try {
-      await finalizeCompletion(r.id, "AUTO_CONFIRMED", "system");
-      confirmed++;
-    } catch (e) {
-      failed++;
-      logger.warn("Auto-confirm failed", { requestId: r.id, error: e instanceof Error ? e.message : "unknown" });
-    }
-  }
-  return { due: due.length, confirmed, failed };
 }
 
 /* ------------------------------------------------------------------ */

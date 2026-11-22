@@ -20,9 +20,11 @@ interface Notification {
 
 interface NotificationBellProps {
   initialUnreadCount?: number;
+  /** Admins open orders in the admin order editor. */
+  isAdmin?: boolean;
 }
 
-export function NotificationBell({ initialUnreadCount = 0 }: NotificationBellProps) {
+export function NotificationBell({ initialUnreadCount = 0, isAdmin = false }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +104,7 @@ export function NotificationBell({ initialUnreadCount = 0 }: NotificationBellPro
       handleMarkAsRead(notification.id);
     }
     if (notification.orderId) {
-      window.location.assign(`/dashboard/${notification.orderId}`);
+      window.location.assign(isAdmin ? `/dashboard/admin/orders/${notification.orderId}` : `/dashboard/${notification.orderId}`);
     }
     setIsOpen(false);
   };

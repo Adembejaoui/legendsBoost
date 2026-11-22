@@ -197,9 +197,9 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
       const pending = (body.completion as { status?: string } | undefined)?.status === "PENDING";
       toast({
         type: "success",
-        title: pending ? "Sent to the customer" : "Order completed",
+        title: pending ? "Sent for review" : "Order completed",
         description: pending
-          ? "The customer confirms the result, or it confirms automatically. Stop playing on the account."
+          ? "The customer sees your screenshots; an admin marks the order Completed. Stop playing on the account."
           : "The order has been marked as complete.",
       });
       setProofs([]);
@@ -249,7 +249,7 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
         className={cn(btn, outline)}
         onClick={() => open("tip")}
         disabled={!canTip || busy !== null}
-        title={canTip ? "Send a tip to your booster" : "You can tip once the order is completed"}
+        title={canTip ? "Send a tip to your booster" : "You can tip once a booster is working on your order"}
       >
         <Coins className="size-4" /> Tip
       </button>,
@@ -427,7 +427,7 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
           }
           onClose={() => setDialog(null)}
         >
-          <p>The tip goes to the booster who completed your order. You pay it securely with Stripe.</p>
+          <p>The tip goes to your booster. You pay it securely with Stripe.</p>
           <div className="flex flex-wrap items-center gap-2">
             {TIP_PRESETS.map((a) => (
               <button
@@ -466,7 +466,6 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
           busyLabel="Sending…"
           cancelLabel="Keep my booster"
           busy={busy === "booster-change"}
-          confirmDisabled={reason.trim().length < 10}
           error={error}
           onConfirm={() =>
             void run("booster-change", async () => {
@@ -482,12 +481,10 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
             takes over and your progress is kept.
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs text-zinc-400">Why do you want a different booster? (required)</span>
+            <span className="mb-1 block text-xs text-zinc-400">Why do you want a different booster? (optional)</span>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              required
-              minLength={10}
               maxLength={1000}
               rows={3}
               className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-[var(--g-accent)]/50"
@@ -501,7 +498,7 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
           <ConfirmDialog
             open={dialog === "complete"}
             title={viewer.role === "admin" ? "Mark this order as complete?" : "Complete this order"}
-            confirmLabel={viewer.role === "admin" ? "Complete order" : "Send to the customer"}
+            confirmLabel={viewer.role === "admin" ? "Complete order" : "Send for review"}
             busyLabel={viewer.role === "admin" ? "Completing…" : "Uploading…"}
             cancelLabel="Keep working"
             busy={busy === "complete"}
@@ -515,9 +512,8 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
             ) : (
               <>
                 <p>
-                  Add 1 to {MAX_PROOFS} screenshots that clearly show the <b>final rank</b> (profile or ranked screen). The
-                  customer checks them and confirms; without an answer the order confirms automatically after{" "}
-                  {data.completion.autoConfirmHours} hours.
+                  Add 1 to {MAX_PROOFS} screenshots that clearly show the <b>final result</b> (profile or ranked screen). The
+                  customer sees them on the order page and an admin checks them, then marks the order Completed.
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   {previews.map((src, i) => (

@@ -16,7 +16,7 @@ const TONE: Record<BoardTone, string> = {
 const COLUMNS = [
   { status: "PENDING", title: "Waiting in the pool", hint: "amber after 30 min, red after 2 h" },
   { status: "CLAIMED", title: "Taken, not started", hint: "amber after 30 min, red after 60 min" },
-  { status: "IN_PROGRESS", title: "In progress", hint: "red when inactive (no games or messages)" },
+  { status: "IN_PROGRESS", title: "Processing", hint: "red when inactive (no games or messages)" },
   { status: "PAUSED", title: "Paused by the customer", hint: "" },
 ];
 

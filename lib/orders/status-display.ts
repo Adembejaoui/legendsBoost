@@ -17,20 +17,20 @@ export const ORDER_STATUS_CONFIG: Record<OrderStatusValue, OrderStatusConfig> = 
     icon: () => null,
   },
   [$Enums.OrderStatus.CLAIMED]: {
-    label: "Booster assigned",
+    label: "Processing",
     description: "A booster has taken this order and will start shortly.",
     color: "active",
     icon: () => null,
   },
   [$Enums.OrderStatus.IN_PROGRESS]: {
-    label: "In progress",
+    label: "Processing",
     description: "A booster is actively working on this order.",
     color: "active",
     icon: () => null,
   },
   [$Enums.OrderStatus.AWAITING_CONFIRMATION]: {
-    label: "Awaiting confirmation",
-    description: "The booster finished the order. The customer confirms the result, or it confirms automatically after 72 hours.",
+    label: "Waiting for review",
+    description: "The booster sent the completion screenshots. Our team checks them and marks the order Completed.",
     color: "active",
     icon: () => null,
   },
@@ -72,7 +72,7 @@ export const STATUS_TABS: Array<{
   statuses: OrderStatusValue[];
 }> = [
   { key: "all", label: "All orders", statuses: [] },
-  { key: "active", label: "Active", statuses: [$Enums.OrderStatus.PENDING, $Enums.OrderStatus.IN_PROGRESS, $Enums.OrderStatus.PAUSED] },
+  { key: "active", label: "Active", statuses: [$Enums.OrderStatus.PENDING, $Enums.OrderStatus.CLAIMED, $Enums.OrderStatus.IN_PROGRESS, $Enums.OrderStatus.PAUSED, $Enums.OrderStatus.AWAITING_CONFIRMATION] },
   { key: "completed", label: "Completed", statuses: [$Enums.OrderStatus.COMPLETED] },
   { key: "cancelled", label: "Cancelled", statuses: [$Enums.OrderStatus.CANCELLED] },
 ];

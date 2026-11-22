@@ -19,7 +19,7 @@ interface Notification {
   metadata?: Record<string, unknown>;
 }
 
-export default function NotificationCenter() {
+export default function NotificationCenter({ isAdmin = false }: { isAdmin?: boolean }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -82,7 +82,7 @@ export default function NotificationCenter() {
       handleMarkAsRead(notification.id);
     }
     if (notification.orderId) {
-      window.location.assign(`/dashboard/${notification.orderId}`);
+      window.location.assign(isAdmin ? `/dashboard/admin/orders/${notification.orderId}` : `/dashboard/${notification.orderId}`);
     }
   };
 

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { guardWorkspace } from "@/lib/orders/workspace-guard";
-import { confirmByCustomer, disputeByCustomer } from "@/lib/orders/completion-request.service";
+import { disputeByCustomer } from "@/lib/orders/completion-request.service";
 
-const Body = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("confirm") }),
-  z.object({ action: z.literal("dispute"), reason: z.string().min(10).max(1000) }),
-]);
+const Body = z.object({ action: z.literal("dispute"), reason: z.string().min(10).max(1000) });
 
-/** Customer answers a completion: confirm it, or report a problem (an admin decides). */
+/**
+ * Customer reports a problem with a completion (an admin decides). There is
+ * no customer confirmation any more: an admin marks the order Completed.
+ */
 export async function POST(req: Request, { params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
   const g = await guardWorkspace(orderId);
@@ -20,10 +20,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
     return NextResponse.json({ error: "Tell us what is wrong (at least 10 characters)." }, { status: 400 });
   }
   try {
-    if (parsed.data.action === "confirm") {
-      await confirmByCustomer(orderId, g.user.id);
-      return NextResponse.json({ ok: true, status: "COMPLETED" });
-    }
     await disputeByCustomer(orderId, g.user.id, parsed.data.reason);
     return NextResponse.json({ ok: true, status: "DISPUTED" });
   } catch (e) {

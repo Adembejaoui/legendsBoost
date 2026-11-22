@@ -23,18 +23,18 @@ interface Assignment {
 const TABS = [
   { id: "all", label: "All", status: null },
   { id: "to-start", label: "To start", status: "ASSIGNED" },
-  { id: "in-progress", label: "In progress", status: "IN_PROGRESS" },
+  { id: "in-progress", label: "Processing", status: "IN_PROGRESS" },
   { id: "paused", label: "Paused", status: "PAUSED" },
-  { id: "submitted", label: "Awaiting confirmation", status: "SUBMITTED" },
+  { id: "submitted", label: "Waiting for review", status: "SUBMITTED" },
   { id: "completed", label: "Completed", status: "COMPLETED" },
   { id: "cancelled", label: "Cancelled", status: "CANCELLED" },
 ] as const;
 
 const STATUS_STYLES: Record<string, { label: string; text: string; bg: string; dot: string }> = {
   ASSIGNED: { label: "To start", text: "text-violet-300", bg: "bg-violet-300/10", dot: "bg-violet-300" },
-  IN_PROGRESS: { label: "In progress", text: "text-[#C8AA6E]", bg: "bg-[#C8AA6E]/10", dot: "bg-[#C8AA6E]" },
+  IN_PROGRESS: { label: "Processing", text: "text-[#C8AA6E]", bg: "bg-[#C8AA6E]/10", dot: "bg-[#C8AA6E]" },
   PAUSED: { label: "Paused", text: "text-amber-300", bg: "bg-amber-300/10", dot: "bg-amber-300" },
-  SUBMITTED: { label: "Awaiting confirmation", text: "text-sky-300", bg: "bg-sky-300/10", dot: "bg-sky-300" },
+  SUBMITTED: { label: "Waiting for review", text: "text-sky-300", bg: "bg-sky-300/10", dot: "bg-sky-300" },
   COMPLETED: { label: "Completed", text: "text-emerald-400", bg: "bg-emerald-400/10", dot: "bg-emerald-400" },
   CANCELLED: { label: "Cancelled", text: "text-rose-400", bg: "bg-rose-400/10", dot: "bg-rose-400" },
   DECLINED: { label: "Declined", text: "text-zinc-400", bg: "bg-zinc-400/10", dot: "bg-zinc-500" },

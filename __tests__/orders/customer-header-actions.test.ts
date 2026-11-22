@@ -82,19 +82,20 @@ beforeEach(() => {
 });
 
 describe("Change booster", () => {
-  it("only the owner of an order with a booster can ask, with a reason, once at a time", async () => {
+  it("only the owner of an order with a booster can ask, once at a time; the reason is optional", async () => {
     const { orderId: pending } = await createPaidOrder(customer.id);
     await expect(requestBoosterChange(customer.id, pending, "My booster is not playing at all")).rejects.toMatchObject({ status: 409 });
 
     const { orderId } = await heldOrder();
     await expect(requestBoosterChange(other.id, orderId, "My booster is not playing at all")).rejects.toMatchObject({ status: 404 });
-    await expect(requestBoosterChange(customer.id, orderId, "short")).rejects.toMatchObject({ status: 400 });
+    await expect(requestBoosterChange(customer.id, orderId, "x".repeat(1001))).rejects.toMatchObject({ status: 400 });
     const r = await requestBoosterChange(customer.id, orderId, "My booster is not playing at all");
     expect(r).toMatchObject({ status: "REQUESTED", boosterId: booster.id });
     await expect(requestBoosterChange(customer.id, orderId, "Asking again for a new booster")).rejects.toMatchObject({ status: 409 });
 
     await withdrawBoosterChange(customer.id, orderId);
-    expect((await requestBoosterChange(customer.id, orderId, "Actually yes, a new booster please")).status).toBe("REQUESTED");
+    // Client PDF 2026-11-22: no reason needed.
+    expect(await requestBoosterChange(customer.id, orderId, undefined)).toMatchObject({ status: "REQUESTED", reason: "No reason given" });
   });
 
   it("reject keeps the booster and needs a note; only admins decide, once", async () => {
@@ -141,5 +142,17 @@ describe("Poke booster", () => {
 
     await expect(pokeBooster(customer.id, orderId, new Date(t0.getTime() + 10 * 60_000))).rejects.toMatchObject({ status: 429 });
     await expect(pokeBooster(customer.id, orderId, new Date(t0.getTime() + POKE_COOLDOWN_MS + 1000))).resolves.toBeTruthy();
+  });
+});
+
+describe("admin alert (client PDF 2026-11-22)", () => {
+  it("a booster change request notifies every admin with the order, for the alert and its sound", async () => {
+    const { orderId } = await heldOrder();
+    const r = await requestBoosterChange(customer.id, orderId, undefined);
+    const event = await prisma.outboxEvent.findFirstOrThrow({ where: { dedupeKey: `booster-change:${r.id}` } });
+    expect(event.payload).toMatchObject({ notification: "BOOSTER_CHANGE_REQUESTED", recipients: "ADMINS", orderId });
+    const { NOTIFICATION_TITLES, NOTIFICATION_MESSAGES } = await import("@/lib/notifications/types");
+    expect(NOTIFICATION_TITLES.BOOSTER_CHANGE_REQUESTED).toBe("Booster Change Requested");
+    expect(NOTIFICATION_MESSAGES.BOOSTER_CHANGE_REQUESTED({ orderId })).toMatch(/asked for a different booster/);
   });
 });

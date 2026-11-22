@@ -6,5 +6,5 @@ export default async function NotificationsPage() {
   const ctx = await getDashboardContext();
   if (!ctx) redirect("/login");
 
-  return <NotificationCenter />;
+  return <NotificationCenter isAdmin={ctx.user.role === "ADMIN"} />;
 }

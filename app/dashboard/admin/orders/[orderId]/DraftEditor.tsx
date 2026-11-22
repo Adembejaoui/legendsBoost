@@ -152,7 +152,8 @@ export function DraftEditor(p: DraftEditorProps) {
 
       {!isDraft && (
         <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-200">
-          This order is not a draft. Only draft orders can be edited or republished.
+          The configuration can be edited only when the order is a draft (for example after its booster abandoned it). Use
+          the order actions above for the booster and the completion.
         </p>
       )}
 

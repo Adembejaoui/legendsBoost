@@ -6,6 +6,8 @@ import { getUnreadCount } from "@/lib/notifications/service";
 import { LiveRefresh } from "@/components/realtime/LiveRefresh";
 import { userChannel } from "@/lib/realtime/channel-names";
 import { BoosterNewOrderAlert } from "@/components/realtime/BoosterNewOrderAlert";
+import { AdminOrderAlert } from "@/components/realtime/AdminOrderAlert";
+import { MessageSoundAlert } from "@/components/realtime/MessageSoundAlert";
 import { hasBoosterAccess } from "@/lib/boosters/status";
 import { VerifyEmailBanner } from "@/components/account/VerifyEmailBanner";
 
@@ -35,6 +37,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <LiveRefresh subscriptions={[{ channel: userChannel(ctx.user.id), events: USER_LIVE_EVENTS }]} />
       {/* Boosters: pop-up + sound for new orders on every page. */}
       {showOrderAlert && <BoosterNewOrderAlert />}
+      {/* Admins: pop-up + sound for booster change requests and abandoned orders. */}
+      {ctx.user.role === "ADMIN" && <AdminOrderAlert userId={ctx.user.id} />}
+      {/* Customers and boosters: a ding for chat messages on other pages. */}
+      {ctx.user.role !== "ADMIN" && <MessageSoundAlert userId={ctx.user.id} />}
       {!ctx.user.emailVerified && ctx.user.email && ctx.user.role !== "ADMIN" && <VerifyEmailBanner email={ctx.user.email} />}
       {showWelcomeModal && (
         <BoosterWelcomeModal user={ctx.user} boosterProfile={ctx.boosterProfile} />

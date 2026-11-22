@@ -121,7 +121,7 @@ export function DashboardShell({ role, user, children, initialUnreadCount = 0 }:
                   <span className="text-sm font-medium text-zinc-300">Dashboard</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <NotificationBell initialUnreadCount={initialUnreadCount} />
+                  <NotificationBell initialUnreadCount={initialUnreadCount} isAdmin={role === "ADMIN"} />
                   {user.image ? (
                     <img src={user.image} alt="" className="size-8 rounded-full object-cover" />
                   ) : (
