@@ -156,6 +156,9 @@ export default async function BoosterDashboardPage() {
             <Wallet className="size-4 text-emerald-300" /> Balance
           </div>
           <div className="mt-1 text-2xl font-bold text-white">{money(balances.available)}</div>
+          {Object.keys(balances.finesDue).length > 0 ? (
+            <div className="mt-1 text-xs text-rose-300/80">After {money(balances.finesDue)} in unpaid fines</div>
+          ) : null}
           <div className="mt-1 text-xs text-emerald-200/60 group-hover:text-emerald-200">Ready to cash out →</div>
         </Link>
         <div className="rounded-xl border border-sky-400/25 bg-gradient-to-br from-sky-500/[0.12] to-sky-500/[0.03] p-4">

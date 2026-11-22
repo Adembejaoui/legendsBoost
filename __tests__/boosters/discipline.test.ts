@@ -32,6 +32,7 @@ import { abandonOrder, claimOrder, completeAssignment } from "@/lib/assignments/
 import { getPoolForBooster } from "@/lib/pool/service";
 import { appealFine, decideFineAppeal, issueFine, reverseFine, strikeSummary } from "@/lib/boosters/discipline";
 import { approveEarning } from "@/lib/finance/earnings";
+import { boosterBalances, boosterFinance } from "@/lib/finance/queries";
 import { recordPayoutPaid, approvePayout, rejectPayout, requestPayout } from "@/lib/finance/payouts";
 import { runInactivityWarnings, runSlaWarnings } from "@/lib/pool/sla";
 
@@ -132,6 +133,23 @@ describe("fines", () => {
     expect(sum(ledger, (t) => t.type === "BOOSTER_FINE" && t.account === "PLATFORM_REVENUE")).toBe(1000);
     expect((await strikeSummary(booster.id)).strikes[0]).toMatchObject({ code: "FINE", fineId: fine.id });
     expect(await prisma.notification.count({ where: { userId: booster.id, type: "FINE_ISSUED" } })).toBe(1);
+  });
+
+  it("the Balance card shows what the next payout really pays: earnings minus unpaid fines", async () => {
+    const { booster, orderId } = await boosterWithAvailableEarning();
+    expect(await boosterBalances(booster.id)).toMatchObject({ available: { EUR: SHARE }, finesDue: {} });
+    const fine = await issueFine(admin.id, { boosterId: booster.id, orderId, code: "OTHER", amount: 750, note: "Ignored the role request" });
+    expect(await boosterBalances(booster.id)).toMatchObject({ available: { EUR: SHARE - 750 }, finesDue: { EUR: 750 } });
+    // The cashout page gets the fines too, and both agree with the payout.
+    expect((await boosterFinance(booster.id)).totals).toMatchObject({ available: { EUR: SHARE }, finesDue: { EUR: 750 } });
+    const payout = await requestPayout(booster.id, "EUR");
+    expect(payout.amount).toBe(SHARE - 750);
+    // Once deducted the fine no longer counts; the money is in the payout.
+    expect(await boosterBalances(booster.id)).toMatchObject({ finesDue: {} });
+    // A fine under appeal is not taken off a payout, so it is not shown either.
+    await rejectPayout(admin.id, payout.id, "wrong details");
+    await appealFine(booster.id, fine.id, "I followed the role request, see the chat");
+    expect(await boosterBalances(booster.id)).toMatchObject({ available: { EUR: SHARE }, finesDue: {} });
   });
 
   it("an unpaid fine is taken off the next payout; a rejected payout makes it due again", async () => {

@@ -10,12 +10,28 @@ const add = (m: CurrencyMap, c: string, v: number) => {
   m[c] = (m[c] ?? 0) + v;
 };
 
+/**
+ * Fines the next payout will take off (same rule as finesDueForPayout:
+ * issued or upheld, not yet deducted). Fines under appeal are not counted.
+ */
+async function unpaidFines(boosterId: string): Promise<CurrencyMap> {
+  const rows = await prisma.boosterFine.groupBy({
+    by: ["currency"],
+    where: { boosterId, status: { in: ["ISSUED", "UPHELD"] }, deductedPayoutId: null },
+    _sum: { amount: true },
+  });
+  const m: CurrencyMap = {};
+  for (const r of rows) if (r._sum.amount) m[r.currency] = r._sum.amount;
+  return m;
+}
+
 /** Assignment statuses in which the booster holds an order (claimed until completed). */
 const HELD = ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] as const;
 
 /**
  * Booster dashboard cards (client PDFs 2026-11-22):
- *  - Available: can be cashed out now (AVAILABLE earnings);
+ *  - Available: can be cashed out now (AVAILABLE earnings minus unpaid
+ *    fines, i.e. what the next payout really pays; finesDue lists them);
  *  - Frozen: the payout of every order the booster holds, from the claim
  *    until an admin marks it Completed, plus completed earnings an admin
  *    still has to release (PENDING) or that a dispute froze (ON_HOLD).
@@ -24,7 +40,7 @@ const HELD = ["ASSIGNED", "ACCEPTED", "IN_PROGRESS", "PAUSED", "SUBMITTED"] as c
  * Net of reversals, per currency. The ledger only moves at completion.
  */
 export async function boosterBalances(boosterId: string) {
-  const [rows, held] = await Promise.all([
+  const [rows, held, finesDue] = await Promise.all([
     prisma.boosterEarning.groupBy({
       by: ["status", "currency"],
       where: { boosterId, status: { in: ["AVAILABLE", "ON_HOLD", "PENDING"] } },
@@ -38,6 +54,7 @@ export async function boosterBalances(boosterId: string) {
         order: { select: { currency: true, boosterPayoutAmount: true, pricingSnapshot: { select: { boosterShareAmount: true, currency: true } } } },
       },
     }),
+    unpaidFines(boosterId),
   ]);
   const available: CurrencyMap = {};
   const frozen: CurrencyMap = {};
@@ -45,17 +62,18 @@ export async function boosterBalances(boosterId: string) {
     const net = (r._sum.grossAmount ?? 0) - (r._sum.reversedAmount ?? 0);
     add(r.status === "AVAILABLE" ? available : frozen, r.currency, net);
   }
+  for (const [cur, amount] of Object.entries(finesDue)) add(available, cur, -amount);
   for (const a of held) {
     // Same amount the booster sees on the order page.
     const amount = a.payoutAmount ?? a.order.boosterPayoutAmount ?? a.order.pricingSnapshot?.boosterShareAmount ?? 0;
     add(frozen, a.order.pricingSnapshot?.currency ?? a.order.currency ?? "EUR", amount);
   }
   const waitingForReview = held.filter((a) => a.status === "SUBMITTED").length;
-  return { available, frozen, waitingForReview, activeOrders: held.length - waitingForReview };
+  return { available, frozen, finesDue, waitingForReview, activeOrders: held.length - waitingForReview };
 }
 
 export async function boosterFinance(boosterId: string) {
-  const [earnings, payouts, payable] = await Promise.all([
+  const [earnings, payouts, payable, finesDue] = await Promise.all([
     prisma.boosterEarning.findMany({
       where: { boosterId },
       orderBy: { createdAt: "desc" },
@@ -64,6 +82,7 @@ export async function boosterFinance(boosterId: string) {
     }),
     prisma.boosterPayout.findMany({ where: { boosterId }, orderBy: { requestedAt: "desc" }, take: 50 }),
     prisma.financialTransaction.groupBy({ by: ["currency"], where: { account: "BOOSTER_PAYABLE", boosterId }, _sum: { amount: true } }),
+    unpaidFines(boosterId),
   ]);
 
   const pending: CurrencyMap = {};
@@ -83,7 +102,8 @@ export async function boosterFinance(boosterId: string) {
   for (const r of payable) ledgerBalance[r.currency] = r._sum.amount ?? 0;
 
   return {
-    totals: { pending, onHold, available, inPayout, paid, ledgerBalance },
+    // available stays the earnings total; finesDue is shown and subtracted by the page.
+    totals: { pending, onHold, available, inPayout, paid, ledgerBalance, finesDue },
     earnings: earnings
       .filter((e) => e.status !== "SPLIT")
       .map((e) => ({

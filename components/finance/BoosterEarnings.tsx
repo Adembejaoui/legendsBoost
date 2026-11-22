@@ -37,7 +37,11 @@ export function BoosterEarnings({ data }: { data: Data }) {
   const [error, setError] = useState<string | null>(null);
   const t = data.totals;
   const openPayout = data.payouts.find((p) => ["REQUESTED", "APPROVED", "PROCESSING"].includes(p.status));
-  const availableCurrencies = Object.entries(t.available).filter(([, v]) => v > 0).map(([c]) => c);
+  const finesDue: Record<string, number> = t.finesDue ?? {};
+  // What a payout really pays: available earnings minus unpaid fines.
+  const payable = Object.fromEntries(Object.entries(t.available).map(([c, v]) => [c, v - (finesDue[c] ?? 0)]));
+  const availableCurrencies = Object.entries(payable).filter(([, v]) => v > 0).map(([c]) => c);
+  const finesBlocked = Object.entries(t.available).some(([c, v]) => v > 0 && payable[c] <= 0);
 
   async function request(currency: string) {
     setBusy(currency);
@@ -70,7 +74,7 @@ export function BoosterEarnings({ data }: { data: Data }) {
       <div className="grid gap-4 md:grid-cols-4">
         {[
           ["Awaiting release", money(addMaps(t.pending, t.onHold))],
-          ["Available", money(t.available)],
+          ["Available", money(payable)],
           ["In payout", money(t.inPayout)],
           ["Paid", money(t.paid)],
         ].map(([label, value]) => (
@@ -80,6 +84,12 @@ export function BoosterEarnings({ data }: { data: Data }) {
           </div>
         ))}
       </div>
+
+      {Object.keys(finesDue).length > 0 ? (
+        <p className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+          Unpaid fines of {money(finesDue)} are taken off your next payout. Available already shows the amount after fines.
+        </p>
+      ) : null}
 
       {Object.values(t.ledgerBalance).some((v) => v < 0) ? (
         <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
@@ -94,7 +104,9 @@ export function BoosterEarnings({ data }: { data: Data }) {
             Your payout of {formatMoney(openPayout.amount, openPayout.currency)} is <strong>{openPayout.status.toLowerCase()}</strong>.
           </p>
         ) : availableCurrencies.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-400">Nothing is available for payout yet.</p>
+          <p className="mt-2 text-sm text-zinc-400">
+            {finesBlocked ? "Your unpaid fines are equal to or more than your available earnings. Earn more or appeal a fine first." : "Nothing is available for payout yet."}
+          </p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
             {availableCurrencies.map((c) => (
@@ -106,7 +118,7 @@ export function BoosterEarnings({ data }: { data: Data }) {
                 className="inline-flex items-center gap-2 rounded-md bg-[#C8AA6E] px-4 py-2 text-sm font-semibold text-[#0A0E14] disabled:opacity-60"
               >
                 {busy === c ? <Loader2 className="size-4 animate-spin" /> : null}
-                Request payout of {formatMoney(t.available[c], c)}
+                Request payout of {formatMoney(payable[c], c)}
               </button>
             ))}
           </div>
