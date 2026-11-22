@@ -21,6 +21,8 @@ import { logger } from "@/lib/logger";
 import type { GameServiceOffer } from "@/types/catalog";
 
 import type { StorefrontService } from "./storefront-types";
+import { cachedCatalog } from "./price-cache";
+import { parseRangeKey } from "@/lib/pricing/units";
 export type { ServiceAvailability, StorefrontService } from "./storefront-types";
 export { AVAILABILITY_LABEL } from "./storefront-types";
 
@@ -56,7 +58,12 @@ export function computeStartingPrice(
   policy: { id: string; platformFeeBps: number; boosterShareBps: number }
 ): { amount: number; currency: string } | null {
   let best: { amount: number; currency: string } | null = null;
+  // A range price (e.g. mastery Level 1 -> 2) needs the "to" field one step above "from".
+  const range = price.unitFieldKey ? parseRangeKey(price.unitFieldKey) : null;
   for (const request of cheapestRequests(offer, checkout)) {
+    if (range && typeof request.configuration[range.from] === "number") {
+      request.configuration = { ...request.configuration, [range.to]: (request.configuration[range.from] as number) + 1 };
+    }
     const v = validateOrderInput(offer, checkout, request);
     if (!v.ok) continue;
     const q = calculateQuote(offer, checkout, price, policy, v.value);
@@ -65,18 +72,23 @@ export function computeStartingPrice(
   return best;
 }
 
+/** Active prices and commission; throws when the database is unreachable. */
+async function loadPricingStrict(gameSlug?: string) {
+  const [rows, policy] = await Promise.all([
+    prisma.servicePrice.findMany({ where: { status: "ACTIVE", ...(gameSlug ? { gameSlug } : {}) } }),
+    getActiveCommissionPolicy(),
+  ]);
+  const prices = new Map<string, ServicePriceConfig>();
+  for (const r of rows) {
+    const p = parseServicePriceRow(r);
+    if (p) prices.set(`${r.gameSlug}:${r.serviceSlug}`, p);
+  }
+  return { prices, policy };
+}
+
 async function loadPricing(gameSlug?: string) {
   try {
-    const [rows, policy] = await Promise.all([
-      prisma.servicePrice.findMany({ where: { status: "ACTIVE", ...(gameSlug ? { gameSlug } : {}) } }),
-      getActiveCommissionPolicy(),
-    ]);
-    const prices = new Map<string, ServicePriceConfig>();
-    for (const r of rows) {
-      const p = parseServicePriceRow(r);
-      if (p) prices.set(`${r.gameSlug}:${r.serviceSlug}`, p);
-    }
-    return { prices, policy };
+    return await loadPricingStrict(gameSlug);
   } catch (e) {
     // The storefront still renders without prices; the quote API stays authoritative.
     logger.error("Storefront pricing unavailable", { error: e instanceof Error ? e.name : "unknown" });
@@ -94,20 +106,40 @@ function describe(offer: GameServiceOffer, pricing: Awaited<ReturnType<typeof lo
   return { serviceSlug: offer.serviceSlug, availability: "available", startingPrice: computeStartingPrice(offer, checkout, price, pricing.policy) };
 }
 
-export async function getStorefrontServices(gameSlug: string): Promise<StorefrontService[]> {
-  const pricing = await loadPricing(gameSlug);
+async function storefrontServices(gameSlug: string, strict: boolean): Promise<StorefrontService[]> {
+  const pricing = strict ? await loadPricingStrict(gameSlug) : await loadPricing(gameSlug);
   return getGameServiceOffers(gameSlug).map((o) => describe(o, pricing));
 }
 
-export async function getStorefrontService(gameSlug: string, serviceSlug: string): Promise<StorefrontService | null> {
+async function storefrontService(gameSlug: string, serviceSlug: string, strict: boolean): Promise<StorefrontService | null> {
   const offer = gameServices.find((o) => o.gameSlug === gameSlug && o.serviceSlug === serviceSlug);
   if (!offer) return null;
-  return describe(offer, await loadPricing(gameSlug));
+  return describe(offer, strict ? await loadPricingStrict(gameSlug) : await loadPricing(gameSlug));
 }
 
-/** Step 1: number of services that can be bought right now, per game. */
-export async function getAvailableServiceCounts(): Promise<Record<string, number | null>> {
-  const pricing = await loadPricing();
+/** Services of a game with their starting price (cached 60 s, see price-cache.ts). */
+export const getStorefrontServices = cachedCatalog(
+  "services",
+  (gameSlug: string) => storefrontServices(gameSlug, true),
+  (gameSlug: string) => storefrontServices(gameSlug, false)
+);
+
+/** One service with its starting price (cached 60 s). */
+export const getStorefrontService = cachedCatalog(
+  "service",
+  (gameSlug: string, serviceSlug: string) => storefrontService(gameSlug, serviceSlug, true),
+  (gameSlug: string, serviceSlug: string) => storefrontService(gameSlug, serviceSlug, false)
+);
+
+/** Step 1: number of services that can be bought right now, per game (cached 60 s). */
+export const getAvailableServiceCounts = cachedCatalog(
+  "counts",
+  () => availableServiceCounts(true),
+  () => availableServiceCounts(false)
+);
+
+async function availableServiceCounts(strict: boolean): Promise<Record<string, number | null>> {
+  const pricing = strict ? await loadPricingStrict() : await loadPricing();
   const counts: Record<string, number | null> = {};
   for (const o of gameServices) {
     const d = describe(o, pricing);

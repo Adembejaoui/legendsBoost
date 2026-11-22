@@ -50,6 +50,29 @@ describe("starting prices (step 2 badges)", () => {
   });
 });
 
+describe("starting price of a price per level (Champion Mastery)", () => {
+  it("is one level: Level 1 -> Level 2", () => {
+    const g = "league-of-legends";
+    const sv = "champion-mastery";
+    const offer = gameServices.find((o) => o.gameSlug === g && o.serviceSlug === sv)!;
+    const price: ServicePriceConfig = {
+      id: "x",
+      version: 5,
+      gameSlug: g,
+      serviceSlug: sv,
+      currency: "USD",
+      pricingModel: "PER_UNIT",
+      baseAmount: 0,
+      stepAmounts: null,
+      unitFieldKey: "range:currentLevel:targetLevel",
+      unitAmount: 600,
+      optionPricing: {},
+      modePricing: { solo: { type: "fixed", amount: 0 } },
+    };
+    expect(computeStartingPrice(offer, getCheckoutConfig(g, sv)!, price, POLICY)).toEqual({ amount: 600, currency: "USD" });
+  });
+});
+
 describe("safeCallbackPath (sign-in return)", () => {
   it.each([
     ["/games/valorant/services/rank-boost", "/games/valorant/services/rank-boost"],

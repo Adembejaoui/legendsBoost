@@ -7,6 +7,7 @@
 import { formatMoney } from "@/lib/money";
 import type { PriceAdjustment } from "./price-config";
 import { getActiveServicePrice } from "./service";
+import { cachedCatalog } from "@/lib/catalog/price-cache";
 
 export interface PriceTags {
   currency: string;
@@ -25,8 +26,10 @@ export function priceTag(adj: PriceAdjustment, currency: string): string {
   return adj.amount === 0 ? "Free" : `+${formatMoney(adj.amount, currency)}`;
 }
 
-export async function getPriceTags(gameSlug: string, serviceSlug: string): Promise<PriceTags | null> {
-  const price = await getActiveServicePrice(gameSlug, serviceSlug).catch(() => null);
+async function priceTags(gameSlug: string, serviceSlug: string, strict: boolean): Promise<PriceTags | null> {
+  const price = strict
+    ? await getActiveServicePrice(gameSlug, serviceSlug)
+    : await getActiveServicePrice(gameSlug, serviceSlug).catch(() => null);
   if (!price) return null;
   const tag = (a: PriceAdjustment) => priceTag(a, price.currency);
   return {
@@ -37,3 +40,10 @@ export async function getPriceTags(gameSlug: string, serviceSlug: string): Promi
     ),
   };
 }
+
+/** Tags shown on the service page (cached 60 s, cleared on any price change). */
+export const getPriceTags = cachedCatalog(
+  "price-tags",
+  (gameSlug: string, serviceSlug: string) => priceTags(gameSlug, serviceSlug, true),
+  (gameSlug: string, serviceSlug: string) => priceTags(gameSlug, serviceSlug, false)
+);

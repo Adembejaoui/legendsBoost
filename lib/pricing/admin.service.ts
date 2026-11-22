@@ -6,6 +6,7 @@
  * Existing orders keep their own snapshot and are never re-priced.
  */
 import prisma from "@/lib/prisma";
+import { invalidateCatalogPrices } from "@/lib/catalog/price-cache";
 import { Prisma } from "@/app/generated/prisma/client";
 import { BPS_DENOMINATOR, normalizeCurrency } from "@/lib/money";
 import { servicePriceInputSchema, validateServicePriceAgainstCatalog, type ServicePriceInput } from "./price-config";
@@ -34,7 +35,7 @@ export async function createServicePriceVersion(adminId: string, raw: unknown) {
   const activeKey = `${input.gameSlug}:${input.serviceSlug}`;
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const latest = await tx.servicePrice.findFirst({
         where: { gameSlug: input.gameSlug, serviceSlug: input.serviceSlug },
         orderBy: { version: "desc" },
@@ -73,6 +74,8 @@ export async function createServicePriceVersion(adminId: string, raw: unknown) {
       });
       return created;
     });
+    invalidateCatalogPrices();
+    return result;
   } catch (e) {
     if ((e as { code?: string }).code === "P2002" || (e as { code?: string }).code === "P2025") {
       throw new PricingAdminError("The price was changed concurrently. Reload and try again.", 409);
@@ -84,7 +87,7 @@ export async function createServicePriceVersion(adminId: string, raw: unknown) {
 /** Retire the active price: the service becomes unpurchasable. */
 export async function retireServicePrice(adminId: string, priceId: string) {
   await assertAdmin(adminId);
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const price = await tx.servicePrice.findUnique({ where: { id: priceId } });
     if (!price) throw new PricingAdminError("Price not found.", 404);
     if (price.status !== "ACTIVE") throw new PricingAdminError("This price is already retired.", 409);
@@ -95,6 +98,8 @@ export async function retireServicePrice(adminId: string, priceId: string) {
     await writeAudit(tx, { actorId: adminId, action: "SERVICE_PRICE_RETIRED", entityType: "servicePrice", entityId: priceId });
     return updated;
   });
+  invalidateCatalogPrices();
+  return result;
 }
 
 /**
@@ -116,7 +121,7 @@ export async function createCommissionPolicy(
     throw new PricingAdminError("A commission change cannot take effect in the past.", 400);
   }
   const note = input.note?.trim().slice(0, 500) || null;
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const policy = await tx.commissionPolicy.create({
       data: { platformFeeBps: fee, boosterShareBps: BPS_DENOMINATOR - fee, effectiveFrom, createdById: adminId, note },
     });
@@ -129,4 +134,6 @@ export async function createCommissionPolicy(
     });
     return policy;
   });
+  invalidateCatalogPrices();
+  return result;
 }
