@@ -5,8 +5,8 @@
  *  - The customer tips the booster through Stripe Checkout (1 to 500 in the
  *    order currency): while the order is Processing (the booster holding it,
  *    client PDF 2026-11-22) or once it is COMPLETED (the booster who completed it).
- *  - Split like an order (same commission policy): platform commission +
- *    booster share. Ledger on payment: CUSTOMER_PAYMENTS = PLATFORM_REVENUE +
+ *  - Split 85% booster / 15% platform (tip test 2026-11-22; before, tips used
+ *    the order commission policy). Ledger on payment: CUSTOMER_PAYMENTS = PLATFORM_REVENUE +
  *    BOOSTER_PAYABLE. The booster share becomes a PENDING earning, released by
  *    an admin like any other earning, then paid out normally.
  *  - Tip sessions are routed by metadata.kind = "tip" in the Stripe webhook;
@@ -17,7 +17,6 @@ import type Stripe from "stripe";
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { getAppUrl, getStripe, toStripeCurrency } from "@/lib/stripe/server";
-import { getActiveCommissionPolicy } from "@/lib/pricing/service";
 import { bpsOfFloor, formatMoney } from "@/lib/money";
 import { postLedger } from "@/lib/finance/ledger";
 import { enqueueOutbox } from "@/lib/payments/outbox";
@@ -34,8 +33,11 @@ export class TipError extends Error {
   }
 }
 
-/** Booster share and platform commission of a tip (same policy as orders). */
-export function splitTip(amount: number, boosterShareBps: number) {
+/** Tips: 85% to the booster, 15% to the company (tip test 2026-11-22). */
+export const TIP_BOOSTER_SHARE_BPS = 8_500;
+
+/** Booster share and platform commission of a tip. */
+export function splitTip(amount: number, boosterShareBps: number = TIP_BOOSTER_SHARE_BPS) {
   const boosterAmount = bpsOfFloor(amount, boosterShareBps);
   return { boosterAmount, platformFeeAmount: amount - boosterAmount };
 }
@@ -71,10 +73,8 @@ export async function createTipCheckout(customerId: string, orderId: string, amo
       ? order.assignments.find((a) => a.status === "COMPLETED")?.boosterId
       : order.assignments.find((a) => (TIPPABLE_ASSIGNMENT as readonly string[]).includes(a.status))?.boosterId;
   if (!boosterId) throw new TipError("This order has no booster to tip.", 409);
-  const policy = await getActiveCommissionPolicy();
-  if (!policy) throw new TipError("Tips are not available right now.", 503);
   const currency = order.pricingSnapshot?.currency ?? order.currency ?? "EUR";
-  const split = splitTip(amount, policy.boosterShareBps);
+  const split = splitTip(amount);
 
   const tip = await prisma.orderTip.create({
     data: { orderId, customerId, boosterId, amount, currency, ...split, idempotencyKey: `tip-${randomUUID()}` },
@@ -133,7 +133,6 @@ export async function applyTipPaid(tx: Tx, s: Stripe.Checkout.Session): Promise<
     data: { status: "PAID", paidAt: new Date(), stripeSessionId: s.id },
   });
   if (moved.count === 0) return { outcome: "tip_already_paid", ignored: true };
-  const policy = await getActiveCommissionPolicy(tx);
   await postLedger(tx, [
     { type: "TIP_PAYMENT", account: "CUSTOMER_PAYMENTS", amount: tip.amount, currency: tip.currency, idempotencyKey: `tip:${tip.id}:customer`, orderId: tip.orderId, description: "Customer tip" },
     { type: "TIP_COMMISSION", account: "PLATFORM_REVENUE", amount: tip.platformFeeAmount, currency: tip.currency, idempotencyKey: `tip:${tip.id}:platform`, orderId: tip.orderId, description: "Commission on a tip" },
@@ -149,8 +148,10 @@ export async function applyTipPaid(tx: Tx, s: Stripe.Checkout.Session): Promise<
         boosterId: tip.boosterId,
         grossAmount: tip.boosterAmount,
         currency: tip.currency,
-        platformFeeBps: policy?.platformFeeBps ?? 0,
-        boosterShareBps: policy?.boosterShareBps ?? 10_000,
+        // The split was fixed when the tip was created (stored amounts), so
+        // a tip started before a split change keeps the split it was sold with.
+        boosterShareBps: Math.round((tip.boosterAmount * 10_000) / tip.amount),
+        platformFeeBps: 10_000 - Math.round((tip.boosterAmount * 10_000) / tip.amount),
         status: "PENDING",
         allocationNote: "Tip from the customer",
       },

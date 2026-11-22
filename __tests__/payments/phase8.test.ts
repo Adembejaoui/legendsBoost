@@ -120,9 +120,10 @@ describe("reviews", () => {
 });
 
 describe("tips", () => {
-  it("split like an order (55 % booster share)", () => {
+  it("85 % to the booster, 15 % to the company (tip test 2026-11-22)", () => {
+    expect(splitTip(2000)).toEqual({ boosterAmount: 1700, platformFeeAmount: 300 }); // 20 -> 17 + 3
+    expect(splitTip(333)).toEqual({ boosterAmount: 283, platformFeeAmount: 50 }); // booster gets the floor
     expect(splitTip(1000, 5500)).toEqual({ boosterAmount: 550, platformFeeAmount: 450 });
-    expect(splitTip(333, 5500)).toEqual({ boosterAmount: 183, platformFeeAmount: 150 });
   });
 
   it("while the order is Processing, to the booster holding it (client PDF 2026-11-22)", async () => {
@@ -165,10 +166,10 @@ describe("tips", () => {
     expect((await prisma.orderTip.findUniqueOrThrow({ where: { id: tipId } })).status).toBe("PAID");
     const ledger = (await ledgerFor(orderId)).filter((t) => t.type.startsWith("TIP_"));
     expect(sum(ledger, (t) => t.account === "CUSTOMER_PAYMENTS")).toBe(1000);
-    expect(sum(ledger, (t) => t.account === "PLATFORM_REVENUE")).toBe(450);
-    expect(sum(ledger, (t) => t.account === "BOOSTER_PAYABLE" && t.boosterId === booster.id)).toBe(550);
+    expect(sum(ledger, (t) => t.account === "PLATFORM_REVENUE")).toBe(150);
+    expect(sum(ledger, (t) => t.account === "BOOSTER_PAYABLE" && t.boosterId === booster.id)).toBe(850);
     const earning = await prisma.boosterEarning.findFirstOrThrow({ where: { boosterId: booster.id, allocationNote: "Tip from the customer" } });
-    expect(earning).toMatchObject({ status: "PENDING", grossAmount: 550 });
+    expect(earning).toMatchObject({ status: "PENDING", grossAmount: 850, boosterShareBps: 8500, platformFeeBps: 1500 });
     expect(await prisma.notification.count({ where: { userId: booster.id, type: "TIP_RECEIVED" } })).toBe(1);
     // The order payment itself is untouched.
     expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("COMPLETED");

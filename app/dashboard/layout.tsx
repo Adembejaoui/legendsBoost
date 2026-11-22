@@ -12,7 +12,7 @@ import { hasBoosterAccess } from "@/lib/boosters/status";
 import { VerifyEmailBanner } from "@/components/account/VerifyEmailBanner";
 
 /** Events on the user's own channel that make dashboard pages refetch. */
-const USER_LIVE_EVENTS = ["notification.created", "notification.read", "notification.all_read", "live.refresh"] as const;
+const USER_LIVE_EVENTS = ["notification.created", "notification.read", "notification.all_read", "live.refresh", "order.access_revoked"] as const;
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getDashboardContext({ includeBoosterProfile: true });

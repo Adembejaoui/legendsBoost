@@ -46,7 +46,7 @@ import { createNotificationsForEvent } from "@/lib/notifications/service";
 import { revokeOrderAccess, broadcastToOrder } from "@/lib/realtime/broadcast";
 import { hasVerifiedPayment, VERIFIED_PAYMENT_WHERE } from "@/lib/orders/payment-gate";
 import { allocateOnCompletion } from "@/lib/finance/earnings";
-import { dispatchOutbox } from "@/lib/payments/outbox";
+import { dispatchOutbox, enqueueOutbox } from "@/lib/payments/outbox";
 import { transitionOrder } from "@/lib/orders/transitions";
 import { canClaimNewOrders, hasBoosterAccess } from "@/lib/boosters/status";
 
@@ -188,18 +188,26 @@ export async function getAvailableOrders(filters?: {
   return orders.filter((order) => isOrderClaimable(order));
 }
 
+/** Assignments that ended with the order taken away from the booster. */
+const ENDED_WITHOUT_BOOSTER = ["RELEASED", "DECLINED"] as const;
+
 export async function getBoosterAssignments(
   boosterId: string,
   filter?: "active" | "all" | "history"
 ) {
+  // Booster order list test 2026-11-22: once an assignment ends without the
+  // booster finishing it (customer changed booster, booster abandoned, or
+  // declined), the order leaves that booster's lists at once. The admin still
+  // sees it, and the order page is already closed to that booster.
   const where: any = {
     boosterId,
+    status: { notIn: [...ENDED_WITHOUT_BOOSTER] },
   };
 
   if (filter === "active") {
     where.status = { in: [...ACTIVE_ASSIGNMENT_STATUSES] };
   } else if (filter === "history") {
-    where.status = { in: ["COMPLETED", "DECLINED", "CANCELLED", "RELEASED"] };
+    where.status = { in: ["COMPLETED", "CANCELLED"] };
   }
 
   // Only what the booster pages show: plain values (no Decimal), and never
@@ -421,6 +429,12 @@ export async function setCustomerOrderPaused(
           createdAt: at,
         },
       });
+      // Sound test 2026-11-22: the booster is also emailed when the order is paused.
+      if (action === "pause") {
+        await enqueueOutbox(tx, [
+          { type: "EMAIL_ORDER_PAUSED", dedupeKey: `order-paused:${event.id}`, payload: { orderId, boosterId: assignment.boosterId } },
+        ]);
+      }
       return { changed: true, assignmentId: assignment.id, boosterId: assignment.boosterId, eventId: event.id, at };
     });
   } catch (error) {
@@ -460,7 +474,10 @@ export async function setCustomerOrderPaused(
     },
   });
 
-  if (c.to === "PAUSED") await closeSessions(orderId, "PAUSED");
+  if (c.to === "PAUSED") {
+    await closeSessions(orderId, "PAUSED");
+    await dispatchOutbox({ limit: 5 }).catch(() => {});
+  }
   return { changed: true, status: c.to };
 }
 

@@ -45,6 +45,8 @@ import { configurePrice, createPaidOrder, rankCheckout, rankOffer, seedUser } fr
 import { decideBoosterChange, requestBoosterChange, withdrawBoosterChange } from "@/lib/orders/booster-change.service";
 import { pokeBooster, POKE_COOLDOWN_MS } from "@/lib/orders/poke.service";
 import { dispatchOutbox } from "@/lib/payments/outbox";
+import { getBoosterAssignments, setCustomerOrderPaused } from "@/lib/assignments/service";
+import { sendOrderPausedEmail } from "@/lib/email/order-paused";
 
 let prisma: Awaited<ReturnType<typeof getTestPrisma>>;
 let admin: { id: string };
@@ -117,6 +119,55 @@ describe("Change booster", () => {
     });
     expect((await prisma.orderBoosterAssignment.findUniqueOrThrow({ where: { id: assignmentId } })).status).toBe("RELEASED");
     expect((await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("PENDING");
+  });
+
+  it("the released order leaves the former booster's order lists at once (booster list test 2026-11-22)", async () => {
+    const { orderId } = await heldOrder();
+    const before = await getBoosterAssignments(booster.id, "all");
+    expect(before.some((a) => a.orderId === orderId)).toBe(true);
+    const r = await requestBoosterChange(customer.id, orderId, "My booster is not playing at all");
+    await decideBoosterChange(admin.id, r.id, { decision: "approve", note: "A new booster will take over." });
+    for (const filter of ["all", "history", "active"] as const) {
+      expect((await getBoosterAssignments(booster.id, filter)).some((a) => a.orderId === orderId)).toBe(false);
+    }
+    // The admin still has the order and its history.
+    expect(await prisma.orderBoosterAssignment.count({ where: { orderId, boosterId: booster.id, status: "RELEASED" } })).toBe(1);
+  });
+});
+
+describe("Pause order email (sound test 2026-11-22)", () => {
+  it("emails the assigned booster when the customer pauses, not when they resume", async () => {
+    const { orderId } = await heldOrder();
+    h.emails.length = 0;
+    await setCustomerOrderPaused(orderId, customer.id, "pause");
+    await dispatchOutbox({ limit: 10 });
+    const mails = h.emails.filter((m) => m.to === `${booster.id}@t.test`);
+    expect(mails).toHaveLength(1);
+    expect(mails[0].subject).toMatch(/^The customer paused order #/);
+    expect(mails[0].text).toMatch(/^Stop boosting now/);
+    expect(mails[0].action).toMatchObject({ label: "Open the order" });
+    expect(mails[0].action.url).toContain(`/dashboard/${orderId}`);
+
+    h.emails.length = 0;
+    await setCustomerOrderPaused(orderId, customer.id, "resume");
+    await dispatchOutbox({ limit: 10 });
+    expect(h.emails).toHaveLength(0);
+  });
+
+  it("a repeated pause click sends one email", async () => {
+    const { orderId } = await heldOrder();
+    h.emails.length = 0;
+    await setCustomerOrderPaused(orderId, customer.id, "pause");
+    await setCustomerOrderPaused(orderId, customer.id, "pause");
+    await dispatchOutbox({ limit: 10 });
+    expect(h.emails.filter((m) => m.to === `${booster.id}@t.test`)).toHaveLength(1);
+  });
+
+  it("no email when the order was resumed before it went out", async () => {
+    const { orderId } = await heldOrder(); // in progress, i.e. not paused (any more)
+    h.emails.length = 0;
+    await sendOrderPausedEmail(orderId, booster.id);
+    expect(h.emails).toHaveLength(0);
   });
 });
 

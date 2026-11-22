@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Bell, BellOff } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
@@ -10,7 +10,10 @@ import { poolChannel } from "@/lib/realtime/channel-names";
 import { LIVE_POLL_MS } from "@/components/realtime/LiveRefresh";
 import {
   armSoundUnlock,
+  desktopPermission,
   playNewOrderSound,
+  requestDesktopPermission,
+  showDesktopNotification,
   setSoundMuted,
   soundMuted,
   soundUnlocked,
@@ -25,8 +28,20 @@ const HAS_REALTIME_ENV = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process
  * sound when an order this booster may take appears in the pool. Listens to
  * the pool channel; falls back to checking every 20 s while realtime is down.
  * Also shows a small sound switch (sound needs one click to be allowed).
+ *
+ * Sound test 2026-11-22: the alert must also work while the dashboard is
+ * behind another tab or window. So it keeps checking in the background
+ * (browsers slow timers down there, never below once a minute), checks every
+ * minute even while live (a background tab can miss a realtime message while
+ * it reconnects), and shows a desktop notification when the booster allowed
+ * it. Mounted on the dashboard and, for boosters, on the public pages too.
  */
+/** Safety check while live: a missed realtime message is caught within a minute. */
+const SAFETY_POLL_MS = 60_000;
+
 export function BoosterNewOrderAlert() {
+  // Only show the switch once the server confirmed this booster can see the pool.
+  const [allowed, setAllowed] = useState(false);
   const { toast } = useToast();
   const toastRef = useRef(toast);
   useEffect(() => {
@@ -45,6 +60,7 @@ export function BoosterNewOrderAlert() {
       try {
         const res = await fetch("/api/booster/orders/available", { cache: "no-store" });
         if (!res.ok || !alive) return;
+        setAllowed(true);
         const data = (await res.json()) as { orders?: { id: string }[] };
         const ids = new Set((data.orders ?? []).map((o) => o.id));
         const prev = known;
@@ -64,6 +80,12 @@ export function BoosterNewOrderAlert() {
           ),
         });
         playNewOrderSound();
+        showDesktopNotification({
+          title: fresh.length === 1 ? "New order available" : `${fresh.length} new orders available`,
+          body: "Open LegendsBoost to claim it before someone else does.",
+          url: "/dashboard/booster/available-orders",
+          tag: "lb-new-order",
+        });
       } catch {
         /* offline: next signal or poll retries */
       } finally {
@@ -79,11 +101,11 @@ export function BoosterNewOrderAlert() {
         clearInterval(poll);
         poll = null;
       } else if (!live && !poll) {
-        poll = setInterval(() => {
-          if (document.visibilityState === "visible") void check();
-        }, LIVE_POLL_MS);
+        // Also while the tab is hidden: that is when the booster needs the alert most.
+        poll = setInterval(() => void check(), LIVE_POLL_MS);
       }
     };
+    const safety = setInterval(() => void check(), SAFETY_POLL_MS);
 
     const channel = HAS_REALTIME_ENV
       ? new LiveChannel({
@@ -110,15 +132,29 @@ export function BoosterNewOrderAlert() {
       alive = false;
       document.removeEventListener("visibilitychange", onVisible);
       if (poll) clearInterval(poll);
+      clearInterval(safety);
       void channel?.stop();
     };
   }, []);
 
   const unlocked = useSyncExternalStore(subscribeSound, soundUnlocked, () => true);
   const muted = useSyncExternalStore(subscribeSound, soundMuted, () => false);
+  const desktop = useSyncExternalStore(subscribeSound, desktopPermission, () => "unsupported" as const);
 
+  if (!allowed) return null;
   const on = unlocked && !muted;
   return (
+    <div className="fixed bottom-4 left-4 z-40 flex flex-col items-start gap-1.5">
+      {on && desktop === "default" ? (
+        <button
+          type="button"
+          onClick={() => void requestDesktopPermission()}
+          title="Get a pop-up with sound when a new order arrives while this tab is in the background"
+          className="rounded-full border border-[#C8AA6E]/30 bg-[#111319]/90 px-3 py-1.5 text-xs text-[#C8AA6E] shadow-lg backdrop-blur hover:text-white"
+        >
+          Alert me in other tabs too
+        </button>
+      ) : null}
     <button
       type="button"
       onClick={() => {
@@ -129,12 +165,14 @@ export function BoosterNewOrderAlert() {
         unlockSound();
         setSoundMuted(false);
         playNewOrderSound({ force: true }); // let the booster hear it once
+        void requestDesktopPermission(); // pop-ups for when the tab is in the background
       }}
       title={on ? "New order sound is on (click to mute)" : "Turn on the new order sound"}
-      className="fixed bottom-4 left-4 z-40 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#111319]/90 px-3 py-1.5 text-xs text-zinc-300 shadow-lg backdrop-blur hover:text-white"
+      className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#111319]/90 px-3 py-1.5 text-xs text-zinc-300 shadow-lg backdrop-blur hover:text-white"
     >
       {on ? <Bell className="h-3.5 w-3.5 text-[#C8AA6E]" /> : <BellOff className="h-3.5 w-3.5 text-zinc-500" />}
       {on ? "Order sound on" : "Turn on order sound"}
     </button>
+    </div>
   );
 }

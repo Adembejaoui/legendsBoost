@@ -1,37 +1,47 @@
 "use client";
 
-import { useEffect } from "react";
-import { LiveChannel } from "@/lib/realtime/live-client";
-import { createBrowserRealtimeClient, fetchRealtimeToken } from "@/lib/chat/realtime-sync";
-import { userChannel } from "@/lib/realtime/channel-names";
-import { armSoundUnlock, playMessageSound } from "@/components/realtime/new-order-alert";
-
-const HAS_REALTIME_ENV = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+import { useEffect, useRef } from "react";
+import Link from "next/link";
+import { useToast } from "@/components/ui/toast";
+import { armSoundUnlock, playMessageSound, playPauseSound, playTipSound } from "@/components/realtime/new-order-alert";
+import { useNotificationAlerts } from "@/components/realtime/useNotificationAlerts";
+import { NOTIFICATION_TITLES } from "@/lib/notifications/types";
 
 /**
- * Customer and booster: a ding when the other person writes in an order chat
- * while they are on another dashboard page (client PDFs 2026-11-22). On that
- * order's own page the chat plays the sound itself.
+ * Customer and booster alerts on every page:
+ *  - a ding when the other person writes in an order chat while they are not
+ *    on that order's page (there the chat plays the sound itself);
+ *  - booster: a pop-up and a sound when the customer pauses an order or
+ *    sends a tip (sound test 2026-11-22).
+ * Real time, with a 20 s check while the live connection is down.
  */
 export function MessageSoundAlert({ userId }: { userId: string }) {
+  const { toast } = useToast();
+  const toastRef = useRef(toast);
   useEffect(() => {
-    armSoundUnlock();
-    if (!HAS_REALTIME_ENV) return;
-    const channel = new LiveChannel({
-      channel: userChannel(userId),
-      events: ["notification.created"],
-      createClient: createBrowserRealtimeClient,
-      fetchToken: fetchRealtimeToken,
-      onSignal: (_event, raw) => {
-        const p = (raw ?? {}) as { type?: string; orderId?: string | null };
-        if (p.type !== "NEW_MESSAGE") return;
-        if (p.orderId && window.location.pathname === `/dashboard/${p.orderId}`) return;
-        playMessageSound();
-      },
-      onState: () => {},
-    });
-    void channel.start();
-    return () => void channel.stop();
-  }, [userId]);
+    toastRef.current = toast;
+  }, [toast]);
+  useEffect(() => armSoundUnlock(), []);
+
+  useNotificationAlerts(userId, (n) => {
+    const open = n.orderId ? (
+      <Link href={`/dashboard/${n.orderId}`} className="text-xs font-semibold text-[#C8AA6E] hover:underline">
+        Open order
+      </Link>
+    ) : undefined;
+    if (n.title === NOTIFICATION_TITLES.TIP_RECEIVED) {
+      toastRef.current({ title: n.title, description: n.message, type: "success", duration: 10_000, action: open });
+      playTipSound();
+      return;
+    }
+    if (n.title === NOTIFICATION_TITLES.ORDER_PAUSED_BY_CUSTOMER) {
+      toastRef.current({ title: n.title, description: n.message, type: "warning", duration: 30_000, action: open });
+      playPauseSound();
+      return;
+    }
+    if (n.type !== "NEW_MESSAGE") return;
+    if (n.orderId && window.location.pathname === `/dashboard/${n.orderId}`) return;
+    playMessageSound();
+  });
   return null;
 }

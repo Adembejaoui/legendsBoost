@@ -2,6 +2,17 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-22 · Notification sound test: alerts, pause email, tips 85/15, released orders
+
+Client PDF "Notification sound test" plus a realtime check of every pop-up and sound.
+
+- **New order alert (booster):** sound starts at once when the browser already allows it for the site; the alert keeps checking while the tab is in the background and once a minute as a safety net; a desktop notification (with the system sound) pops up when the tab or window is in the background, after the booster allows it ("Turn on order sound" / "Alert me in other tabs too"). Also on the public pages.
+- **Pause:** the assigned booster is emailed ("The customer paused order #…", outbox `EMAIL_ORDER_PAUSED`, not sent if resumed first) and gets a pop-up and a sound.
+- **Tips:** a pop-up and a "coin" sound for the booster. Tips are now split 85 % booster / 15 % company (a tip of 20 pays 17 + 3); tips started before keep their split.
+- **Released orders:** once a booster's assignment ends without them finishing (change booster, abandon, decline) the order leaves their lists at once (live); the admin keeps it. The Completed tab already lists only the orders that booster finished.
+- **Admin:** a pop-up and a sound when a booster sends screenshots for completion review.
+- **Fallback:** chat, tip, pause and admin pop-ups and sounds are checked every 20 s while the live connection is down, and caught up when it returns (each notification once). Chat sounds also play on the public pages.
+
 ## 2026-11-22 · How orders work: admin completion, Frozen payout, alerts, sounds
 
 Client PDFs "How orders work", "Booster / Admin / Customer dashboard changes". Decisions: the 72 h auto-confirm is removed (admin only); the admin's Completed releases the payout at once; "customer abandons" = Change booster without a reason; admin alerts open the admin order editor; tips while Processing and after completion; the customer can still report a problem; a booster who leaves an order loses its payout from Frozen (the admin can split it as before); "Processing" everywhere.
