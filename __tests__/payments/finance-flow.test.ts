@@ -312,6 +312,23 @@ describe("refunds", () => {
     expect(after).toMatchObject({ status: "PAID", grossAmount: 5500, reversedAmount: 1100 });
   });
 
+  it("a refund that lowers a booster's earning refreshes that booster's open pages live", async () => {
+    const booster = await seedUser("BOOSTER");
+    const { orderId } = await createPaidOrder(customer.id);
+    await completedBy(orderId, booster.id);
+    const r = await requestRefund(admin.id, { orderId, amount: 1000, reason: "Goodwill", idempotencyKey: refundKey() });
+    const signals = await prisma.outboxEvent.findMany({ where: { type: "USER_SIGNAL", dedupeKey: { startsWith: `refund:${r.id}` } } });
+    expect(signals).toHaveLength(1);
+    expect(signals[0].payload).toEqual({ userIds: [booster.id], scope: "earnings" });
+    expect(signals[0].status).toBe("DONE");
+  });
+
+  it("a refund of an unclaimed order sends no booster signal", async () => {
+    const { orderId } = await createPaidOrder(customer.id);
+    const r = await requestRefund(admin.id, { orderId, amount: 1000, reason: "Goodwill", idempotencyKey: refundKey() });
+    expect(await prisma.outboxEvent.count({ where: { type: "USER_SIGNAL", dedupeKey: { startsWith: `refund:${r.id}` } } })).toBe(0);
+  });
+
   it("a failed Stripe refund is recorded and posts nothing", async () => {
     const { orderId } = await createPaidOrder(customer.id);
     h.stripe.state.failNextRefund = true;

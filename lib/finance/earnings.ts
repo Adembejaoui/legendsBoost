@@ -270,6 +270,7 @@ export async function distributeBoosterReversal(
   const capacity = remaining.reduce((a, b) => a + b, 0);
   const toDistribute = Math.min(input.amount, capacity);
   const parts = toDistribute > 0 ? allocateProRata(toDistribute, remaining) : earnings.map(() => 0);
+  const touchedBoosters = new Set<string>();
 
   for (let i = 0; i < earnings.length; i++) {
     const e = earnings[i];
@@ -283,6 +284,7 @@ export async function distributeBoosterReversal(
       data: { reversedAmount, ...(fullyReversed && releasable ? { status: "REVERSED" } : {}) },
     });
     const unallocated = e.boosterId === null;
+    if (e.boosterId) touchedBoosters.add(e.boosterId);
     await postLedger(tx, [
       {
         type: input.type,
@@ -296,6 +298,12 @@ export async function distributeBoosterReversal(
         refundId: input.refundId ?? null,
         disputeId: input.disputeId ?? null,
       },
+    ]);
+  }
+  // The boosters' open pages (balance, earnings) reload after commit.
+  if (touchedBoosters.size > 0) {
+    await enqueueOutbox(tx, [
+      { type: "USER_SIGNAL", dedupeKey: `${input.keyPrefix}:booster-signal`, payload: { userIds: [...touchedBoosters], scope: "earnings" } },
     ]);
   }
   // Anything beyond the earnings' capacity (should not happen) stays visible

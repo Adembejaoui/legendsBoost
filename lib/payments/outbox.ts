@@ -32,6 +32,8 @@ export type OutboxMessage =
   | { type: "FETCH_STRIPE_FEE"; payload: { paymentId: string } }
   /** Live update: tell boosters the pool changed (no order data). */
   | { type: "POOL_SIGNAL"; payload: { reason: "added" | "removed" } }
+  /** Live update: these users' open pages reload their data (e.g. a booster's balance after a refund). */
+  | { type: "USER_SIGNAL"; payload: { userIds: string[]; scope: string } }
   /** "Order confirmed" email to the customer (once per paid order). */
   | { type: "EMAIL_ORDER_CONFIRMED"; payload: { orderId: string } }
   /** "Please confirm" email when a booster completes with proof. */
@@ -82,6 +84,10 @@ const handlers: Record<OutboxMessage["type"], Handler> = {
   POOL_SIGNAL: (async (p: Extract<OutboxMessage, { type: "POOL_SIGNAL" }>["payload"]) => {
     const { signalPool } = await import("@/lib/realtime/live");
     await signalPool(p.reason);
+  }) as Handler,
+  USER_SIGNAL: (async (p: Extract<OutboxMessage, { type: "USER_SIGNAL" }>["payload"]) => {
+    const { signalUsers } = await import("@/lib/realtime/live");
+    await signalUsers(p.userIds, p.scope);
   }) as Handler,
   NOTIFY: (async (p: Extract<OutboxMessage, { type: "NOTIFY" }>["payload"], dedupeKey: string) => {
     let recipients: string[];
