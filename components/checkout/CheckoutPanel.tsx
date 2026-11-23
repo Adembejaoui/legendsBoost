@@ -34,8 +34,8 @@ import { redirectToStripeCheckout } from '@/lib/checkout/redirect'
 import { useTranslations } from 'next-intl'
 import { rankLabel, useCatalogText } from '@/lib/i18n/catalog'
 import { useCurrency } from '@/lib/currency/client'
-import { useLocale } from 'next-intl'
-import { defaultVpnCountry, isVpnCountry, VPN_COUNTRIES, vpnCountryName } from '@/lib/catalog/vpn-countries'
+import { isVpnCountry } from '@/lib/catalog/vpn-countries'
+import { VpnCountryPicker } from './VpnCountryPicker'
 
 interface CheckoutPanelProps {
   game: { slug: string; name: string; accent?: string }
@@ -84,7 +84,6 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const ct = useCatalogText()
   // Priced and charged in the visitor's currency (header picker).
   const currency = useCurrency()
-  const locale = useLocale()
   const config = getCheckoutConfig(game.slug, offer.serviceSlug)
   const enabledModes = useMemo(() => (config?.modes ?? []).filter((m) => m.enabled), [config])
   const [mode, setMode] = useState<CheckoutMode>(() => (enabledModes[0]?.id as CheckoutMode) ?? 'solo')
@@ -153,7 +152,6 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       if (on) setOtpModalOpen(true)
       else setOtpChampion(undefined)
     }
-    if (id === 'vpn' && on && !isVpnCountry(championsRolesByMode[mode].vpnCountry)) setVpnCountry(defaultVpnCountry(values.server))
   }
   const setVpnCountry = (country: string) => {
     setChampionsRolesByMode((prev) => {
@@ -233,7 +231,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         ...rest,
         ...(selectedOptions.includes('otp-champion') && otpChampion ? { otpChampion } : {}),
         // The VPN country is sent only with the VPN extra (default: the server's country).
-        ...(selectedOptions.includes('vpn') ? { vpnCountry: isVpnCountry(vpnCountry) ? vpnCountry : defaultVpnCountry(values.server) } : {}),
+        ...(selectedOptions.includes('vpn') && isVpnCountry(vpnCountry) ? { vpnCountry } : {}),
       }
     })(),
     ...(couponCode ? { couponCode } : {}),
@@ -241,6 +239,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   }
   const payloadJson = JSON.stringify(payload)
   const ready = canOrder && missing.length === 0
+  const vpnMissing = selectedOptions.includes('vpn') && !isVpnCountry(championsRolesByMode[mode].vpnCountry)
+  const blockers = vpnMissing ? [...missing, t('vpnCountry')] : missing
 
   // Live quote: refresh (debounced) whenever the complete configuration changes.
   useEffect(() => {
@@ -319,7 +319,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
 
     // 1. Validate.
     if (!canOrder) return fail(offer.purchase?.reason === 'unpriced' ? t('unpriced') : t('notPurchasable'))
-    if (missing.length) return fail(t('complete', { fields: missing.join(', ') }))
+    if (blockers.length) return fail(t('complete', { fields: blockers.join(', ') }))
 
     try {
       // 2. Quote for exactly this configuration (fresh, or refreshed now).
@@ -430,26 +430,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const secondaryOptions = visibleOptions.filter((o) => o.group === 'secondary')
   const modeChoices = priceTags ? enabledModes.filter((m) => m.id in priceTags.modes) : enabledModes
   const chosenName = boosters.find((b) => b.id === chosenBooster)?.displayName
-  const vpnPicker = (
-    <label className="mb-1.5 ms-9 flex items-center gap-2 text-[11px] text-zinc-400">
-      <span>{t('vpnCountry')}</span>
-      <select
-        value={isVpnCountry(championsRolesByMode[mode].vpnCountry) ? championsRolesByMode[mode].vpnCountry : defaultVpnCountry(values.server)}
-        onChange={(e) => setVpnCountry(e.target.value)}
-        disabled={busy}
-        className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#0b0c10] px-2 py-1 text-xs text-zinc-200 outline-none focus:border-white/30"
-      >
-        {[...VPN_COUNTRIES]
-          .map((c) => ({ c, name: vpnCountryName(c, locale) }))
-          .sort((a, b) => a.name.localeCompare(b.name, locale))
-          .map(({ c, name }) => (
-            <option key={c} value={c}>
-              {name}
-            </option>
-          ))}
-      </select>
-    </label>
-  )
+  const vpnPicker = <VpnCountryPicker value={championsRolesByMode[mode].vpnCountry} onChange={setVpnCountry} disabled={busy} />
   const optionRow = (option: CheckoutOption) => [
     <CheckoutOptionRow
       key={`${game.slug}-${offer.serviceSlug}-${option.id}-${mode}`}
@@ -594,13 +575,13 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             {quoteLoading ? <Loader2 className="size-5 animate-spin text-zinc-400" aria-label={t('calculatingAria')} /> : null}
             {quote ? formatMoney(quote.totalAmount, quote.currency) : '—'}
           </p>
-          {!quote || missing.length || signInRequired || current?.kind === 'error' || !canOrder ? (
+          {!quote || blockers.length || signInRequired || current?.kind === 'error' || !canOrder ? (
             <p className="mt-0.5 text-xs text-zinc-500">
               {!canOrder
                 ? offer.purchase?.reason === 'unpriced'
                   ? t('unpriced')
                   : t('notPurchasable')
-                : missing.length
+                : blockers.length
                   ? t('completeShort', { fields: missing.join(', ') })
                   : signInRequired
                     ? t('signInForPrice')
@@ -666,7 +647,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             type="button"
             onClick={() => void continueToPayment()}
             // A quote error does not disable the button: clicking re-requests the quote.
-            disabled={busy || !canOrder || missing.length > 0}
+            disabled={busy || !canOrder || blockers.length > 0}
             aria-busy={busy}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
           >

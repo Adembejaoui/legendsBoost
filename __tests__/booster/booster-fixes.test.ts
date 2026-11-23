@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { validateOrderInput } from "@/lib/pricing/order-input";
-import { defaultVpnCountry, isVpnCountry, vpnCountryName } from "@/lib/catalog/vpn-countries";
+import { isVpnCountry, matchesCountry, VPN_COUNTRIES, vpnCountryName, vpnCountryOptions } from "@/lib/catalog/vpn-countries";
 import { conversionFactor, USD_PEGS } from "@/lib/currency/rates";
 import { SITE_CURRENCIES } from "@/lib/currency/currencies";
 import { earningReason } from "@/lib/finance/queries";
@@ -50,13 +50,22 @@ describe("VPN country", () => {
     if (r.ok) expect(r.value.championsRoles).toEqual({ roles: [], champions: [] });
   });
 
-  it("defaults to the server's country; names follow the visitor's language", () => {
-    expect(defaultVpnCountry("EUW1")).toBe("DE");
-    expect(defaultVpnCountry("NA1")).toBe("US");
-    expect(defaultVpnCountry(undefined)).toBe("US");
-    for (const s of ["NA1", "BR1", "EUW1", "EUN1", "TR1", "KR", "JP1", "OC1"]) expect(isVpnCountry(defaultVpnCountry(s))).toBe(true);
+  it("every country can be chosen, with no default; names follow the visitor's language", () => {
+    expect(VPN_COUNTRIES.length).toBeGreaterThanOrEqual(245);
+    for (const c of ["US", "DE", "TN", "AE", "BR", "KR", "NZ", "IS"]) expect(isVpnCountry(c)).toBe(true);
+    expect(isVpnCountry("ZZ")).toBe(false);
     expect(vpnCountryName("DE", "en")).toBe("Germany");
     expect(vpnCountryName("DE", "fr")).toBe("Allemagne");
+    // Every code has a real name (not just the code).
+    for (const o of vpnCountryOptions("en")) expect(o.name, o.code).not.toBe(o.code);
+  });
+
+  it("search matches names without accents or case, and exact codes", () => {
+    const fr = vpnCountryOptions("fr");
+    expect(fr.filter((o) => matchesCountry(o, "alle")).map((o) => o.code)).toEqual(["DE"]);
+    expect(fr.filter((o) => matchesCountry(o, "etats")).map((o) => o.code)).toContain("US");
+    expect(vpnCountryOptions("en").filter((o) => matchesCountry(o, "tn")).map((o) => o.code)).toContain("TN");
+    expect(fr.filter((o) => matchesCountry(o, "")).length).toBe(VPN_COUNTRIES.length);
   });
 });
 

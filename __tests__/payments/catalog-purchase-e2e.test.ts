@@ -53,8 +53,18 @@ import { getAvailableOrders, claimOrder } from "@/lib/assignments/service";
 import { champions as championList } from "@/lib/catalog/champions";
 
 /** OTP Champ Only needs its champion (client PDFs 2026-11-19). */
+/** What the customer picks for configurable extras: the OTP champion and the VPN country (required, no default). */
 const otpFor = (selectedOptions: string[]) =>
-  selectedOptions.includes("otp-champion") ? { championsRoles: { roles: [], champions: [], otpChampion: championList[0].id } } : {};
+  selectedOptions.includes("otp-champion") || selectedOptions.includes("vpn")
+    ? {
+        championsRoles: {
+          roles: [],
+          champions: [],
+          ...(selectedOptions.includes("otp-champion") ? { otpChampion: championList[0].id } : {}),
+          ...(selectedOptions.includes("vpn") ? { vpnCountry: "DE" } : {}),
+        },
+      }
+    : {};
 
 let prisma: Awaited<ReturnType<typeof getTestPrisma>>;
 let admin: { id: string };

@@ -81,6 +81,12 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
     throw new OrderCreationError(server.coupon.reason ?? "This discount code cannot be used.", 409);
   }
 
+  // VPN extra: the customer must choose the country (no default, client 2026-11-23).
+  // Checked here, not in the quote, so the price still shows while they choose.
+  if (server.input.selectedOptions.includes("vpn") && !server.input.championsRoles?.vpnCountry) {
+    throw new OrderCreationError("Choose the country for the VPN.", 400);
+  }
+
   const { input, quote } = server;
   if (preferredBoosterId) {
     try {

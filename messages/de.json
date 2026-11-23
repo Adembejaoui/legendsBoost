@@ -229,7 +229,10 @@
     "chooseChampionsRoles": "Wähle deine Champions und Rollen",
     "championOne": "Champion: {name}",
     "chooseChampion": "Wähle deinen Champion",
-    "vpnCountry": "VPN-Land"
+    "vpnCountry": "VPN-Land",
+    "vpnChoose": "Land wählen",
+    "vpnSearch": "Land suchen",
+    "vpnNone": "Kein Land gefunden"
   },
   "ChampionsModal": {
     "aria": "Champions und Rollen",

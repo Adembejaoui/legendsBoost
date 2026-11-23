@@ -105,8 +105,18 @@ function* configurations(fields: any[]): Generator<Record<string, unknown>> {
 
 /** Option selections to try per mode: none, each enabled option alone, all enabled together. */
 /** OTP Champ Only needs its champion (client PDFs 2026-11-19). */
+/** What the customer picks for configurable extras: the OTP champion and the VPN country (required, no default). */
 const otpFor = (selectedOptions: string[]) =>
-  selectedOptions.includes("otp-champion") ? { championsRoles: { roles: [], champions: [], otpChampion: champions[0].id } } : {};
+  selectedOptions.includes("otp-champion") || selectedOptions.includes("vpn")
+    ? {
+        championsRoles: {
+          roles: [],
+          champions: [],
+          ...(selectedOptions.includes("otp-champion") ? { otpChampion: champions[0].id } : {}),
+          ...(selectedOptions.includes("vpn") ? { vpnCountry: "DE" } : {}),
+        },
+      }
+    : {};
 
 function optionSets(checkout: any, mode: string | null): string[][] {
   const ids = checkout.options.filter((o: any) => o.enabled && (!mode || !o.availableModes || o.availableModes.includes(mode))).map((o: any) => o.id);

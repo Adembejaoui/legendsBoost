@@ -229,7 +229,10 @@
     "chooseChampionsRoles": "اختر أبطالك وأدوارك",
     "championOne": "البطل: {name}",
     "chooseChampion": "اختر بطلك",
-    "vpnCountry": "بلد VPN"
+    "vpnCountry": "بلد VPN",
+    "vpnChoose": "اختر بلدًا",
+    "vpnSearch": "ابحث عن بلد",
+    "vpnNone": "لم يُعثر على أي بلد"
   },
   "ChampionsModal": {
     "aria": "الأبطال والأدوار",
