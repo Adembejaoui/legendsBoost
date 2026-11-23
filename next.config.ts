@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { SHORT_SERVICE_PATHS } from "./lib/seo/short-paths";
+import { routing } from "./i18n/routing";
+
+/** "en|fr|es|..." for route patterns; OTHER_LOCALES has no English (no prefix). */
+const ALL_LOCALES = routing.locales.join("|");
+const OTHER_LOCALES = routing.locales.filter((l) => l !== routing.defaultLocale).join("|");
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
@@ -65,7 +70,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // One list (lib/seo/short-paths.ts) for these rewrites, links, the sitemap and canonical tags.
     return Object.entries(SHORT_SERVICE_PATHS).map(([key, short]) => ({
-      source: `/:locale(en|fr)${short}`,
+      source: `/:locale(${ALL_LOCALES})${short}`,
       destination: `/:locale/games/${key.replace("/", "/services/")}`,
     }));
   },
@@ -74,7 +79,7 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       // Signed-in pages and API answers must never be cached by shared caches.
       { source: "/dashboard/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
-      { source: "/:locale(fr)/dashboard/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      { source: `/:locale(${OTHER_LOCALES})/dashboard/:path*`, headers: [{ key: "Cache-Control", value: "private, no-store" }] },
       // Public blog images are cached for a year (their own header); every other API answer is not.
       { source: "/api/:path((?!blog/images/).*)", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];

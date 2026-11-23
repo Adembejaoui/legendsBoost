@@ -66,7 +66,7 @@ export function ChampionPicker({ label, description, champions, value, onChange,
       </div>
 
       <div className="relative mb-2">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-zinc-500" aria-hidden />
+        <Search className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-zinc-500" aria-hidden />
         <input
           type="search"
           value={query}
@@ -74,10 +74,10 @@ export function ChampionPicker({ label, description, champions, value, onChange,
           placeholder={t('searchChampion')}
           aria-label={t('searchChampionAria')}
           disabled={disabled}
-          className="h-9 w-full rounded-md border border-white/10 bg-[#0b0c10] pl-8 pr-8 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60"
+          className="h-9 w-full rounded-md border border-white/10 bg-[#0b0c10] ps-8 pe-8 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60"
         />
         {query ? (
-          <button type="button" aria-label={t('clearSearch')} onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-500 hover:text-white">
+          <button type="button" aria-label={t('clearSearch')} onClick={() => setQuery('')} className="absolute end-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-500 hover:text-white">
             <X className="size-3.5" />
           </button>
         ) : null}
@@ -112,7 +112,7 @@ export function ChampionPicker({ label, description, champions, value, onChange,
                 <Portrait champion={champion} className="size-10" />
                 <span className="w-full truncate text-center">{champion.name}</span>
                 {isSelected ? (
-                  <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-violet-500 text-white">
+                  <span className="absolute end-1 top-1 grid size-4 place-items-center rounded-full bg-violet-500 text-white">
                     <Check className="size-3" />
                   </span>
                 ) : null}

@@ -453,7 +453,7 @@ export function BecomeBoosterForm({
           ))}
           <div className="pt-2">
             <Button type="button" variant="outline" onClick={addGame} disabled={form.games.length >= 10}>
-              <Plus className="mr-2 size-4" />
+              <Plus className="me-2 size-4" />
               Add another game
             </Button>
             {errors.games && <p className="mt-2 text-xs text-rose-400">{errors.games}</p>}
@@ -707,7 +707,7 @@ export function BecomeBoosterForm({
           className="mt-6 w-full sm:w-auto"
         >
           {isSubmitting ? "Submitting..." : "Submit Application"}
-          <ArrowRight className="ml-2 size-4" />
+          <ArrowRight className="ms-2 size-4" />
         </Button>
       </section>
     </form>

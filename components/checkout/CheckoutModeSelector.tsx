@@ -33,7 +33,7 @@ export function CheckoutModeSelector({ modes, value, onChange, tags }: CheckoutM
                 )}
               >
                 {mode.label}
-                {tags?.[mode.id] ? <span className="ml-1.5 text-[11px] text-violet-300">{tags[mode.id]}</span> : null}
+                {tags?.[mode.id] ? <span className="ms-1.5 text-[11px] text-violet-300">{tags[mode.id]}</span> : null}
               </button>
             )
           })}

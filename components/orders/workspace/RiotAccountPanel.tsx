@@ -101,7 +101,7 @@ export function RiotAccountPanel({ data, embedded = false }: { data: WorkspaceDT
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-500">Tagline</span>
               <div className="flex items-center rounded-lg border border-white/10 bg-black/30 focus-within:border-[var(--g-accent)]/60">
-                <span className="pl-2 text-sm text-zinc-500">#</span>
+                <span className="ps-2 text-sm text-zinc-500">#</span>
                 <input
                   value={tagLine}
                   onChange={(e) => setTagLine(e.target.value.replace(/^#/, ""))}

@@ -41,7 +41,7 @@ export default async function AdminBlogPage() {
         <div className="overflow-x-auto rounded-lg border border-white/10">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-zinc-400">
+              <tr className="border-b border-white/10 text-start text-xs uppercase tracking-wide text-zinc-400">
                 <th className="px-3 py-2">Article</th>
                 <th className="px-3 py-2">Game</th>
                 {routing.locales.map((l) => (

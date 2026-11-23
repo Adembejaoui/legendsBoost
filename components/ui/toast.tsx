@@ -150,7 +150,7 @@ export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: () => voi
         tone.surface
       )}
     >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", tone.bar)} />
+      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1", tone.bar)} />
       <span className={cn("mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg", tone.tile)}>
         <Icon className={cn("size-4", tone.icon)} />
       </span>
@@ -158,7 +158,7 @@ export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: () => voi
         {toast.title && <div className={cn("text-sm font-semibold", tone.title)}>{toast.title}</div>}
         {toast.description && <div className="text-xs text-zinc-300/90">{toast.description}</div>}
       </div>
-      <div className="ml-auto flex items-center gap-2 self-center">
+      <div className="ms-auto flex items-center gap-2 self-center">
         {toast.action && <div>{toast.action}</div>}
         <button onClick={onDismiss} className="rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Dismiss">
           <X className="size-3.5" />

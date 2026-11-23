@@ -94,7 +94,7 @@ export function FeedbackPanel({ data }: { data: WorkspaceDTO }) {
             ) : null}
             {f.review.text ? <p className="text-zinc-300">{f.review.text}</p> : null}
             {f.review.reply ? (
-              <p className="border-l-2 border-[var(--g-accent)]/40 pl-2 text-zinc-400">
+              <p className="border-s-2 border-[var(--g-accent)]/40 ps-2 text-zinc-400">
                 <span className="font-semibold text-zinc-300">Booster reply: </span>
                 {f.review.reply}
               </p>

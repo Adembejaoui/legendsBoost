@@ -7,7 +7,7 @@ import '../globals.css'
 import { Providers } from '@/components/providers'
 import { siteUrl } from '@/lib/site/url'
 import { CookieNotice } from '@/components/layout/CookieNotice'
-import { routing } from '@/i18n/routing'
+import { routing, textDirection } from '@/i18n/routing'
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }))
@@ -56,7 +56,7 @@ export default async function LocaleLayout({
   if (!hasLocale(routing.locales, locale)) notFound()
   setRequestLocale(locale)
   return (
-    <html lang={locale}>
+    <html lang={locale} dir={textDirection(locale)}>
       <body className="antialiased">
         <NextIntlClientProvider>
           <Providers>{children}</Providers>

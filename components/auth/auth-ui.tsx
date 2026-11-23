@@ -75,14 +75,14 @@ export function PasswordInput({
         placeholder={placeholder}
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        className={`${inputClass} pr-11`}
+        className={`${inputClass} pe-11`}
       />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? t("hidePassword") : t("showPassword")}
         aria-pressed={visible}
-        className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-zinc-500 transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C8AA6E]/40"
+        className="absolute end-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-zinc-500 transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C8AA6E]/40"
       >
         <svg
           viewBox="0 0 24 24"

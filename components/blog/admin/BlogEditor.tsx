@@ -181,7 +181,7 @@ export function BlogEditor({ initial, translationOf, games, services, translatio
         <div>
           <label className={labelCls} htmlFor="slug">Address</label>
           <div className="flex items-center rounded-md border border-white/10 bg-[#0b0c10] text-sm">
-            <span className="pl-3 text-zinc-500">{localizedPath('/blog/', post.locale)}</span>
+            <span className="ps-3 text-zinc-500">{localizedPath('/blog/', post.locale)}</span>
             <input
               id="slug"
               className="min-w-0 flex-1 bg-transparent px-1 py-2 text-white outline-none"

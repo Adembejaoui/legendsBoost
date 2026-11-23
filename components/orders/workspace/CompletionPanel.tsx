@@ -155,7 +155,7 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
         </div>
       </div>
 
-      <div className="space-y-2 sm:pl-8">
+      <div className="space-y-2 sm:ps-8">
         <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-400">
           <ImageIcon className="size-3.5" /> Final rank screenshots
         </p>
@@ -175,7 +175,7 @@ export function CompletionPanel({ data }: { data: WorkspaceDTO }) {
       </div>
 
       {(completion.canDispute || completion.canDecide) && (
-        <div className="space-y-2 sm:pl-8">
+        <div className="space-y-2 sm:ps-8">
           {mode !== "idle" && (
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">

@@ -24,7 +24,7 @@ export function ServiceCard({ service, gameSlug, gameName, accent = '#8b5cf6', p
       )}
     >
       <div
-        className="absolute left-0 top-0 h-1 w-full"
+        className="absolute start-0 top-0 h-1 w-full"
         style={{ backgroundColor: accent }}
         aria-hidden
       />

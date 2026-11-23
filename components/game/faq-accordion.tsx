@@ -55,7 +55,7 @@ export function FaqAccordion({
             <div key={faq.question} className="border-b border-white/10">
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-6 py-5 text-left text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400"
+                className="flex w-full items-center justify-between gap-6 py-5 text-start text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-400"
                 aria-expanded={active === index}
                 onClick={() => setActive(active === index ? null : index)}
               >
@@ -65,7 +65,7 @@ export function FaqAccordion({
                 />
               </button>
               {active === index && (
-                <p className="max-w-2xl pb-5 pr-10 text-sm leading-6 text-zinc-500">{faq.answer}</p>
+                <p className="max-w-2xl pb-5 pe-10 text-sm leading-6 text-zinc-500">{faq.answer}</p>
               )}
             </div>
           ))}

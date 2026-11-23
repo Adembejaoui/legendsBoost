@@ -92,8 +92,8 @@ export function PersonalInformationForm({ initial }: {
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <Input id="email" value={initial.email} disabled className="pr-9" />
-            <Lock className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+            <Input id="email" value={initial.email} disabled className="pe-9" />
+            <Lock className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
           </div>
         </div>
         <div className="space-y-2">

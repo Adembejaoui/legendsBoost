@@ -20,9 +20,12 @@ export function isSiteCurrency(v: unknown): v is SiteCurrency {
   return typeof v === "string" && (SITE_CURRENCIES as readonly string[]).includes(v);
 }
 
-/** Before the visitor picks one: euros on the French site, dollars otherwise. */
+/** Languages whose visitors mostly pay in euros. */
+const EURO_LOCALES = ["fr", "es", "de"];
+
+/** Before the visitor picks one: euros on the French, Spanish and German sites, dollars otherwise. */
 export function defaultCurrencyFor(locale: string): SiteCurrency {
-  return locale === "fr" ? "EUR" : "USD";
+  return EURO_LOCALES.includes(locale) ? "EUR" : "USD";
 }
 
 /** The cookie value when valid, else the language default. */

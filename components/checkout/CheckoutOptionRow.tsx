@@ -76,7 +76,7 @@ export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel,
               type="button"
               onClick={onConfigure}
               disabled={disabled}
-              className="inline-flex min-w-0 items-center gap-0.5 truncate text-left text-sm font-medium text-white hover:text-zinc-200"
+              className="inline-flex min-w-0 items-center gap-0.5 truncate text-start text-sm font-medium text-white hover:text-zinc-200"
             >
               {option.label}
               <ChevronRight className="size-3.5 shrink-0 text-zinc-500" aria-hidden />

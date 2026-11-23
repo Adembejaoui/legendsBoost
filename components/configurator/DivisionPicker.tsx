@@ -47,7 +47,7 @@ export function DivisionPicker({
             >
               <span>{division.label}</span>
               {division.iconSrc ? (
-                <span className="ml-2 shrink-0">{division.label.charAt(0)}</span>
+                <span className="ms-2 shrink-0">{division.label.charAt(0)}</span>
               ) : null}
             </button>
           )

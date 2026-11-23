@@ -6,7 +6,7 @@ import { formatMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-const th = "px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-zinc-400";
+const th = "px-3 py-2 text-start text-xs font-medium uppercase tracking-wide text-zinc-400";
 const td = "px-3 py-1.5 align-top";
 
 /** Read-only view of the immutable ledger. */

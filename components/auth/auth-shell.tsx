@@ -32,9 +32,9 @@ function RankLadder() {
     <ol className="space-y-2" aria-label={t("ladder")}>
       {rungs.map((tier) => (
         <li key={tier.name} className="flex items-center gap-4">
-          <span className="w-24 text-right text-sm text-zinc-500">{ct(tier.name)}</span>
+          <span className="w-24 text-end text-sm text-zinc-500">{ct(tier.name)}</span>
           <span
-            className="h-3.5 rounded-r-sm"
+            className="h-3.5 rounded-e-sm"
             style={{ width: `${tier.width}%`, backgroundColor: tier.color, opacity: 0.85 }}
           />
         </li>
@@ -69,7 +69,7 @@ export function AuthShell({
 }) {
   return (
     <div className="grid min-h-screen bg-[#070A12] lg:grid-cols-[1.05fr_1fr]">
-      <aside className="hidden flex-col justify-between border-r border-white/10 p-12 lg:flex xl:p-16">
+      <aside className="hidden flex-col justify-between border-e border-white/10 p-12 lg:flex xl:p-16">
         <Brand />
         <div>
           <h2

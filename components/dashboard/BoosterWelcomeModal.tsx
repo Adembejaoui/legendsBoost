@@ -87,7 +87,7 @@ export function BoosterWelcomeModal({
             className="flex-1"
           >
             {markingSeen ? "Going..." : "Go to Booster Dashboard"}
-            <ArrowRight className="ml-2 size-4" />
+            <ArrowRight className="ms-2 size-4" />
           </Button>
           <Button variant="outline" onClick={() => handleMarkSeen(false)} disabled={markingSeen}>
             Maybe later

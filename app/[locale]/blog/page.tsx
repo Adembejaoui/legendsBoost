@@ -78,13 +78,13 @@ export default async function BlogPage({ searchParams }: { searchParams: SearchP
             {game ? <input type="hidden" name="game" value={game} /> : null}
             <label className="relative flex-1">
               <span className="sr-only">{t('search')}</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" aria-hidden />
+              <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" aria-hidden />
               <input
                 name="q"
                 defaultValue={q}
                 maxLength={80}
                 placeholder={t('search')}
-                className="h-10 w-full rounded-lg border border-white/10 bg-[#111319] pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60"
+                className="h-10 w-full rounded-lg border border-white/10 bg-[#111319] ps-9 pe-3 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60"
               />
             </label>
             <button type="submit" className="h-10 rounded-lg bg-white/10 px-4 text-sm text-white hover:bg-white/15">

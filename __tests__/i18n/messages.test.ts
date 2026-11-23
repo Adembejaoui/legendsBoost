@@ -6,6 +6,9 @@
 import { describe, it, expect } from "vitest";
 import en from "@/messages/en.json";
 import fr from "@/messages/fr.json";
+import es from "@/messages/es.json";
+import de from "@/messages/de.json";
+import ar from "@/messages/ar.json";
 import { routing } from "@/i18n/routing";
 import { languageAlternates, localizedPath, stripLocale } from "@/lib/i18n/alternates";
 
@@ -23,7 +26,7 @@ function flatten(tree: Tree, prefix = ""): Record<string, string> {
 
 const tokens = (s: string) => [...s.matchAll(/\{(\w+)[^}]*\}|<(\w+)>/g)].map((m) => m[1] ?? `<${m[2]}>`).sort();
 
-const languages: Record<string, Tree> = { fr };
+const languages: Record<string, Tree> = { fr, es, de, ar };
 
 describe("language files", () => {
   const base = flatten(en);
@@ -64,7 +67,7 @@ describe("language addresses", () => {
   it("lists each language's address for search engines", () => {
     expect(languageAlternates("/games", "fr")).toEqual({
       canonical: "/fr/games",
-      languages: { en: "/games", fr: "/fr/games", "x-default": "/games" },
+      languages: { en: "/games", fr: "/fr/games", es: "/es/games", de: "/de/games", ar: "/ar/games", "x-default": "/games" },
     });
   });
 });

@@ -200,7 +200,7 @@ export default async function CustomerDashboardPage({
                       >
                         {item.label}
                         {item.count > 0 && (
-                          <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black text-[10px] font-bold text-white">
+                          <span className="ms-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black text-[10px] font-bold text-white">
                             {item.count}
                           </span>
                         )}

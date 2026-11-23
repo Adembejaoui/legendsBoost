@@ -50,7 +50,7 @@ export function Row({ label, value, mono = false }: { label: string; value: Reac
   return (
     <div className="flex items-baseline justify-between gap-4 py-1 text-[13px]">
       <dt className="shrink-0 text-zinc-500">{label}</dt>
-      <dd className={cn("min-w-0 truncate text-right text-zinc-100", mono && "font-mono text-[13px]")}>{value}</dd>
+      <dd className={cn("min-w-0 truncate text-end text-zinc-100", mono && "font-mono text-[13px]")}>{value}</dd>
     </div>
   );
 }

@@ -35,10 +35,10 @@ export function CheckboxField({
         <span className="text-sm font-medium text-white">{label}</span>
       </label>
       {description && (
-        <p className="ml-8 text-xs text-zinc-500">{description}</p>
+        <p className="ms-8 text-xs text-zinc-500">{description}</p>
       )}
       {required && !value && (
-        <p className="ml-8 text-xs text-rose-400">{t('required')}</p>
+        <p className="ms-8 text-xs text-rose-400">{t('required')}</p>
       )}
     </div>
   )

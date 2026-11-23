@@ -1,7 +1,7 @@
 export function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg
-      className={className ?? "mr-2 h-4 w-4"}
+      className={className ?? "me-2 h-4 w-4"}
       viewBox="0 0 24 24"
       fill="currentColor"
     >

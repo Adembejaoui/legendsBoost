@@ -100,7 +100,7 @@ function PausedBanner({ data }: { data: WorkspaceDTO }) {
       <p className="min-w-0 text-[13px] leading-snug text-amber-100">
         <span className="font-semibold">{headline}</span> <span className="text-amber-100/80">{body}</span>
         {since && (
-          <span className="ml-1 whitespace-nowrap text-[11px] text-amber-200/60">
+          <span className="ms-1 whitespace-nowrap text-[11px] text-amber-200/60">
             Since {since.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
           </span>
         )}
@@ -290,11 +290,11 @@ export default function OrderWorkspace({
             src={data.order.gameImage}
             alt=""
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 h-full w-2/3 object-cover opacity-[0.16] [mask-image:linear-gradient(to_left,black_20%,transparent)]"
+            className="pointer-events-none absolute inset-y-0 end-0 h-full w-2/3 object-cover opacity-[0.16] [mask-image:linear-gradient(to_left,black_20%,transparent)]"
           />
         )}
-        <div aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--g-accent)]" />
-        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pl-4 pr-3 sm:py-3">
+        <div aria-hidden className="absolute inset-y-0 start-0 w-1 bg-[var(--g-accent)]" />
+        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5 ps-4 pe-3 sm:py-3">
           <Link
             href={BACK_HREF[role]}
             className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/20 text-zinc-400 hover:bg-white/5 hover:text-white"

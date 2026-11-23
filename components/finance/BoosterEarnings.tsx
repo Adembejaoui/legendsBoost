@@ -133,7 +133,7 @@ export function BoosterEarnings({ data }: { data: Data }) {
         ) : (
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full min-w-160 text-sm">
-              <thead className="bg-white/5 text-left text-xs uppercase tracking-wide text-zinc-400">
+              <thead className="bg-white/5 text-start text-xs uppercase tracking-wide text-zinc-400">
                 <tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Service</th><th className="px-3 py-2">Share</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Status</th></tr>
               </thead>
               <tbody>
@@ -144,7 +144,7 @@ export function BoosterEarnings({ data }: { data: Data }) {
                     <td className="px-3 py-2">{e.boosterShareBps / 100}%</td>
                     <td className="px-3 py-2">
                       {formatMoney(e.netAmount, e.currency)}
-                      {e.reversedAmount > 0 ? <span className="ml-1 text-xs text-zinc-500">({formatMoney(e.grossAmount, e.currency)} before refunds)</span> : null}
+                      {e.reversedAmount > 0 ? <span className="ms-1 text-xs text-zinc-500">({formatMoney(e.grossAmount, e.currency)} before refunds)</span> : null}
                     </td>
                     <td className="px-3 py-2">{STATUS_LABEL[e.status] ?? e.status}</td>
                   </tr>

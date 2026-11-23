@@ -169,7 +169,7 @@ export default function ApplicationsList() {
       </div>
 
       <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-        <table className="w-full text-left">
+        <table className="w-full text-start">
           <thead>
             <tr className="border-b border-white/10 bg-white/5">
               <th className="px-4 py-3 text-xs font-semibold text-zinc-400 uppercase">Applicant</th>
@@ -325,7 +325,7 @@ function ApplicationDetail({
           </p>
         </div>
         <Button onClick={onClose} variant="outline">
-          <ChevronRight className="-mr-1 size-4 rotate-180" /> Back to list
+          <ChevronRight className="-me-1 size-4 rotate-180" /> Back to list
         </Button>
       </div>
 
@@ -353,7 +353,7 @@ function ApplicationDetail({
           <h3 className="mb-3 text-sm font-semibold text-white">Gaming expertise</h3>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs text-zinc-500 uppercase mb-2">
+              <tr className="text-start text-xs text-zinc-500 uppercase mb-2">
                 <th>Game</th>
                 <th>Region</th>
                 <th>Current rank</th>

@@ -144,7 +144,7 @@ export function DraftEditor(p: DraftEditorProps) {
           </h1>
           <p className="text-xs text-zinc-500">Customer: {p.order.customer} · Status: {p.order.status}</p>
         </div>
-        <Link href={`/dashboard/${p.order.id}`} className="ml-auto text-sm text-violet-300 hover:text-violet-200">
+        <Link href={`/dashboard/${p.order.id}`} className="ms-auto text-sm text-violet-300 hover:text-violet-200">
           Open workspace
         </Link>
       </div>

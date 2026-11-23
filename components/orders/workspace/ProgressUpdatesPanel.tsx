@@ -195,7 +195,7 @@ export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">
                   {x.label}
-                  {x.lp !== null && <span className="ml-1.5 font-normal tabular-nums text-zinc-400">{x.lp} {u.pointsLabel}</span>}
+                  {x.lp !== null && <span className="ms-1.5 font-normal tabular-nums text-zinc-400">{x.lp} {u.pointsLabel}</span>}
                 </p>
                 <p className="text-[11px] text-zinc-500">{when(x.at)}</p>
               </div>

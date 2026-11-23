@@ -140,7 +140,7 @@ export function PermissionEditor({ userId, game, regions }: { userId: string; ga
         <span className="w-36 text-sm font-semibold">{game.gameName}</span>
         <label className="text-xs text-zinc-400">
           Highest target rank
-          <select value={tierId} onChange={(e) => { setTierId(e.target.value); setDivisionId(""); }} className={`${input} ml-2`}>
+          <select value={tierId} onChange={(e) => { setTierId(e.target.value); setDivisionId(""); }} className={`${input} ms-2`}>
             <option value="">Choose…</option>
             {game.tiers.map((t) => (
               <option key={t.tierId} value={t.tierId}>{t.tierName}</option>
@@ -156,7 +156,7 @@ export function PermissionEditor({ userId, game, regions }: { userId: string; ga
         ) : null}
       </div>
       <div className="flex flex-wrap gap-1 text-[11px]">
-        <span className="mr-1 text-zinc-500">Regions (none = all):</span>
+        <span className="me-1 text-zinc-500">Regions (none = all):</span>
         {regions.map((r) => (
           <button key={r} type="button" onClick={() => toggle(selRegions, setSelRegions, r)} className={`rounded px-1.5 py-0.5 ${selRegions.includes(r) ? "bg-violet-500/30 text-white" : "bg-white/5 text-zinc-400"}`}>
             {r}
@@ -164,7 +164,7 @@ export function PermissionEditor({ userId, game, regions }: { userId: string; ga
         ))}
       </div>
       <div className="flex flex-wrap gap-1 text-[11px]">
-        <span className="mr-1 text-zinc-500">Services (none = all):</span>
+        <span className="me-1 text-zinc-500">Services (none = all):</span>
         {game.services.map((s) => (
           <button key={s.slug} type="button" onClick={() => toggle(selServices, setSelServices, s.slug)} className={`rounded px-1.5 py-0.5 ${selServices.includes(s.slug) ? "bg-violet-500/30 text-white" : "bg-white/5 text-zinc-400"}`}>
             {s.title}

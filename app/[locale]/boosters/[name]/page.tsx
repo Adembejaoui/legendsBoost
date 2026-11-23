@@ -90,7 +90,7 @@ export default async function BoosterProfilePage({ params }: { params: Promise<{
                 {r.tags.length > 0 ? <p className="text-xs text-zinc-400">{r.tags.join(" · ")}</p> : null}
                 {r.text ? <p className="text-zinc-300">{r.text}</p> : null}
                 {r.reply ? (
-                  <p className="border-l-2 border-[#C8AA6E]/40 pl-2 text-zinc-400">
+                  <p className="border-s-2 border-[#C8AA6E]/40 ps-2 text-zinc-400">
                     <span className="font-semibold text-zinc-300">{b.displayName}: </span>
                     {r.reply}
                   </p>

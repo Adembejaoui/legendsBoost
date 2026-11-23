@@ -269,7 +269,7 @@ export function SupportTicketDetail({ ticketId, isAdmin = false }: SupportTicket
               {!message.isAdminReply && message.sender?.image && (
                 <img src={message.sender.image} alt="" className="size-8 rounded-full object-cover flex-shrink-0" />
               )}
-              <div className={cn("flex-1 max-w-[70%]", message.isAdminReply ? "text-right" : "")}>
+              <div className={cn("flex-1 max-w-[70%]", message.isAdminReply ? "text-end" : "")}>
                 <div className={cn("rounded-2xl px-4 py-2", message.isAdminReply ? "bg-violet-500/20 border border-violet-500/30 text-white rounded-bl-md" : "bg-white/5 border border-white/10 text-white rounded-br-md")}>
                   {!message.isAdminReply && (
                     <p className="text-xs text-zinc-400 mb-1">{message.sender?.name ?? DELETED_USER_LABEL}</p>

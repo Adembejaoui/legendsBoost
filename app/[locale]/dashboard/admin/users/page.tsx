@@ -7,7 +7,7 @@ import { DeletionDecision } from "@/components/admin/Phase9Controls";
 
 export const dynamic = "force-dynamic";
 
-const th = "px-2 py-1.5 text-left text-xs font-medium text-zinc-400";
+const th = "px-2 py-1.5 text-start text-xs font-medium text-zinc-400";
 const td = "px-2 py-1.5 align-top";
 
 /** Admin: all users (search, role filter) and account deletion requests. */
@@ -42,7 +42,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                   <span className="text-zinc-400">{u?.email}</span>
                   <span className="text-xs text-zinc-500">{u?.role?.toLowerCase()} · {r.requestedAt.toISOString().slice(0, 10)}</span>
                   {r.reason ? <span className="text-zinc-300">“{r.reason}”</span> : null}
-                  <span className="ml-auto">
+                  <span className="ms-auto">
                     <DeletionDecision requestId={r.id} />
                   </span>
                 </li>

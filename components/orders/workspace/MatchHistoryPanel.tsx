@@ -50,7 +50,7 @@ function MatchRow({ m }: { m: WorkspaceMatchDTO }) {
           </time>
         </p>
       </div>
-      <div className="text-right leading-tight">
+      <div className="text-end leading-tight">
         <p className="text-[13px] font-semibold tabular-nums text-white">
           {m.kills}/<span className="text-rose-300">{m.deaths}</span>/{m.assists}
         </p>

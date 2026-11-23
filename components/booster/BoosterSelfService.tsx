@@ -125,7 +125,7 @@ export function BoosterSelfService({
                 {p.regions.length ? p.regions.join(", ") : "all regions"} · {p.services.length ? p.services.join(", ") : "all services"}
               </span>
               {p.lowerOptions.length > 0 ? (
-                <span className="ml-auto flex items-center gap-2">
+                <span className="ms-auto flex items-center gap-2">
                   <select
                     value={picks[p.gameSlug] ?? ""}
                     onChange={(e) => setPicks({ ...picks, [p.gameSlug]: e.target.value })}

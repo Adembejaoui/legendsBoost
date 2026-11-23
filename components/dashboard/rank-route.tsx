@@ -59,7 +59,7 @@ function Side({
   align: "left" | "right";
 }) {
   return (
-    <div className={cn("min-w-0", align === "right" && "text-right")}>
+    <div className={cn("min-w-0", align === "right" && "text-end")}>
       <div className="text-xs text-zinc-500">{caption}</div>
       <div
         className={cn(

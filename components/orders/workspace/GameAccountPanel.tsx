@@ -96,7 +96,7 @@ export function GameAccountPanel({ data }: { data: WorkspaceDTO }) {
               <label className="block">
                 <span className="mb-1 block text-xs text-zinc-500">Tag</span>
                 <div className="flex items-center rounded-lg border border-white/10 bg-black/30 focus-within:border-[var(--g-accent)]/60">
-                  <span className="pl-2 text-sm text-zinc-500">#</span>
+                  <span className="ps-2 text-sm text-zinc-500">#</span>
                   <input
                     className="w-full bg-transparent px-1.5 py-2 text-sm text-white outline-none"
                     value={tagLine}
@@ -130,7 +130,7 @@ export function GameAccountPanel({ data }: { data: WorkspaceDTO }) {
               <span className="mb-1 block text-xs text-zinc-500">Password</span>
               <div className="relative">
                 <input
-                  className={`${input} pr-9`}
+                  className={`${input} pe-9`}
                   type={showPw ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -138,7 +138,7 @@ export function GameAccountPanel({ data }: { data: WorkspaceDTO }) {
                   maxLength={200}
                   autoComplete="new-password"
                 />
-                <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300" aria-label={showPw ? "Hide password" : "Show password"}>
+                <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute end-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300" aria-label={showPw ? "Hide password" : "Show password"}>
                   {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>

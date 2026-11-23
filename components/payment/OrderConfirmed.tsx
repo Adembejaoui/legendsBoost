@@ -79,7 +79,7 @@ export function OrderConfirmed({ orderId, summary }: { orderId: string; summary:
                   {summary.details.map((d) => (
                     <div key={d.label} className="flex justify-between gap-3">
                       <dt className="text-zinc-500">{d.label}</dt>
-                      <dd className="text-right font-medium text-zinc-200">{d.value}</dd>
+                      <dd className="text-end font-medium text-zinc-200">{d.value}</dd>
                     </div>
                   ))}
                 </dl>

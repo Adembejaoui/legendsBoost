@@ -144,7 +144,7 @@ export function BoosterNewOrderAlert() {
   if (!allowed) return null;
   const on = unlocked && !muted;
   return (
-    <div className="fixed bottom-4 left-4 z-40 flex flex-col items-start gap-1.5">
+    <div className="fixed bottom-4 start-4 z-40 flex flex-col items-start gap-1.5">
       {on && desktop === "default" ? (
         <button
           type="button"

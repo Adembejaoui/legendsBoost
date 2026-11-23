@@ -2,6 +2,13 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-23 · Spanish, German and Arabic
+
+- **Languages:** `/es`, `/de`, `/ar` next to English and French (`i18n/routing.ts`). Every page text (`messages/es|de|ar.json`) and every catalog text (`lib/i18n/catalog/es|de|ar.ts`) translated; the tests fail if a language misses one.
+- **Arabic is right to left:** `<html dir="rtl">`; layout classes use start/end instead of left/right (identical in other languages); arrows and chevrons are mirrored (`app/globals.css`).
+- **Currency default:** euros for French, Spanish and German, dollars otherwise (visitors can still pick).
+- Rewrites, cache headers, robots.txt, sitemap and hreflang cover every language automatically.
+
 ## 2026-11-23 · Home FAQ rewritten
 
 - The home FAQ described an early version ("no payment functionality", "order tracking planned"). Now six true answers in English and French: how it works, price, games and services, order tracking, refunds and problems, account safety (`Home.faq` in messages, list in `lib/content/home-faq.ts`). Also sent to Google as FAQPage data.

@@ -524,7 +524,7 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
                         type="button"
                         aria-label="Remove screenshot"
                         onClick={() => setProofs((cur) => cur.filter((_, j) => j !== i))}
-                        className="absolute right-1 top-1 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
+                        className="absolute end-1 top-1 rounded-full bg-black/70 p-0.5 text-white hover:bg-black"
                       >
                         <X className="size-3.5" />
                       </button>

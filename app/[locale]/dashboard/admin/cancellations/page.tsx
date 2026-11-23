@@ -61,7 +61,7 @@ export default async function AdminCancellationsPage() {
                     {started ? " · work started" : " · no work started"}
                   </p>
                 </div>
-                <div className="text-right text-sm">
+                <div className="text-end text-sm">
                   <p className="text-zinc-400">Paid</p>
                   <p className="font-semibold">{snap ? formatMoney(snap.totalAmount, snap.currency) : "—"}</p>
                 </div>

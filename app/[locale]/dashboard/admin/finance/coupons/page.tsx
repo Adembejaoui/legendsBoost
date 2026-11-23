@@ -10,7 +10,7 @@ import { CouponCreateForm, CouponToggle } from "@/components/finance/CouponsAdmi
 export const dynamic = "force-dynamic";
 
 const card = "rounded-lg border border-white/10 bg-white/5 p-4";
-const th = "px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-zinc-400";
+const th = "px-3 py-2 text-start text-xs font-medium uppercase tracking-wide text-zinc-400";
 const td = "px-3 py-2 align-top";
 
 export default async function AdminCouponsPage() {

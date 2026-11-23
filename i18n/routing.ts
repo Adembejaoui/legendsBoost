@@ -6,7 +6,7 @@ import { defineRouting } from "next-intl/routing";
  * Add a language here and a matching messages/<code>.json file.
  */
 export const routing = defineRouting({
-  locales: ["en", "fr"],
+  locales: ["en", "fr", "es", "de", "ar"],
   defaultLocale: "en",
   localePrefix: "as-needed",
   // Remembered for a year once a visitor picks a language.
@@ -19,4 +19,14 @@ export type Locale = (typeof routing.locales)[number];
 export const LOCALE_NAMES: Record<Locale, string> = {
   en: "English",
   fr: "Français",
+  es: "Español",
+  de: "Deutsch",
+  ar: "العربية",
 };
+
+/** Languages written right to left: the page gets dir="rtl" and a mirrored layout. */
+export const RTL_LOCALES: readonly string[] = ["ar"];
+
+export function textDirection(locale: string): "rtl" | "ltr" {
+  return RTL_LOCALES.includes(locale) ? "rtl" : "ltr";
+}

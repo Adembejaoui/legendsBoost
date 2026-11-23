@@ -30,7 +30,7 @@ export function DashboardSidebar({ role, user, onNavigate }: { role: UserRole; u
   const nav = getNavigation(role);
   const initials = (user.name || user.email || "?").slice(0, 2).toUpperCase();
   return (
-    <aside className="flex h-full flex-col border-r border-white/10 bg-[#111319] text-white">
+    <aside className="flex h-full flex-col border-e border-white/10 bg-[#111319] text-white">
       <div className="flex h-16 items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-3" aria-label="LegendsBoost home">
           <span className="grid size-9 place-items-center rounded-lg bg-violet-500 text-lg font-black text-white">L</span>
@@ -98,7 +98,7 @@ export function DashboardShell({ role, user, children, initialUnreadCount = 0 }:
       <div className="min-h-screen bg-[#0b0c10] text-white">
         <div className="flex">
           <div className="hidden md:block md:w-64 md:shrink-0">
-            <div className="fixed inset-y-0 left-0 w-64">
+            <div className="fixed inset-y-0 start-0 w-64">
               <DashboardSidebar role={role} user={user} />
             </div>
           </div>

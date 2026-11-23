@@ -201,7 +201,7 @@ export function RegisterForm() {
                   />
                 ))}
               </div>
-              <span className="w-12 text-right text-xs text-zinc-400">
+              <span className="w-12 text-end text-xs text-zinc-400">
                 <span className="sr-only">{t("register.strength")} </span>
                 {STRENGTH_KEYS[strength] ? t(`register.${STRENGTH_KEYS[strength]}`) : ""}
               </span>

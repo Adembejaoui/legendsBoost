@@ -108,7 +108,7 @@ export function CustomerOrderCard({ order }: CustomerOrderCardProps) {
               </span>
             )}
             {targetRank && (
-              <span className="flex items-center gap-1 ml-3">
+              <span className="flex items-center gap-1 ms-3">
                 <span className="text-white/60">Target:</span>
                 <RankDisplay
                   gameSlug={order.gameSlug}
@@ -123,7 +123,7 @@ export function CustomerOrderCard({ order }: CustomerOrderCardProps) {
 
       <div className="flex items-center gap-3">
         {order.price != null && order.currency ? (
-          <div className="text-right hidden sm:block">
+          <div className="text-end hidden sm:block">
             <div className="text-xs text-zinc-500">Total</div>
             <div className="text-sm font-bold tabular-nums text-white">
               {order.price.toString()} {order.currency}

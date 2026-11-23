@@ -1,5 +1,8 @@
 import { useLocale } from "next-intl";
 import { catalogFr } from "@/lib/i18n/catalog/fr";
+import { catalogEs } from "@/lib/i18n/catalog/es";
+import { catalogDe } from "@/lib/i18n/catalog/de";
+import { catalogAr } from "@/lib/i18n/catalog/ar";
 import { getDivision, getTier } from "@/lib/catalog/rank-systems";
 import type { RankSelection } from "@/types/catalog";
 
@@ -10,7 +13,8 @@ import type { RankSelection } from "@/types/catalog";
  * translation stays in English. Only what is SHOWN is translated: saved
  * values (option values, slugs, keys) never change.
  */
-const DICTIONARIES: Record<string, Record<string, string>> = { fr: catalogFr };
+export const CATALOG_DICTIONARIES: Record<string, Record<string, string>> = { fr: catalogFr, es: catalogEs, de: catalogDe, ar: catalogAr };
+const DICTIONARIES = CATALOG_DICTIONARIES;
 
 export type CatalogText = (english: string | undefined | null) => string;
 

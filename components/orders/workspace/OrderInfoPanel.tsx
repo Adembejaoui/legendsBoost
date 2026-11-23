@@ -49,7 +49,7 @@ export function OrderInfoPanel({ data }: { data: WorkspaceDTO }) {
           <p className="truncate text-sm font-semibold text-white">{order.serviceName}</p>
           <p className="truncate text-xs text-zinc-500">{order.gameName}</p>
         </div>
-        <Pill tone={ORDER_STATUS_TONE[order.status] ?? "neutral"} className="ml-auto">
+        <Pill tone={ORDER_STATUS_TONE[order.status] ?? "neutral"} className="ms-auto">
           {order.statusLabel}
         </Pill>
       </div>

@@ -28,7 +28,7 @@ export async function ServiceEmbed({ gameSlug, serviceSlug }: { gameSlug: string
       </div>
       <div className="flex shrink-0 items-center gap-4">
         {price ? (
-          <p className="text-right">
+          <p className="text-end">
             <span className="block text-[11px] text-zinc-500">{t('from')}</span>
             <span className="text-xl font-bold text-white">{formatMoney(price.amount, price.currency)}</span>
           </p>

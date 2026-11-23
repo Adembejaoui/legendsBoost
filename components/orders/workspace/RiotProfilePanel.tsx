@@ -95,7 +95,7 @@ export function RiotProfilePanel({ data }: { data: WorkspaceDTO }) {
               <p className="text-lg font-bold leading-tight text-white">{rankText(main)}</p>
               <p className="text-sm font-semibold text-[var(--g-accent)]">{main.lp} LP</p>
             </div>
-            <div className="text-right text-[11px] text-zinc-400">
+            <div className="text-end text-[11px] text-zinc-400">
               <p>{main.wins}W {main.losses}L</p>
               {main.winRate !== null && <Pill tone={main.winRate >= 50 ? "green" : "red"}>{main.winRate}%</Pill>}
             </div>
@@ -142,7 +142,7 @@ export function RiotProfilePanel({ data }: { data: WorkspaceDTO }) {
                     {m.queue} · {Math.round(m.durationSec / 60)} min{m.endedAt ? ` · ${ago(m.endedAt)}` : ""}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-end">
                   <p className="text-sm font-semibold text-white">
                     {m.kills}/<span className="text-rose-300">{m.deaths}</span>/{m.assists}
                   </p>

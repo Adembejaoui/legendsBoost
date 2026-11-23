@@ -30,10 +30,10 @@ const components: Components = {
   ),
   h4: ({ children }) => <h4 className="mt-6 text-lg font-semibold text-white">{children}</h4>,
   p: ({ children }) => <p className="mt-4 leading-7 text-zinc-300">{children}</p>,
-  ul: ({ children }) => <ul className="mt-4 list-disc space-y-2 pl-6 text-zinc-300">{children}</ul>,
-  ol: ({ children }) => <ol className="mt-4 list-decimal space-y-2 pl-6 text-zinc-300">{children}</ol>,
+  ul: ({ children }) => <ul className="mt-4 list-disc space-y-2 ps-6 text-zinc-300">{children}</ul>,
+  ol: ({ children }) => <ol className="mt-4 list-decimal space-y-2 ps-6 text-zinc-300">{children}</ol>,
   li: ({ children }) => <li className="leading-7">{children}</li>,
-  blockquote: ({ children }) => <blockquote className="mt-5 border-l-2 border-violet-400/60 pl-4 italic text-zinc-400">{children}</blockquote>,
+  blockquote: ({ children }) => <blockquote className="mt-5 border-s-2 border-violet-400/60 ps-4 italic text-zinc-400">{children}</blockquote>,
   strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
   hr: () => <hr className="my-10 border-white/10" />,
   code: ({ children, className }) =>
@@ -45,7 +45,7 @@ const components: Components = {
   pre: ({ children }) => <pre className="mt-5 overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-4 text-sm text-zinc-200">{children}</pre>,
   table: ({ children }) => (
     <div className="mt-5 overflow-x-auto">
-      <table className="w-full border-collapse text-left text-sm text-zinc-300">{children}</table>
+      <table className="w-full border-collapse text-start text-sm text-zinc-300">{children}</table>
     </div>
   ),
   th: ({ children }) => <th className="border-b border-white/15 px-3 py-2 font-semibold text-white">{children}</th>,

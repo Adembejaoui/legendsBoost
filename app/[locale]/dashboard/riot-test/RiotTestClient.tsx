@@ -56,7 +56,7 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 py-1 text-sm">
       <span className="text-zinc-400">{k}</span>
-      <span className="break-all text-right text-zinc-100">{v}</span>
+      <span className="break-all text-end text-zinc-100">{v}</span>
     </div>
   );
 }
@@ -164,7 +164,7 @@ export default function RiotTestClient({ platforms }: { platforms: { value: stri
                   <div className="text-sm text-zinc-400">
                     Level {s.level ?? "?"} · Active region {s.activeRegion ?? "?"}{" "}
                     {!s.regionMatchesSelection && <span className="text-amber-300">(no League profile on the selected server)</span>}
-                    {s.inGame && <span className="ml-2 text-emerald-300">● in game now</span>}
+                    {s.inGame && <span className="ms-2 text-emerald-300">● in game now</span>}
                   </div>
                   <div className="mt-1 break-all font-mono text-xs text-zinc-500">PUUID {s.puuid}</div>
                 </div>
@@ -227,7 +227,7 @@ export default function RiotTestClient({ platforms }: { platforms: { value: stri
                       <span className="text-zinc-400">{Math.round(m.durationSec / 60)} min</span>
                       <span className="text-zinc-400">queue {m.queueId}{m.gameMode ? ` (${m.gameMode})` : ""}</span>
                       {m.position && <span className="text-zinc-500">{m.position}</span>}
-                      <span className="ml-auto text-xs text-zinc-500">{m.endedAt ? new Date(m.endedAt).toLocaleString() : ""}</span>
+                      <span className="ms-auto text-xs text-zinc-500">{m.endedAt ? new Date(m.endedAt).toLocaleString() : ""}</span>
                     </div>
                   ))}
                 </div>
@@ -247,7 +247,7 @@ export default function RiotTestClient({ platforms }: { platforms: { value: stri
                     </Badge>
                     <span className="text-white">{st.label}</span>
                     <span className="font-mono text-xs text-zinc-500">{st.api}</span>
-                    {!st.skipped && <span className="ml-auto text-xs text-zinc-500">{st.ms} ms</span>}
+                    {!st.skipped && <span className="ms-auto text-xs text-zinc-500">{st.ms} ms</span>}
                   </summary>
                   {st.skipped && <p className="mt-2 text-xs text-zinc-400">{st.skipped}</p>}
                   {st.url && <p className="mt-2 break-all font-mono text-xs text-zinc-500">GET {st.url}</p>}

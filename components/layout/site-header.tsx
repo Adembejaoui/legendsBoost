@@ -92,7 +92,7 @@ export function SiteHeader() {
             {loading ? null : authed ? (
               <>
                 <Link href={dashboardHref(role)} onClick={close} className="rounded-lg px-3 py-3 text-sm text-zinc-300 hover:bg-white/5 hover:text-white">{dashboardLabel}</Link>
-                <button onClick={() => { close(); signOut({ callbackUrl: '/' }) }} className="rounded-lg px-3 py-3 text-left text-sm text-zinc-300 hover:bg-white/5 hover:text-white flex items-center gap-2"><LogOut className="size-4" />{t('signOut')}</button>
+                <button onClick={() => { close(); signOut({ callbackUrl: '/' }) }} className="rounded-lg px-3 py-3 text-start text-sm text-zinc-300 hover:bg-white/5 hover:text-white flex items-center gap-2"><LogOut className="size-4" />{t('signOut')}</button>
               </>
             ) : (
               <>

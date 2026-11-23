@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-const th = "px-2 py-1.5 text-left text-xs font-medium text-zinc-400";
+const th = "px-2 py-1.5 text-start text-xs font-medium text-zinc-400";
 const td = "px-2 py-1.5";
 const STATUSES = ["APPROVED", "TRIAL", "ON_BREAK", "PENDING", "UNDER_REVIEW", "NEEDS_INFO", "SUSPENDED", "REJECTED", "TERMINATED"];
 

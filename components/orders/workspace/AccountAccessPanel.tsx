@@ -145,7 +145,7 @@ export function AccountAccessPanel({ data, embedded = false }: { data: Workspace
       ) : rulesOpen ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-white">Session rules</p>
-          <ul className="list-disc space-y-1 pl-4 text-[11px] text-zinc-400">
+          <ul className="list-disc space-y-1 ps-4 text-[11px] text-zinc-400">
             {s.rules.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -226,7 +226,7 @@ export function AccountAccessPanel({ data, embedded = false }: { data: Workspace
             <span className="mb-1 block text-xs text-zinc-500">Password</span>
             <div className="relative">
               <input
-                className={`${input} pr-9`}
+                className={`${input} pe-9`}
                 type={showPw ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -234,7 +234,7 @@ export function AccountAccessPanel({ data, embedded = false }: { data: Workspace
                 maxLength={200}
                 autoComplete="new-password"
               />
-              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300" aria-label={showPw ? "Hide password" : "Show password"}>
+              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute end-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300" aria-label={showPw ? "Hide password" : "Show password"}>
                 {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>

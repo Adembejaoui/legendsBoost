@@ -454,7 +454,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                 <span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/[0.06] text-zinc-300">
                   <ArrowRight className="size-3.5" aria-hidden />
                 </span>
-                <div className="flex min-w-0 items-center gap-2 text-right">
+                <div className="flex min-w-0 items-center gap-2 text-end">
                   {toLine.iconSrc ? <Image src={toLine.iconSrc} alt="" width={36} height={36} className="size-9 object-contain" /> : null}
                   <p className="truncate text-sm font-bold text-white">{toLine.value}</p>
                 </div>

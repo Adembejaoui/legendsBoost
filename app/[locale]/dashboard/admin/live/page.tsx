@@ -58,7 +58,7 @@ export default async function AdminLiveBoardPage() {
                   </div>
                   <div className="mt-1 text-zinc-300">
                     {getGame(o.gameSlug)?.name ?? o.gameSlug} · {o.serviceSlug}
-                    {o.isPriority ? <span className="ml-1 text-[#e3c98f]">priority</span> : null}
+                    {o.isPriority ? <span className="ms-1 text-[#e3c98f]">priority</span> : null}
                   </div>
                   <div className="mt-1 text-zinc-500">
                     {o.customer ?? "Customer"}

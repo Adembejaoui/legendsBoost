@@ -182,12 +182,12 @@ export function SupportTicketList({ isAdmin = false }: SupportTicketListProps) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/10 bg-white/5">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Subject</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden md:table-cell">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden lg:table-cell">Priority</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden md:table-cell">Order</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-400 uppercase tracking-wider">Updated</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider">Subject</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden md:table-cell">Category</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden lg:table-cell">Priority</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider hidden md:table-cell">Order</th>
+                  <th className="px-4 py-3 text-start text-xs font-semibold text-zinc-400 uppercase tracking-wider">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">

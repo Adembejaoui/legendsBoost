@@ -33,7 +33,7 @@ export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefr
   const price = storefront?.startingPrice
   const body = (
     <>
-      <div className="absolute left-0 top-0 h-1 w-full" style={{ backgroundColor: accent }} aria-hidden />
+      <div className="absolute start-0 top-0 h-1 w-full" style={{ backgroundColor: accent }} aria-hidden />
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-lg font-semibold tracking-tight text-white">{title}</h3>

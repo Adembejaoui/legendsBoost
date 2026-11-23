@@ -126,12 +126,12 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, si
             </div>
             <div className="mb-2 flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+                <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={t('search', { count: champions.length })}
-                  className="w-full rounded-lg border border-white/10 bg-[#0b0c10] py-2 pl-9 pr-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                  className="w-full rounded-lg border border-white/10 bg-[#0b0c10] py-2 ps-9 pe-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-400"
                 />
               </div>
               <div className="flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-[#0b0c10] p-1">
@@ -180,7 +180,7 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, si
                       )}
                       <span className="w-full truncate text-[11px] text-zinc-200">{champ.name}</span>
                       {selected ? (
-                        <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-violet-500">
+                        <span className="absolute end-1 top-1 grid size-4 place-items-center rounded-full bg-violet-500">
                           <Check className="size-3 text-white" />
                         </span>
                       ) : null}
@@ -199,7 +199,7 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, si
                       key={cid}
                       type="button"
                       onClick={() => toggleChampion(cid)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 py-0.5 pl-0.5 pr-2 text-xs text-zinc-300 hover:border-rose-400/40 hover:text-rose-200"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 py-0.5 ps-0.5 pe-2 text-xs text-zinc-300 hover:border-rose-400/40 hover:text-rose-200"
                       title={t('remove')}
                     >
                       {c?.iconSrc ? (

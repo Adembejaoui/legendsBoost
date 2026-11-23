@@ -19,7 +19,7 @@ function Tile({
 }) {
   return (
     <div className="relative min-w-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#10121a] px-3 py-2.5">
-      <div aria-hidden className="pointer-events-none absolute -right-4 -top-6 size-16 rounded-full bg-[radial-gradient(circle,rgba(var(--g-rgb),0.14),transparent_70%)]" />
+      <div aria-hidden className="pointer-events-none absolute -end-4 -top-6 size-16 rounded-full bg-[radial-gradient(circle,rgba(var(--g-rgb),0.14),transparent_70%)]" />
       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span className="text-[var(--g-accent)]">{icon}</span>
         {label}

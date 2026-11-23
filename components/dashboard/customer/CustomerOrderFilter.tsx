@@ -36,7 +36,7 @@ export function CustomerOrderFilter({ options, selectedValue }: CustomerOrderFil
       <select
         value={selectedValue}
         onChange={(event) => handleChange(event.target.value)}
-        className="appearance-none rounded-lg border border-white/10 bg-white/5 py-2.5 pl-3 pr-10 text-sm text-zinc-200 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/40"
+        className="appearance-none rounded-lg border border-white/10 bg-white/5 py-2.5 ps-3 pe-10 text-sm text-zinc-200 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/40"
       >
         {options.map((option) => (
           <option key={option.value || "all"} value={option.value}>
@@ -46,7 +46,7 @@ export function CustomerOrderFilter({ options, selectedValue }: CustomerOrderFil
       </select>
       <svg
         aria-hidden="true"
-        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
+        className="pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
         viewBox="0 0 20 20"
         fill="currentColor"
       >
@@ -55,7 +55,7 @@ export function CustomerOrderFilter({ options, selectedValue }: CustomerOrderFil
       {selectedValue && (
         <Link
           href={buildClearHref(pathname, searchParams)}
-          className="ml-2 rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white"
+          className="ms-2 rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white"
         >
           Clear
         </Link>

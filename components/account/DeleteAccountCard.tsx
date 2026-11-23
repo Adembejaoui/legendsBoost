@@ -64,7 +64,7 @@ export function DeleteAccountCard() {
           </button>
         </div>
       ) : status && status.blockers.length > 0 ? (
-        <ul className="list-disc space-y-1 pl-5 text-amber-300">
+        <ul className="list-disc space-y-1 ps-5 text-amber-300">
           {status.blockers.map((b) => (
             <li key={b}>{b}</li>
           ))}

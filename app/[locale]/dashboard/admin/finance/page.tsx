@@ -19,7 +19,7 @@ function money(map: Record<string, number>) {
 
 const card = "rounded-lg border border-white/10 bg-white/5 p-4";
 const section = "mt-8";
-const th = "px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-zinc-400";
+const th = "px-3 py-2 text-start text-xs font-medium uppercase tracking-wide text-zinc-400";
 const td = "px-3 py-2 align-top";
 
 export default async function AdminFinancePage() {
@@ -167,8 +167,8 @@ export default async function AdminFinancePage() {
             <tr key={p.id} className="border-t border-white/5">
               <td className={td}>{p.orderId.slice(-8).toUpperCase()}</td>
               <td className={td}>#{p.attemptNumber}</td>
-              <td className={td}>{p.status}{p.failureCode ? <span className="ml-1 text-xs text-zinc-500">({p.failureCode})</span> : null}</td>
-              <td className={td}>{formatMoney(p.amount, p.currency)}{p.amountRefunded ? <span className="ml-1 text-xs text-zinc-500">refunded {formatMoney(p.amountRefunded, p.currency)}</span> : null}</td>
+              <td className={td}>{p.status}{p.failureCode ? <span className="ms-1 text-xs text-zinc-500">({p.failureCode})</span> : null}</td>
+              <td className={td}>{formatMoney(p.amount, p.currency)}{p.amountRefunded ? <span className="ms-1 text-xs text-zinc-500">refunded {formatMoney(p.amountRefunded, p.currency)}</span> : null}</td>
               <td className={td}>{p.status === "SUCCEEDED" && !p.reviewReason && p.stripePaymentIntentId && (p.amountReceived ?? p.amount) > p.amountRefunded ? <RefundForm orderId={p.orderId} paymentId={p.id} maxAmount={(p.amountReceived ?? p.amount) - p.amountRefunded} currency={p.currency} /> : null}</td>
             </tr>))}</tbody></table>
         {q.pendingRefunds.length ? <p className="mt-2 text-xs text-amber-300">{q.pendingRefunds.length} refund(s) pending or failed; see transactions.</p> : null}

@@ -75,7 +75,7 @@ export function CancellationDecision({
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-zinc-400">
           Refund ({currency})
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className={`${input} ml-2 w-28`} />
+          <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className={`${input} ms-2 w-28`} />
         </label>
         <input
           value={note}

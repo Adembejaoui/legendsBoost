@@ -63,7 +63,7 @@ export function VerifyEmailBanner({ email }: { email: string }) {
             Please confirm your email address <span className="font-semibold">{email}</span> so we can reach you about your orders.
           </>
         )}
-        {error ? <span className="ml-2 text-rose-300">{error}</span> : null}
+        {error ? <span className="ms-2 text-rose-300">{error}</span> : null}
       </p>
       {state !== "sent" && (
         <button
