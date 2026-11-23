@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { SHORT_SERVICE_PATHS } from "./lib/seo/short-paths";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
@@ -62,17 +63,10 @@ const nextConfig: NextConfig = {
   // first and turns /lol-boosting into /en/lol-boosting (or /fr/...), so the
   // short addresses are matched with the language in front.
   async rewrites() {
-    const short: [string, string][] = [
-      ["league-of-legends-rank-boost", "rank-boost"],
-      ["lol-boosting", "win-boost"],
-      ["lol-placement-boost", "placement-boost"],
-      ["lol-arena-boost", "arena-boost"],
-      ["champion-mastery", "champion-mastery"],
-      ["normal-games", "normal-matches"],
-    ];
-    return short.map(([from, slug]) => ({
-      source: `/:locale(en|fr)/${from}`,
-      destination: `/:locale/games/league-of-legends/services/${slug}`,
+    // One list (lib/seo/short-paths.ts) for these rewrites, links, the sitemap and canonical tags.
+    return Object.entries(SHORT_SERVICE_PATHS).map(([key, short]) => ({
+      source: `/:locale(en|fr)${short}`,
+      destination: `/:locale/games/${key.replace("/", "/services/")}`,
     }));
   },
   async headers() {

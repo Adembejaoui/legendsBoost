@@ -384,5 +384,19 @@
     "ctaTitle": "Ready to climb?",
     "ctaText": "Pick your service and see your price in seconds.",
     "ctaButton": "See services"
+  },
+  "Seo": {
+    "home": "Home",
+    "serviceTitle": "{service} {game} — Verified Boosters | LegendsBoost",
+    "serviceDescription": "{description} See your price live, pay securely and follow every game from your order page.",
+    "serviceDescriptionPrice": "{description} From {price}. Pay securely and follow every game from your order page.",
+    "gameTitle": "{game} Boosting Services — Rank, Wins & More | LegendsBoost",
+    "gameDescription": "{game} boosting by verified players: {services}. Live prices and full order tracking.",
+    "boostersTitle": "Our Boosters — Verified Players & Reviews | LegendsBoost",
+    "boostersDescription": "Meet our verified boosters: their games, ranks, ratings and reviews from real orders.",
+    "boosterTitle": "{name} — LegendsBoost Booster",
+    "boosterDescription": "{name}'s games, ratings and reviews from real LegendsBoost orders.",
+    "termsTitle": "Terms of Service — LegendsBoost",
+    "privacyTitle": "Privacy Policy — LegendsBoost"
   }
 }

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { PlaceholderPage } from "@/components/layout/PlaceholderPage";
 
-export const metadata: Metadata = { title: "Privacy Policy — LegendsBoost" };
+// Not indexed while the page is a placeholder (thin content); remove robots when the real text is in.
+export const metadata: Metadata = { title: "Privacy Policy — LegendsBoost", robots: { index: false, follow: true } };
 
 // PLACEHOLDER: replace with the reviewed privacy policy (build plan Phase 1).
 export default function PrivacyPage() {

@@ -13,6 +13,12 @@ import type { Metadata } from 'next'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { catalogText, localizeField } from '@/lib/i18n/catalog'
 import { getRequestCurrency } from '@/lib/currency/server'
+import { languageAlternates } from '@/lib/i18n/alternates'
+import { servicePath } from '@/lib/seo/short-paths'
+import { breadcrumbLd, faqLd, serviceLd } from '@/lib/seo/structured-data'
+import { JsonLd } from '@/components/seo/JsonLd'
+import { faqFor } from '@/lib/content/faqAC'
+import { formatMoney } from '@/lib/money'
 
 interface ServicePageProps {
   params: Promise<{ gameSlug: string; serviceSlug: string }>
@@ -24,10 +30,23 @@ export async function generateMetadata({ params }: ServicePageProps): Promise<Me
   if (!entry) {
     return { title: (await getTranslations('Service'))('notFound') }
   }
-  const ct = catalogText(await getLocale())
+  const locale = await getLocale()
+  const ct = catalogText(locale)
+  const t = await getTranslations('Seo')
+  const storefront = await getStorefrontService(gameSlug, serviceSlug, await getRequestCurrency()).catch(() => null)
+  const price = storefront?.availability === 'available' ? storefront.startingPrice : null
+  const service = ct(entry.offer.title ?? entry.template.title)
+  const description = ct(entry.offer.description ?? entry.template.description)
+  const title = t('serviceTitle', { service, game: entry.game.name })
+  const desc = price
+    ? t('serviceDescriptionPrice', { description, price: formatMoney(price.amount, price.currency) })
+    : t('serviceDescription', { description })
   return {
-    title: `${ct(entry.offer.title ?? entry.template.title)} — ${entry.game.name} — LegendsBoost`,
-    description: ct(entry.offer.description ?? entry.template.description),
+    title,
+    description: desc,
+    // One indexed address per service: the short one when it exists.
+    alternates: languageAlternates(servicePath(gameSlug, serviceSlug), locale),
+    openGraph: { title, description: desc, url: servicePath(gameSlug, serviceSlug) },
   }
 }
 
@@ -91,8 +110,37 @@ export default async function ServicePage({ params }: ServicePageProps) {
     category: template.category,
   }
 
+  const locale = await getLocale()
+  const seo = await getTranslations('Seo')
+  const tService = await getTranslations('Service')
+  const serviceName = ct(offer.title ?? template.title)
+  const path = servicePath(game.slug, offer.serviceSlug)
+  const faqs = faqFor(game.slug, offer.serviceSlug).map((f) => ({ question: ct(f.question), answer: ct(f.answer) }))
+
   return (
     <>
+      <JsonLd
+        data={[
+          breadcrumbLd(
+            [
+              { name: seo('home'), path: '/' },
+              { name: tService('games'), path: '/games' },
+              { name: game.name, path: `/games/${game.slug}` },
+              { name: serviceName, path },
+            ],
+            locale,
+          ),
+          serviceLd({
+            name: serviceName,
+            description: ct(offer.description ?? template.description),
+            gameName: game.name,
+            path,
+            locale,
+            price: storefront?.availability === 'available' ? storefront.startingPrice : null,
+          }),
+          faqLd(faqs),
+        ]}
+      />
       <SiteHeader />
       <main className="pb-10 pt-24 sm:pt-28">
         <CheckoutSteps current={3} gameSlug={game.slug} serviceSlug={offer.serviceSlug} />

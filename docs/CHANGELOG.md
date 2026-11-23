@@ -2,6 +2,15 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-23 · SEO
+
+- **One address per page:** the short League addresses (`/lol-boosting`, ...) are the main ones (`lib/seo/short-paths.ts`, also used by the rewrites, links, sitemap and canonical tags); the long `/games/.../services/...` address points to them.
+- **Canonical + hreflang** (English, French, x-default) on home, games, each game, each service, blog, boosters.
+- **Titles and descriptions** with keywords for game and service pages (service description includes the "From" price), in both languages.
+- **Structured data:** Organization + WebSite (home), BreadcrumbList (game, service), FAQPage (game and service FAQs), Service with starting-price Offer (service pages), BlogPosting (articles).
+- **Not indexed:** dashboard, checkout returns, sign-in pages, blog search and tag lists, placeholder Terms / Privacy (remove their `robots` line once the real text is in). `robots.txt` now blocks private pages in every language.
+- Sitemap: short addresses, hidden services left out, boosters page added.
+
 ## 2026-11-23 · Blog
 
 - **Admin → Blog** (`/dashboard/admin/blog`): articles in Markdown with live preview, cover and inline images (PNG/JPG/WebP, checked by their bytes, private bucket `blog-images`, served by `/api/blog/images/[id]` with a one-year cache), game, tags, Google title and description, draft / publish / schedule (future date), delete one language (audited).

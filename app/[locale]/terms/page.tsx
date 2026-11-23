@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { PlaceholderPage } from "@/components/layout/PlaceholderPage";
 import { RISK_DISCLOSURE_TEXT } from "@/lib/orders/risk-disclosure";
 
-export const metadata: Metadata = { title: "Terms of Service — LegendsBoost" };
+// Not indexed while the page is a placeholder (thin content); remove robots when the real text is in.
+export const metadata: Metadata = { title: "Terms of Service — LegendsBoost", robots: { index: false, follow: true } };
 
 // PLACEHOLDER: replace with the reviewed legal text (build plan Phase 1).
 export default function TermsPage() {

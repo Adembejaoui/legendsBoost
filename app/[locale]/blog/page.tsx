@@ -12,9 +12,21 @@ import { cn } from '@/lib/utils'
 
 type SearchParams = Promise<{ game?: string; tag?: string; q?: string; page?: string }>
 
-export async function generateMetadata(): Promise<Metadata> {
-  const [t, locale] = await Promise.all([getTranslations('Blog'), getLocale()])
-  return { title: t('metaTitle'), description: t('metaDescription'), alternates: languageAlternates('/blog', locale) }
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const [t, locale, sp] = await Promise.all([getTranslations('Blog'), getLocale(), searchParams])
+  const game = getGames().some((g) => g.slug === sp.game) ? sp.game : undefined
+  const page = Number(sp.page) > 1 ? Math.floor(Number(sp.page)) : undefined
+  const qs = new URLSearchParams()
+  if (game) qs.set('game', game)
+  if (page) qs.set('page', String(page))
+  const path = qs.size ? `/blog?${qs}` : '/blog'
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+    alternates: languageAlternates(path, locale),
+    // Search results and tag lists are thin duplicates: followed, not indexed.
+    ...(sp.q || sp.tag ? { robots: { index: false, follow: true } } : {}),
+  }
 }
 
 /** Blog list: filters by game, tag and words, 12 per page. */

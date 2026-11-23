@@ -1,13 +1,15 @@
 import { Link } from "@/i18n/navigation";
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
+import { languageAlternates } from "@/lib/i18n/alternates";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { listPublicBoosters } from "@/lib/boosters/public-profile";
 
-export const metadata: Metadata = {
-  title: "Our boosters — LegendsBoost",
-  description: "Verified boosters, their games, ratings and reviews from real orders.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [t, locale] = await Promise.all([getTranslations("Seo"), getLocale()]);
+  return { title: t("boostersTitle"), description: t("boostersDescription"), alternates: languageAlternates("/boosters", locale) };
+}
 export const dynamic = "force-dynamic";
 
 /** Public list of active boosters who chose a public name. */

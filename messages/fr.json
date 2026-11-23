@@ -384,5 +384,19 @@
     "ctaTitle": "Prêt à grimper ?",
     "ctaText": "Choisissez votre service et voyez votre prix en quelques secondes.",
     "ctaButton": "Voir les services"
+  },
+  "Seo": {
+    "home": "Accueil",
+    "serviceTitle": "{service} {game} — Boosters vérifiés | LegendsBoost",
+    "serviceDescription": "{description} Voyez votre prix en direct, payez en toute sécurité et suivez chaque partie depuis votre commande.",
+    "serviceDescriptionPrice": "{description} Dès {price}. Payez en toute sécurité et suivez chaque partie depuis votre commande.",
+    "gameTitle": "Boosting {game} — Rang, victoires et plus | LegendsBoost",
+    "gameDescription": "Boosting {game} par des joueurs vérifiés : {services}. Prix en direct et suivi complet de la commande.",
+    "boostersTitle": "Nos boosters — Joueurs vérifiés et avis | LegendsBoost",
+    "boostersDescription": "Découvrez nos boosters vérifiés : leurs jeux, rangs, notes et avis de vraies commandes.",
+    "boosterTitle": "{name} — Booster LegendsBoost",
+    "boosterDescription": "Jeux, notes et avis de {name} sur de vraies commandes LegendsBoost.",
+    "termsTitle": "Conditions d'utilisation — LegendsBoost",
+    "privacyTitle": "Politique de confidentialité — LegendsBoost"
   }
 }

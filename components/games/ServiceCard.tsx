@@ -8,6 +8,7 @@ import { ArrowRight } from 'lucide-react'
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from 'next-intl'
 import { useCatalogText } from '@/lib/i18n/catalog'
+import { servicePath } from '@/lib/seo/short-paths'
 
 interface ServiceCardProps {
   offer: GameServiceOffer
@@ -71,7 +72,7 @@ export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefr
   }
   return (
     <Link
-      href={`/games/${game.slug}/services/${offer.serviceSlug}`}
+      href={servicePath(game.slug, offer.serviceSlug)}
       className={cn(base, 'hover:border-white/25 hover:bg-[#14161e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-400')}
       aria-label={price ? t('selectAriaPrice', { title, price: formatMoney(price.amount, price.currency) }) : t('selectAria', { title })}
     >

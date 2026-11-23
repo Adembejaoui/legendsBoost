@@ -6,6 +6,7 @@ import { routing } from "@/i18n/routing";
 import { localizedPath } from "@/lib/i18n/alternates";
 import { sitemapPosts } from "@/lib/blog/service";
 import { logger } from "@/lib/logger";
+import { servicePath } from "@/lib/seo/short-paths";
 
 /** Rebuilt at most once an hour (new blog posts). */
 export const revalidate = 3600;
@@ -30,8 +31,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     page("/", "weekly", 1),
     page("/games", "weekly", 0.8),
     ...getGames().map((g) => page(`/games/${g.slug}`, "weekly", 0.7)),
-    ...gameServices.map((s) => page(`/games/${s.gameSlug}/services/${s.serviceSlug}`, "weekly", 0.6)),
+    // The main address of each service page (short one when it has one).
+    ...gameServices.filter((s) => s.visibility !== "hidden").map((s) => page(servicePath(s.gameSlug, s.serviceSlug), "weekly", 0.7)),
     page("/blog", "daily", 0.6),
+    page("/boosters", "weekly", 0.5),
   ];
 
   let posts: Awaited<ReturnType<typeof sitemapPosts>> = [];

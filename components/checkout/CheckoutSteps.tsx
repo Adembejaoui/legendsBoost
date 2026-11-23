@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
+import { servicePath } from '@/lib/seo/short-paths'
 
 /**
  * Four-step progress indicator: Game -> Service -> Configure -> Payment.
@@ -23,7 +24,7 @@ export function CheckoutSteps({
   const steps: { n: 1 | 2 | 3 | 4; label: string; href?: string }[] = [
     { n: 1, label: t('chooseGame'), href: '/games' },
     { n: 2, label: t('chooseService'), href: gameSlug ? `/games/${gameSlug}` : undefined },
-    { n: 3, label: t('configure'), href: gameSlug && serviceSlug ? `/games/${gameSlug}/services/${serviceSlug}` : undefined },
+    { n: 3, label: t('configure'), href: gameSlug && serviceSlug ? servicePath(gameSlug, serviceSlug) : undefined },
     { n: 4, label: t('payment') },
   ]
   return (

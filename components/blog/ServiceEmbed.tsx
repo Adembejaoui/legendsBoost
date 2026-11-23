@@ -6,6 +6,7 @@ import { getStorefrontService } from '@/lib/catalog/storefront'
 import { getRequestCurrency } from '@/lib/currency/server'
 import { catalogText } from '@/lib/i18n/catalog'
 import { formatMoney } from '@/lib/money'
+import { servicePath } from '@/lib/seo/short-paths'
 
 /** Order box inside a post: the service, its live starting price and an order button. */
 export async function ServiceEmbed({ gameSlug, serviceSlug }: { gameSlug: string; serviceSlug: string }) {
@@ -33,7 +34,7 @@ export async function ServiceEmbed({ gameSlug, serviceSlug }: { gameSlug: string
           </p>
         ) : null}
         <Link
-          href={`/games/${gameSlug}/services/${serviceSlug}`}
+          href={servicePath(gameSlug, serviceSlug)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-400"
         >
           {t('order')}

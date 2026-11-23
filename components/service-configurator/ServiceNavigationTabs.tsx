@@ -3,6 +3,7 @@
 import { Link } from "@/i18n/navigation";
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
+import { servicePath } from '@/lib/seo/short-paths'
 import type { OfferWithTemplate } from '@/lib/catalog/catalog-utils'
 
 interface ServiceNavigationTabsProps {
@@ -21,7 +22,7 @@ export function ServiceNavigationTabs({ gameSlug, activeServiceSlug, offers }: S
         {offers.map((entry) => {
           const slug = entry.offer.serviceSlug
           const isActive = slug === activeServiceSlug
-          const href = `/games/${gameSlug}/services/${slug}`
+          const href = servicePath(gameSlug, slug)
           const title = entry.offer.title ?? entry.template.title
           return (
             <li key={slug} className="shrink-0">

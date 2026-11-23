@@ -6,7 +6,7 @@ import { RegisterForm } from "@/components/auth/register-form";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("Auth.register");
-  return { title: t("metaTitle"), description: t("metaDescription") };
+  return { title: t("metaTitle"), description: t("metaDescription"), robots: { index: false, follow: true } };
 }
 
 export default function RegisterPage() {

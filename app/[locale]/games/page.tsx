@@ -10,10 +10,11 @@ import type { Metadata } from 'next'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { useTranslations } from 'next-intl'
 import { catalogText } from '@/lib/i18n/catalog'
+import { languageAlternates } from '@/lib/i18n/alternates'
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('Games')
-  return { title: t('metaTitle'), description: t('metaDescription') }
+  return { title: t('metaTitle'), description: t('metaDescription'), alternates: languageAlternates('/games', await getLocale()) }
 }
 
 // Service counts depend on live prices and the Stripe mode: render per request.

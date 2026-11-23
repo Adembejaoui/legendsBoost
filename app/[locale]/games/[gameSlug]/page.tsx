@@ -14,6 +14,10 @@ import type { Metadata } from 'next'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { catalogText } from '@/lib/i18n/catalog'
 import { getRequestCurrency } from '@/lib/currency/server'
+import { languageAlternates } from '@/lib/i18n/alternates'
+import { breadcrumbLd, faqLd } from '@/lib/seo/structured-data'
+import { JsonLd } from '@/components/seo/JsonLd'
+import { getOffersWithTemplate as offersFor } from '@/lib/catalog/catalog-utils'
 import type { Game } from '@/types/game'
 
 interface GamePageProps {
@@ -30,9 +34,16 @@ export async function generateMetadata({ params }: GamePageProps): Promise<Metad
   if (!game) {
     return { title: t('notFound') }
   }
+  const locale = await getLocale()
+  const ct = catalogText(locale)
+  const seo = await getTranslations('Seo')
+  const services = offersFor(gameSlug)
+    .map(({ offer, template }) => ct(offer.title ?? template.title))
+    .join(', ')
   return {
-    title: t('metaTitle', { name: game.name }),
-    description: catalogText(await getLocale())(game.shortDescription),
+    title: seo('gameTitle', { game: game.name }),
+    description: seo('gameDescription', { game: game.name, services }),
+    alternates: languageAlternates(`/games/${game.slug}`, locale),
   }
 }
 
@@ -56,8 +67,26 @@ export default async function GamePage({ params }: GamePageProps) {
     .filter((gameItem) => gameItem.slug !== game.slug)
     .map((g) => ({ ...g, description: ct(g.description) })) as unknown as Game[]
 
+  const locale = await getLocale()
+  const seo = await getTranslations('Seo')
+  const tService = await getTranslations('Service')
+  const faqs = (gameFaqs[game.slug] ?? []).map((f) => ({ question: ct(f.q), answer: ct(f.a) }))
+
   return (
     <>
+      <JsonLd
+        data={[
+          breadcrumbLd(
+            [
+              { name: seo('home'), path: '/' },
+              { name: tService('games'), path: '/games' },
+              { name: game.name, path: `/games/${game.slug}` },
+            ],
+            locale,
+          ),
+          faqLd(faqs),
+        ]}
+      />
       <SiteHeader />
       <main className="pt-24 sm:pt-28">
         <CheckoutSteps current={2} gameSlug={game.slug} />

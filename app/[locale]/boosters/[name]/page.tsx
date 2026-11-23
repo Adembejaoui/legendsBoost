@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
+import { languageAlternates } from "@/lib/i18n/alternates";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { getPublicBooster } from "@/lib/boosters/public-profile";
@@ -11,7 +13,15 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
   const { name } = await params;
-  return { title: `${decodeURIComponent(name)} — LegendsBoost booster` };
+  const display = decodeURIComponent(name);
+  const [t, locale, b] = await Promise.all([getTranslations("Seo"), getLocale(), getPublicBooster(display).catch(() => null)]);
+  // Unknown or hidden booster: the page is a 404, never indexed.
+  if (!b) return { title: t("boosterTitle", { name: display }), robots: { index: false } };
+  return {
+    title: t("boosterTitle", { name: display }),
+    description: t("boosterDescription", { name: display }),
+    alternates: languageAlternates(`/boosters/${encodeURIComponent(display)}`, locale),
+  };
 }
 
 /** Public booster profile: games, rating, reviews, and a way to choose them. */
