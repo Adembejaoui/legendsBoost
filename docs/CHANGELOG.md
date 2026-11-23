@@ -2,6 +2,16 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-23 · Booster fixes and additions (client PDF)
+
+- **Available Orders card redesigned:** payout first with the currency code ("12.40 EUR"), rank route, a details grid (Server, Queue type, Mode, OTP Champ with portrait, VPN country, roles), champions and extras, "Claim for …" as the main button, bidding folded under "Or bid".
+- **VPN country:** turning VPN on at checkout shows a country list (28 countries, names in the visitor's language), preselected from the order's server. Saved with the order (`championsRoles.vpnCountry`, validated, dropped without the VPN extra); the booster sees it on the card and on the order page ("VPN: Germany", rule "Always use a VPN set to Germany").
+- **AED:** 4th checkout currency at the fixed rate of 3.6725 per USD (`USD_PEGS` in `lib/currency/rates.ts`, also added to rates already stored).
+- **Rank Boost completion:** an order with a target rank can only be submitted once the booster's latest Rank Update reaches it (`missingFinalRank`); the Complete dialog explains what to post.
+- **Payments** (was Cashout): Frozen / Available / In payout / Paid per currency with the code ("20.00 EUR · 15.00 USD"), then one row per payment: Order ID | Reason | Paid Amount.
+- **Fines/Abandoned Orders** (was Rules & Fines): one row per deduction: Order ID | Reason | Reduced Amount, then the fine schedule and strikes.
+- Already in place, unchanged: Completed tab in Claimed Orders, payout Frozen from the claim, moved to Available once when the admin marks the order Completed, admin alert on completion.
+
 ## 2026-11-23 · Spanish, German and Arabic
 
 - **Languages:** `/es`, `/de`, `/ar` next to English and French (`i18n/routing.ts`). Every page text (`messages/es|de|ar.json`) and every catalog text (`lib/i18n/catalog/es|de|ar.ts`) translated; the tests fail if a language misses one.

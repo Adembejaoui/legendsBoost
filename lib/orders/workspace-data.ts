@@ -18,6 +18,7 @@ import {
   allowedRankOptions,
   computeReportedProgress,
   listProgressUpdates,
+  missingFinalRank,
   orderRankSystemId,
   pointsLabel,
   PROGRESS_REMINDER_HOURS,
@@ -53,6 +54,7 @@ import { getOpenSession, listSessions, SESSION_RULES } from "./sessions.service"
 import { getConfig } from "@/lib/config";
 import { REVIEW_TAGS } from "@/lib/reviews/service";
 import { latestCompletionRequest } from "./completion-request.service";
+import { vpnCountryName } from "@/lib/catalog/vpn-countries";
 
 /** Review and tips block of the order page (Phase 8). */
 async function feedbackFor(orderId: string, status: string, role: string, viewerId: string): Promise<WorkspaceDTO["feedback"]> {
@@ -260,15 +262,20 @@ export async function getOrderWorkspace(
   if (notes) details.push({ label: "Additional information", value: notes });
 
   const checkout = getCheckoutConfig(order.gameSlug, order.serviceSlug);
-  const options = order.selectedOptions.map(
-    (id) => checkout?.options.find((o) => o.id === id)?.label ?? id
-  );
+  const vpnPick = (order.championsRoles as { vpnCountry?: unknown } | null)?.vpnCountry;
+  const options = order.selectedOptions.map((id) => {
+    const label = checkout?.options.find((o) => o.id === id)?.label ?? id;
+    return id === "vpn" && typeof vpnPick === "string" ? `${label} (${vpnCountryName(vpnPick)})` : label;
+  });
   // Booster rules for the extras the customer bought.
   const otpId = (order.championsRoles as { otpChampion?: unknown } | null)?.otpChampion;
+  const vpnCode = (order.championsRoles as { vpnCountry?: unknown } | null)?.vpnCountry;
+  const vpnName = typeof vpnCode === "string" ? vpnCountryName(vpnCode) : null;
   const rules = order.selectedOptions.flatMap((id) => {
     const o = checkout?.options.find((x) => x.id === id);
     if (!o?.boosterRule) return [];
     const champ = id === "otp-champion" && typeof otpId === "string" ? getChampion(otpId)?.name ?? otpId : null;
+    if (id === "vpn" && vpnName) return [{ label: `${o.label}: ${vpnName}`, rule: `Always use a VPN set to ${vpnName}.` }];
     return [{ label: o.label, rule: champ ? `${o.boosterRule} Champion: ${champ}.` : o.boosterRule }];
   });
   const mode = order.selectedMode
@@ -303,7 +310,9 @@ export async function getOrderWorkspace(
     order.status === "IN_PROGRESS" &&
     Date.now() - new Date(latest?.at ?? order.assignments.find((a) => a.activeOrderId === order.id)?.startedAt ?? Date.now()).getTime() >
       PROGRESS_REMINDER_HOURS * 3_600_000;
+  const finalRankMissing = targetRef ? await missingFinalRank(orderId) : null;
   const progress: WorkspaceDTO["progress"] = {
+    finalRankMissing,
     kind: startRef && targetRef ? "rank" : "none",
     status: reported.status,
     percent: reported.percent,

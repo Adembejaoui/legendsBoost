@@ -43,7 +43,7 @@ vi.mock("@/lib/email/send", async (orig) => ({
 
 import { closeTestDb, getTestPrisma } from "../support/pg-test-db";
 import { createFakeStripe, WEBHOOK_SECRET } from "../support/fake-stripe";
-import { claimAndStart, configurePrice, createPaidOrder, rankCheckout, rankOffer, seedUser, setConfig } from "../support/payment-fixtures";
+import { claimAndStart, configurePrice, createPaidOrder, postRank, rankCheckout, rankOffer, seedUser, setConfig } from "../support/payment-fixtures";
 import { setProofStoreForTest, sniffImageType, validateProofFiles } from "@/lib/storage/order-proofs";
 import {
   adminAcceptCompletion,
@@ -90,17 +90,39 @@ beforeEach(() => {
   h.emails.length = 0;
 });
 
-/** Paid order, claimed and started by a fresh booster. */
-async function working() {
+/** Paid order (Gold IV -> Gold I), claimed and started by a fresh booster who already posted the final rank. */
+async function working(opts: { finalRank?: boolean } = {}) {
   const customer = await seedUser("CUSTOMER");
   const booster = await seedUser("BOOSTER");
   const { orderId } = await createPaidOrder(customer.id);
   await claimAndStart(orderId, booster.id);
+  if (opts.finalRank !== false) await postRank(orderId, booster.id);
   const a = await prisma.orderBoosterAssignment.findFirstOrThrow({ where: { orderId, boosterId: booster.id } });
   return { customer, booster, orderId, assignmentId: a.id };
 }
 
 const statusOf = async (orderId: string) => (await prisma.order.findUniqueOrThrow({ where: { id: orderId } })).status;
+
+describe("final rank (client PDF 2026-11-23)", () => {
+  it("a rank order cannot be submitted until the final rank is posted in Rank Update", async () => {
+    const w = await working({ finalRank: false });
+    const submit = () => submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot });
+    await expect(submit()).rejects.toThrow("Post the final rank (Gold I) in Rank Update before completing this order.");
+    // Partial progress is not enough.
+    await postRank(w.orderId, w.booster.id, "gold", "ii");
+    await expect(submit()).rejects.toThrow("Post the final rank (Gold I)");
+    expect(await statusOf(w.orderId)).toBe("IN_PROGRESS");
+    // The target rank posted: the completion goes through.
+    await postRank(w.orderId, w.booster.id, "gold", "i");
+    await expect(submit()).resolves.toMatchObject({ status: "PENDING" });
+  });
+
+  it("a higher rank than the target also counts", async () => {
+    const w = await working({ finalRank: false });
+    await postRank(w.orderId, w.booster.id, "platinum", "iv");
+    await expect(submitCompletion({ ...w, boosterId: w.booster.id, files: [PNG()], riotCheck: noRiot })).resolves.toMatchObject({ status: "PENDING" });
+  });
+});
 
 describe("proof files", () => {
   it("are recognised by their bytes, limited in number and size", async () => {

@@ -13,6 +13,7 @@ import type { GameCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem, isTargetAboveCurrent } from "@/lib/catalog/rank-systems";
 import { getChampion, LOL_ROLE_IDS, normalizeChampionId } from "@/lib/catalog/champions";
 import { MAX_AMOUNT } from "@/lib/money";
+import { isVpnCountry } from "@/lib/catalog/vpn-countries";
 import { SITE_CURRENCIES } from "@/lib/currency/currencies";
 
 export const orderRequestSchema = z
@@ -43,6 +44,8 @@ export const orderRequestSchema = z
         champions: z.array(z.string().min(1).max(64)).max(20),
         /** "OTP Champ Only" extra: the one champion the booster must play. */
         otpChampion: z.string().min(1).max(64).optional(),
+        /** VPN extra: the country the booster's VPN must be set to (ISO code). */
+        vpnCountry: z.string().length(2).optional(),
       })
       .strict()
       .optional(),
@@ -66,7 +69,7 @@ export interface NormalizedOrderInput {
   configuration: Record<string, unknown>;
   selectedMode: "solo" | "duo" | null;
   selectedOptions: string[];
-  championsRoles: { roles: string[]; champions: string[]; otpChampion?: string } | null;
+  championsRoles: { roles: string[]; champions: string[]; otpChampion?: string; vpnCountry?: string } | null;
   /** Upper-case coupon code; absent when none (keeps older request hashes stable). */
   couponCode?: string;
   /** Currency to charge; absent = the price list's own (keeps older request hashes stable). */
@@ -201,7 +204,7 @@ export function validateOrderInput(
   }
 
   // Champions & roles: only real lanes and real champions (current ids).
-  let championsRoles: { roles: string[]; champions: string[]; otpChampion?: string } | null = null;
+  let championsRoles: { roles: string[]; champions: string[]; otpChampion?: string; vpnCountry?: string } | null = null;
   if (input.championsRoles) {
     const roles = [...new Set(input.championsRoles.roles)];
     for (const r of roles) if (!LOL_ROLE_IDS.has(r)) errors.push(`Unknown role: ${r}`);
@@ -216,7 +219,14 @@ export function validateOrderInput(
       otp = normalizeChampionId(input.championsRoles.otpChampion) ?? undefined;
       if (!otp) errors.push(`Unknown champion: ${input.championsRoles.otpChampion}`);
     }
-    championsRoles = { roles, champions: champs, ...(otp ? { otpChampion: otp } : {}) };
+    let vpn: string | undefined;
+    if (input.championsRoles.vpnCountry) {
+      vpn = input.championsRoles.vpnCountry.toUpperCase();
+      if (!isVpnCountry(vpn)) errors.push(`Unknown VPN country: ${input.championsRoles.vpnCountry}`);
+      // Only kept while the VPN extra is bought.
+      if (!input.selectedOptions.includes("vpn")) vpn = undefined;
+    }
+    championsRoles = { roles, champions: champs, ...(otp ? { otpChampion: otp } : {}), ...(vpn ? { vpnCountry: vpn } : {}) };
   }
   // OTP Champ Only needs its champion.
   if (input.selectedOptions.includes("otp-champion") && !championsRoles?.otpChampion) {

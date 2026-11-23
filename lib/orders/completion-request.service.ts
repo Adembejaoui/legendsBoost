@@ -28,6 +28,7 @@ import { broadcastToOrder } from "@/lib/realtime/broadcast";
 import { afterOrderCompleted, closeSessions, completeOrderInTx, verifyBoosterEligibility } from "@/lib/assignments/service";
 import { proofPath, proofStore, validateProofFiles } from "@/lib/storage/order-proofs";
 import { approveEarning } from "@/lib/finance/earnings";
+import { missingFinalRank } from "@/lib/orders/progress-updates.service";
 
 export class CompletionFlowError extends Error {
   constructor(message: string, public readonly status = 409) {
@@ -84,6 +85,9 @@ export async function submitCompletion(p: {
   if (pre.status !== "IN_PROGRESS" || pre.order.status !== "IN_PROGRESS") throw new CompletionFlowError("This order cannot be completed right now.");
 
   const proofs = await validateProofFiles(p.files);
+  // Rank orders: the final rank must be posted in Rank Update first (client PDF 2026-11-23).
+  const missing = await missingFinalRank(p.orderId);
+  if (missing) throw new CompletionFlowError(`Post the final rank (${missing}) in Rank Update before completing this order.`);
   const hours = await getConfig("auto_confirm_hours");
   const autoConfirmAt = new Date(Date.now() + hours * 3_600_000);
 

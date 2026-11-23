@@ -28,6 +28,11 @@ export interface WorkspaceProgressDTO {
   stale: boolean;
   startLpAssumed: boolean;
   wins?: { attributed: number; ordered: number | null };
+  /**
+   * Rank orders: the target rank the booster still has to post in Rank
+   * Update before completing ("Gold IV"), or null when nothing is missing.
+   */
+  finalRankMissing?: string | null;
 }
 
 export interface WorkspaceMatchDTO {

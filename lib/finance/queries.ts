@@ -4,6 +4,48 @@
  * payout / payment / refund / dispute records; nothing is a stored balance.
  */
 import prisma from "@/lib/prisma";
+import { getGame } from "@/lib/catalog/games";
+import { getGameServiceOffer } from "@/lib/catalog/game-services";
+import { formatRankLabel } from "@/lib/catalog/rank-systems";
+import { orderRankSystemId } from "@/lib/orders/progress-updates.service";
+
+const EARNING_STATE: Record<string, string> = {
+  PENDING: "waiting for release",
+  ON_HOLD: "on hold",
+  PENDING_REVIEW: "under review",
+  AVAILABLE: "completed",
+  IN_PAYOUT: "in a payout",
+  PAID: "paid out",
+  REVERSED: "refunded",
+};
+
+/**
+ * Why the booster got this money, for the Payments page (client PDF
+ * 2026-11-23): "LoL Rank Boost (Silver IV → Gold IV) · completed", or
+ * "Tip from the customer".
+ */
+export function earningReason(e: {
+  status: string;
+  allocationNote: string | null;
+  order: { gameSlug: string; serviceSlug: string; configuration: unknown };
+}): string {
+  const state = EARNING_STATE[e.status] ?? e.status.toLowerCase();
+  if (e.allocationNote === "Tip from the customer") return `Tip from the customer · ${state}`;
+  const game = getGame(e.order.gameSlug);
+  const offer = getGameServiceOffer(e.order.gameSlug, e.order.serviceSlug);
+  const service = `${game?.shortName ?? e.order.gameSlug} ${offer?.title ?? e.order.serviceSlug}`;
+  const cfg = (e.order.configuration ?? {}) as Record<string, unknown>;
+  const system = orderRankSystemId(e.order.gameSlug, e.order.serviceSlug);
+  const rank = (v: unknown) =>
+    system && v && typeof v === "object" && typeof (v as { tierId?: unknown }).tierId === "string"
+      ? formatRankLabel(system, v as { tierId: string; divisionId: string | null })
+      : null;
+  const from = rank(cfg.currentRank);
+  const to = rank(cfg.targetRank);
+  const units = typeof cfg.wins === "number" ? `${cfg.wins} win${cfg.wins === 1 ? "" : "s"}` : null;
+  const detail = from && to ? `${from} → ${to}` : units;
+  return `${service}${detail ? ` (${detail})` : ""} · ${state}`;
+}
 
 type CurrencyMap = Record<string, number>;
 const add = (m: CurrencyMap, c: string, v: number) => {
@@ -73,16 +115,17 @@ export async function boosterBalances(boosterId: string) {
 }
 
 export async function boosterFinance(boosterId: string) {
-  const [earnings, payouts, payable, finesDue] = await Promise.all([
+  const [earnings, payouts, payable, finesDue, balances] = await Promise.all([
     prisma.boosterEarning.findMany({
       where: { boosterId },
       orderBy: { createdAt: "desc" },
       take: 200,
-      include: { order: { select: { id: true, gameSlug: true, serviceSlug: true, status: true, completedAt: true } } },
+      include: { order: { select: { id: true, gameSlug: true, serviceSlug: true, status: true, completedAt: true, configuration: true } } },
     }),
     prisma.boosterPayout.findMany({ where: { boosterId }, orderBy: { requestedAt: "desc" }, take: 50 }),
     prisma.financialTransaction.groupBy({ by: ["currency"], where: { account: "BOOSTER_PAYABLE", boosterId }, _sum: { amount: true } }),
     unpaidFines(boosterId),
+    boosterBalances(boosterId),
   ]);
 
   const pending: CurrencyMap = {};
@@ -103,7 +146,8 @@ export async function boosterFinance(boosterId: string) {
 
   return {
     // available stays the earnings total; finesDue is shown and subtracted by the page.
-    totals: { pending, onHold, available, inPayout, paid, ledgerBalance, finesDue },
+    // frozen = claimed orders + earnings waiting for release, per currency (client PDF 2026-11-23).
+    totals: { pending, onHold, available, inPayout, paid, ledgerBalance, finesDue, frozen: balances.frozen },
     earnings: earnings
       .filter((e) => e.status !== "SPLIT")
       .map((e) => ({
@@ -111,6 +155,7 @@ export async function boosterFinance(boosterId: string) {
         orderId: e.orderId,
         orderRef: e.orderId.slice(-8).toUpperCase(),
         service: `${e.order.gameSlug} / ${e.order.serviceSlug}`,
+        reason: earningReason(e),
         orderStatus: e.order.status,
         completedAt: e.order.completedAt?.toISOString() ?? null,
         status: e.status,

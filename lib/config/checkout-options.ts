@@ -491,4 +491,6 @@ export interface ChampionsRolesConfig {
   champions: string[]
   /** OTP Champ Only: the one champion to play. */
   otpChampion?: string
+  /** VPN extra: country the booster's VPN must be set to (ISO code). */
+  vpnCountry?: string
 }

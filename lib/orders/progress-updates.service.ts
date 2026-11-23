@@ -14,7 +14,7 @@
  */
 import prisma from "@/lib/prisma";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
-import { formatRankLabel, getRankSystem, getRankSystemsByGame, getTier } from "@/lib/catalog/rank-systems";
+import { formatRankLabel, getRankSystem, getRankSystemsByGame, getTier, rankScore } from "@/lib/catalog/rank-systems";
 import { enqueueOutbox, dispatchOutbox } from "@/lib/payments/outbox";
 import { createNotification } from "@/lib/notifications/service";
 import { logger } from "@/lib/logger";
@@ -310,4 +310,28 @@ export async function runProgressReminders(now = new Date()) {
     }
   }
   return { progressReminders: reminded };
+}
+
+/**
+ * Rank Boost completion (client PDF 2026-11-23): an order with a target rank
+ * can only be submitted as complete once the booster's latest Rank Update
+ * reaches that rank (e.g. Silver IV -> Gold IV needs "Gold IV" posted), so
+ * the customer and the admin both see the final rank. Returns the target
+ * label still to post, or null when nothing is missing (or the order has no
+ * target rank: wins, placements, Arena, mastery...).
+ */
+export async function missingFinalRank(orderId: string): Promise<string | null> {
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { gameSlug: true, serviceSlug: true, configuration: true } });
+  if (!order) return null;
+  const cfg = (order.configuration ?? {}) as Record<string, unknown>;
+  const target = cfg.targetRank as { tierId?: unknown; divisionId?: unknown } | undefined;
+  if (!target || typeof target.tierId !== "string") return null;
+  const rankSystemId = orderRankSystemId(order.gameSlug, order.serviceSlug);
+  if (!rankSystemId) return null;
+  const targetSel = { tierId: target.tierId, divisionId: typeof target.divisionId === "string" ? target.divisionId : null };
+  const targetScore = rankScore(rankSystemId, targetSel);
+  if (targetScore === null) return null;
+  const latest = await prisma.orderProgressUpdate.findFirst({ where: { orderId }, orderBy: { createdAt: "desc" }, select: { tierId: true, divisionId: true } });
+  const reached = latest ? rankScore(rankSystemId, { tierId: latest.tierId, divisionId: latest.divisionId }) : null;
+  return reached !== null && reached >= targetScore ? null : formatRankLabel(rankSystemId, targetSel);
 }

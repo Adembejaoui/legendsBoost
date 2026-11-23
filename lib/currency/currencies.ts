@@ -1,10 +1,10 @@
 /**
  * Currencies a customer can pay in (client decision 2026-11-23: USD, EUR,
- * GBP). Prices are set by admins in one currency per service; the order is
+ * GBP; AED added with the booster fixes PDF the same day). Prices are set by admins in one currency per service; the order is
  * priced and charged in the customer's choice at the daily exchange rate
  * (lib/currency/rates.ts). Safe for client and server code.
  */
-export const SITE_CURRENCIES = ["USD", "EUR", "GBP"] as const;
+export const SITE_CURRENCIES = ["USD", "EUR", "GBP", "AED"] as const;
 export type SiteCurrency = (typeof SITE_CURRENCIES)[number];
 
 /** Remembers the visitor's choice (1 year). */
@@ -14,6 +14,7 @@ export const CURRENCY_LABELS: Record<SiteCurrency, string> = {
   USD: "$ USD",
   EUR: "€ EUR",
   GBP: "£ GBP",
+  AED: "د.إ AED",
 };
 
 export function isSiteCurrency(v: unknown): v is SiteCurrency {

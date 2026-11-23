@@ -87,13 +87,13 @@ export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
     },
     {
       id: "cashout",
-      label: "Cashout",
+      label: "Payments",
       href: "/dashboard/booster/cashout",
       icon: "Wallet",
     },
     {
       id: "booster-rules",
-      label: "Rules & Fines",
+      label: "Fines/Abandoned Orders",
       href: "/dashboard/booster/rules",
       icon: "Shield",
     },

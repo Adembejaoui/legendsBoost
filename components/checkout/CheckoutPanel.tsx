@@ -34,6 +34,8 @@ import { redirectToStripeCheckout } from '@/lib/checkout/redirect'
 import { useTranslations } from 'next-intl'
 import { rankLabel, useCatalogText } from '@/lib/i18n/catalog'
 import { useCurrency } from '@/lib/currency/client'
+import { useLocale } from 'next-intl'
+import { defaultVpnCountry, isVpnCountry, VPN_COUNTRIES, vpnCountryName } from '@/lib/catalog/vpn-countries'
 
 interface CheckoutPanelProps {
   game: { slug: string; name: string; accent?: string }
@@ -82,6 +84,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const ct = useCatalogText()
   // Priced and charged in the visitor's currency (header picker).
   const currency = useCurrency()
+  const locale = useLocale()
   const config = getCheckoutConfig(game.slug, offer.serviceSlug)
   const enabledModes = useMemo(() => (config?.modes ?? []).filter((m) => m.enabled), [config])
   const [mode, setMode] = useState<CheckoutMode>(() => (enabledModes[0]?.id as CheckoutMode) ?? 'solo')
@@ -150,6 +153,14 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       if (on) setOtpModalOpen(true)
       else setOtpChampion(undefined)
     }
+    if (id === 'vpn' && on && !isVpnCountry(championsRolesByMode[mode].vpnCountry)) setVpnCountry(defaultVpnCountry(values.server))
+  }
+  const setVpnCountry = (country: string) => {
+    setChampionsRolesByMode((prev) => {
+      const next = { ...prev, [mode]: { ...prev[mode], vpnCountry: country } }
+      remember({ championsRoles: next })
+      return next
+    })
   }
   const setOtpChampion = (champion: string | undefined) => {
     setChampionsRolesByMode((prev) => {
@@ -217,8 +228,13 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     selectedOptions,
     championsRoles: (() => {
       // The OTP champion is only sent while "OTP Champ Only" is selected.
-      const { otpChampion, ...rest } = championsRolesByMode[mode]
-      return selectedOptions.includes('otp-champion') && otpChampion ? { ...rest, otpChampion } : rest
+      const { otpChampion, vpnCountry, ...rest } = championsRolesByMode[mode]
+      return {
+        ...rest,
+        ...(selectedOptions.includes('otp-champion') && otpChampion ? { otpChampion } : {}),
+        // The VPN country is sent only with the VPN extra (default: the server's country).
+        ...(selectedOptions.includes('vpn') ? { vpnCountry: isVpnCountry(vpnCountry) ? vpnCountry : defaultVpnCountry(values.server) } : {}),
+      }
     })(),
     ...(couponCode ? { couponCode } : {}),
     currency,
@@ -414,7 +430,27 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const secondaryOptions = visibleOptions.filter((o) => o.group === 'secondary')
   const modeChoices = priceTags ? enabledModes.filter((m) => m.id in priceTags.modes) : enabledModes
   const chosenName = boosters.find((b) => b.id === chosenBooster)?.displayName
-  const optionRow = (option: CheckoutOption) => (
+  const vpnPicker = (
+    <label className="mb-1.5 ms-9 flex items-center gap-2 text-[11px] text-zinc-400">
+      <span>{t('vpnCountry')}</span>
+      <select
+        value={isVpnCountry(championsRolesByMode[mode].vpnCountry) ? championsRolesByMode[mode].vpnCountry : defaultVpnCountry(values.server)}
+        onChange={(e) => setVpnCountry(e.target.value)}
+        disabled={busy}
+        className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#0b0c10] px-2 py-1 text-xs text-zinc-200 outline-none focus:border-white/30"
+      >
+        {[...VPN_COUNTRIES]
+          .map((c) => ({ c, name: vpnCountryName(c, locale) }))
+          .sort((a, b) => a.name.localeCompare(b.name, locale))
+          .map(({ c, name }) => (
+            <option key={c} value={c}>
+              {name}
+            </option>
+          ))}
+      </select>
+    </label>
+  )
+  const optionRow = (option: CheckoutOption) => [
     <CheckoutOptionRow
       key={`${game.slug}-${offer.serviceSlug}-${option.id}-${mode}`}
       option={option}
@@ -431,8 +467,10 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             ? () => setOtpModalOpen(true)
             : undefined
       }
-    />
-  )
+    />,
+    // VPN on: the country it must be set to, right under the switch.
+    option.id === 'vpn' && extrasByMode[mode]?.vpn ? <div key={`${option.id}-country-${mode}`}>{vpnPicker}</div> : null,
+  ]
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#111319]">

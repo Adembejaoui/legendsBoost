@@ -228,7 +228,8 @@
     "champions": "Champions: {list}",
     "chooseChampionsRoles": "Choose your champions and roles",
     "championOne": "Champion: {name}",
-    "chooseChampion": "Choose your champion"
+    "chooseChampion": "Choose your champion",
+    "vpnCountry": "VPN country"
   },
   "ChampionsModal": {
     "aria": "Champions and roles",

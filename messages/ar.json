@@ -228,7 +228,8 @@
     "champions": "الأبطال: {list}",
     "chooseChampionsRoles": "اختر أبطالك وأدوارك",
     "championOne": "البطل: {name}",
-    "chooseChampion": "اختر بطلك"
+    "chooseChampion": "اختر بطلك",
+    "vpnCountry": "بلد VPN"
   },
   "ChampionsModal": {
     "aria": "الأبطال والأدوار",

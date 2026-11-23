@@ -164,3 +164,10 @@ export async function ledgerFor(orderId: string) {
 export function sum(rows: { amount: number; account?: string; type?: string }[], f: (r: any) => boolean) {
   return rows.filter(f).reduce((a, r) => a + r.amount, 0);
 }
+
+/** The booster posts a rank in Rank Update (default: Gold I, the target of the fixture order). */
+export async function postRank(orderId: string, boosterId: string, tierId = "gold", divisionId: string | null = "i") {
+  const prisma = await getTestPrisma();
+  const a = await prisma.orderBoosterAssignment.findFirstOrThrow({ where: { orderId, boosterId } });
+  await prisma.orderProgressUpdate.create({ data: { orderId, assignmentId: a.id, boosterId, rankSystemId: "lol-ranked", tierId, divisionId } });
+}

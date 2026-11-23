@@ -502,13 +502,18 @@ export function OrderControls({ data }: { data: WorkspaceDTO }) {
             busyLabel={viewer.role === "admin" ? "Completing…" : "Uploading…"}
             cancelLabel="Keep working"
             busy={busy === "complete"}
-            confirmDisabled={viewer.role !== "admin" && proofs.length === 0}
+            confirmDisabled={viewer.role !== "admin" && (proofs.length === 0 || !!data.progress?.finalRankMissing)}
             error={error}
             onConfirm={() => void complete()}
             onClose={() => setDialog(null)}
           >
             {viewer.role === "admin" ? (
               <p>Only do this once the boost is finished. The customer and the booster are notified.</p>
+            ) : data.progress?.finalRankMissing ? (
+              <p className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-amber-100">
+                Post the final rank (<b>{data.progress.finalRankMissing}</b>) in Rank Update first, so the customer and our team can see it.
+                Then come back to complete the order.
+              </p>
             ) : (
               <>
                 <p>

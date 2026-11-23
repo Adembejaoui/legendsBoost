@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Loader2 } from "lucide-react";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, toDecimalString } from "@/lib/money";
 import type { boosterFinance } from "@/lib/finance/queries";
 
 type Data = Awaited<ReturnType<typeof boosterFinance>>;
@@ -19,16 +19,20 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING_REVIEW: "Under review",
 };
 
-function addMaps(a: Record<string, number>, b: Record<string, number>) {
-  const out: Record<string, number> = { ...a };
-  for (const [c, v] of Object.entries(b)) out[c] = (out[c] ?? 0) + v;
-  return out;
+/** "12.40 EUR": amount and currency code (each currency is its own wallet). */
+function code(amount: number, currency: string) {
+  try {
+    return `${toDecimalString(amount, currency)} ${currency}`;
+  } catch {
+    return formatMoney(amount, currency);
+  }
 }
 
+/** One balance per currency: "20.00 EUR · 15.00 USD". */
 function money(map: Record<string, number>) {
   const entries = Object.entries(map).filter(([, v]) => v !== 0);
-  if (entries.length === 0) return formatMoney(0, "EUR");
-  return entries.map(([c, v]) => formatMoney(v, c)).join(" · ");
+  if (entries.length === 0) return code(0, "EUR");
+  return entries.map(([c, v]) => code(v, c)).join(" · ");
 }
 
 export function BoosterEarnings({ data }: { data: Data }) {
@@ -65,15 +69,16 @@ export function BoosterEarnings({ data }: { data: Data }) {
   return (
     <div className="text-white">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Earnings</h1>
+        <h1 className="text-2xl font-bold">Payments</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Your share of completed orders. Earnings are released by our team after review, then you can request a manual payout.
+          Each currency is a separate balance. A claimed order&apos;s payout is Frozen; it becomes Available when our team marks the order
+          Completed. Then you can request a payout.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         {[
-          ["Awaiting release", money(addMaps(t.pending, t.onHold))],
+          ["Frozen", money(t.frozen ?? {})],
           ["Available", money(payable)],
           ["In payout", money(t.inPayout)],
           ["Paid", money(t.paid)],
@@ -127,26 +132,28 @@ export function BoosterEarnings({ data }: { data: Data }) {
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-2 text-lg font-semibold">Earnings per order</h2>
+        <h2 className="mb-2 text-lg font-semibold">Payments</h2>
         {data.earnings.length === 0 ? (
-          <p className="text-sm text-zinc-500">No earnings yet.</p>
+          <p className="text-sm text-zinc-500">No payments yet.</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-white/10">
-            <table className="w-full min-w-160 text-sm">
+            <table className="w-full min-w-140 text-sm">
               <thead className="bg-white/5 text-start text-xs uppercase tracking-wide text-zinc-400">
-                <tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Service</th><th className="px-3 py-2">Share</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2">Status</th></tr>
+                <tr>
+                  <th className="px-3 py-2 text-start">Order ID</th>
+                  <th className="px-3 py-2 text-start">Reason</th>
+                  <th className="px-3 py-2 text-end">Paid Amount</th>
+                </tr>
               </thead>
               <tbody>
                 {data.earnings.map((e) => (
-                  <tr key={e.id} className="border-t border-white/5">
-                    <td className="px-3 py-2 font-mono">{e.orderRef}</td>
-                    <td className="px-3 py-2">{e.service}</td>
-                    <td className="px-3 py-2">{e.boosterShareBps / 100}%</td>
-                    <td className="px-3 py-2">
-                      {formatMoney(e.netAmount, e.currency)}
-                      {e.reversedAmount > 0 ? <span className="ms-1 text-xs text-zinc-500">({formatMoney(e.grossAmount, e.currency)} before refunds)</span> : null}
+                  <tr key={e.id} className="border-t border-white/5" title={STATUS_LABEL[e.status] ?? e.status}>
+                    <td className="px-3 py-2 font-mono">#{e.orderRef}</td>
+                    <td className="px-3 py-2 text-zinc-300">{e.reason}</td>
+                    <td className="px-3 py-2 text-end font-semibold tabular-nums">
+                      {code(e.netAmount, e.currency)}
+                      {e.reversedAmount > 0 ? <span className="block text-xs font-normal text-zinc-500">{code(e.grossAmount, e.currency)} before refunds</span> : null}
                     </td>
-                    <td className="px-3 py-2">{STATUS_LABEL[e.status] ?? e.status}</td>
                   </tr>
                 ))}
               </tbody>
@@ -163,7 +170,7 @@ export function BoosterEarnings({ data }: { data: Data }) {
           <ul className="space-y-2">
             {data.payouts.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/3 px-4 py-3 text-sm">
-                <span>{formatMoney(p.amount, p.currency)}</span>
+                <span>{code(p.amount, p.currency)}</span>
                 <span className="text-zinc-400">{new Date(p.requestedAt).toLocaleDateString()}</span>
                 <span className="font-medium">{p.status.toLowerCase()}</span>
                 {p.status === "PAID" && p.externalReference ? <span className="text-xs text-zinc-500">Ref {p.externalReference}</span> : null}

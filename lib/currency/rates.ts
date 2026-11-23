@@ -26,7 +26,12 @@ const FX_BASE = "USD";
 const REFRESH_AFTER_MS = 24 * 60 * 60_000;
 const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 const MEMORY_MS = 10 * 60_000;
-const SOURCE_URL = `https://api.frankfurter.dev/v1/latest?base=${FX_BASE}&symbols=${SITE_CURRENCIES.filter((c) => c !== FX_BASE).join(",")}`;
+/**
+ * Currencies the ECB does not publish, pegged to the US dollar by their
+ * central bank: UAE dirham, 3.6725 AED per USD since 1997.
+ */
+export const USD_PEGS: Record<string, number> = { AED: 3.6725 };
+const SOURCE_URL = `https://api.frankfurter.dev/v1/latest?base=${FX_BASE}&symbols=${SITE_CURRENCIES.filter((c) => c !== FX_BASE && !(c in USD_PEGS)).join(",")}`;
 
 const fxSchema = z.object({
   base: z.literal(FX_BASE),
@@ -60,7 +65,7 @@ export async function refreshFxRates(fetchImpl: typeof fetch = fetch): Promise<F
     const res = await fetchImpl(SOURCE_URL, { signal: AbortSignal.timeout(4000), cache: "no-store" });
     if (!res.ok) throw new Error(`status ${res.status}`);
     const body = (await res.json()) as { base?: string; date?: string; rates?: Record<string, number> };
-    const value = fxSchema.parse({ base: body.base, rates: { ...body.rates, [FX_BASE]: 1 }, date: body.date ?? "", fetchedAt: new Date().toISOString() });
+    const value = fxSchema.parse({ base: body.base, rates: { ...body.rates, ...USD_PEGS, [FX_BASE]: 1 }, date: body.date ?? "", fetchedAt: new Date().toISOString() });
     for (const c of SITE_CURRENCIES) if (!(c in value.rates)) throw new Error(`missing ${c}`);
     await prisma.appConfig.upsert({
       where: { key: FX_CONFIG_KEY },
@@ -81,6 +86,8 @@ export async function getFxRates(now = Date.now()): Promise<FxRates | null> {
   let value = await readStored();
   const age = value ? now - Date.parse(value.fetchedAt) : Infinity;
   if (age > REFRESH_AFTER_MS) value = (await refreshFxRates()) ?? value;
+  // Fixed pegs are always known, also in rates stored before a pegged currency was added.
+  if (value) value = { ...value, rates: { ...USD_PEGS, ...value.rates } };
   const usable = value && now - Date.parse(value.fetchedAt) <= MAX_AGE_MS ? value : null;
   memory = { at: now, value: usable };
   return usable;
