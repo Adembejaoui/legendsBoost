@@ -12,6 +12,7 @@ import { parseServicePriceRow, type ServicePriceConfig } from "./price-config";
 import { getConfig } from "@/lib/config";
 import { estimateCompletion, type Estimate } from "./eta";
 import { evaluateCoupon } from "./coupons";
+import { conversionFactor, getFxRates, priceInCurrency } from "@/lib/currency/rates";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -25,6 +26,7 @@ export class PricingError extends Error {
 // Deliberately different from NOT_PURCHASABLE_MESSAGE (catalog eligibility):
 // the two used to be identical, which hid which gate refused the order.
 export const NOT_PRICED_MESSAGE = "No price is configured for this service yet.";
+export const CURRENCY_UNAVAILABLE_MESSAGE = "Prices in this currency are not available right now. Please choose another currency.";
 
 export async function getActiveServicePrice(gameSlug: string, serviceSlug: string, db: Db = prisma): Promise<ServicePriceConfig | null> {
   const row = await db.servicePrice.findUnique({ where: { activeKey: `${gameSlug}:${serviceSlug}` } });
@@ -79,8 +81,13 @@ export async function buildServerQuote(
   const validated = validateOrderInput(eligibility.offer, eligibility.checkout, request);
   if (!validated.ok) throw new PricingError(validated.errors[0], 400, validated.errors);
 
-  const price = await getActiveServicePrice(request.gameSlug, request.serviceSlug, db);
-  if (!price) throw new PricingError(NOT_PRICED_MESSAGE, 403);
+  const listPrice = await getActiveServicePrice(request.gameSlug, request.serviceSlug, db);
+  if (!listPrice) throw new PricingError(NOT_PRICED_MESSAGE, 403);
+  // The customer's currency: the whole price list is converted first, so every
+  // amount (and the booster share) is a whole number in the charged currency.
+  const priced = await priceInCurrency(listPrice, validated.value.currency);
+  if (!priced) throw new PricingError(CURRENCY_UNAVAILABLE_MESSAGE, 503);
+  const price = priced.price;
   const policy = await getActiveCommissionPolicy(db);
   if (!policy) throw new PricingError("Payments are not configured yet.", 503);
 
@@ -93,7 +100,16 @@ export async function buildServerQuote(
   let coupon: CouponResult | null = null;
   const code = validated.value.couponCode;
   if (code) {
-    const row = await db.coupon.findUnique({ where: { code } });
+    const stored = await db.coupon.findUnique({ where: { code } });
+    // A code set up in another currency: its amounts are converted at today's rate (no margin).
+    let row = stored;
+    if (stored?.currency && stored.currency !== result.quote.currency) {
+      const factor = conversionFactor(stored.currency, result.quote.currency, await getFxRates());
+      if (factor !== null) {
+        const c = (n: number | null) => (n == null ? n : Math.round(n * factor));
+        row = { ...stored, currency: result.quote.currency, amount: c(stored.amount), maxDiscount: c(stored.maxDiscount), minSubtotal: c(stored.minSubtotal) };
+      }
+    }
     if (!row) {
       coupon = { code, applied: false, reason: "This code does not exist." };
     } else {
@@ -137,7 +153,7 @@ export async function buildServerQuote(
   });
   return {
     input: validated.value,
-    quote: result.quote,
+    quote: { ...result.quote, fx: priced.fx },
     serviceTitle: eligibility.offer.title ?? request.serviceSlug,
     estimate,
     coupon,

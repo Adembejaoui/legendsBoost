@@ -1,5 +1,5 @@
 import { Clock, CheckCircle2, XCircle, Package, Gamepad2, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 
 const EMPTY_STATE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; title: string; description: string; ctaLabel: string; ctaHref: string }> = {
   default: {

@@ -2,6 +2,7 @@
 
 import type { ConfigOption } from '@/types/catalog'
 import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 
 interface SelectFieldProps {
   label: string
@@ -22,6 +23,7 @@ export function SelectField({
   required,
   disabled = false,
 }: SelectFieldProps) {
+  const t = useTranslations('Service')
   return (
     <div className="space-y-2">
       <label className="flex items-center gap-1 text-sm font-medium text-white">
@@ -37,7 +39,7 @@ export function SelectField({
         disabled={disabled}
         className="w-full rounded-lg border border-white/10 bg-[#111319] px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50 disabled:pointer-events-none"
       >
-        <option value="">Select an option</option>
+        <option value="">{t('selectOption')}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -45,7 +47,7 @@ export function SelectField({
         ))}
       </select>
       {required && !value && (
-        <p className="text-xs text-rose-400">This field is required.</p>
+        <p className="text-xs text-rose-400">{t('required')}</p>
       )}
     </div>
   )
@@ -70,6 +72,7 @@ export function MultiSelectField({
   required,
   disabled = false,
 }: MultiSelectFieldProps) {
+  const t = useTranslations('Service')
   const isSelected = (val: string) => value.includes(val)
 
   return (
@@ -113,7 +116,7 @@ export function MultiSelectField({
         })}
       </div>
       {required && value.length === 0 && (
-        <p className="text-xs text-rose-400">This field is required.</p>
+        <p className="text-xs text-rose-400">{t('required')}</p>
       )}
     </div>
   )

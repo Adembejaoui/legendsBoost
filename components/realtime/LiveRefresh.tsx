@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { LiveChannel, type LiveState } from "@/lib/realtime/live-client";
 import { createBrowserRealtimeClient, fetchRealtimeToken } from "@/lib/chat/realtime-sync";
 

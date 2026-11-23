@@ -18,20 +18,22 @@
  */
 import type { CheckoutMode, CheckoutOption, ChampionsRolesConfig } from '@/lib/config/checkout-options'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 import Image from 'next/image'
 import { ArrowRight, Loader2, Lock, ShoppingCart, User, UserRound, Users } from 'lucide-react'
 import { CheckoutOptionRow } from './CheckoutOptionRow'
 import { ChampionsRolesModal } from './ChampionsRolesModal'
-import { formatSelection } from '@/lib/catalog/catalog-utils'
 import { champions as championCatalog } from '@/lib/catalog/champions'
 import { getTier } from '@/lib/catalog/rank-systems'
 import { getCheckoutConfig, getCheckoutOptionsForMode } from '@/lib/config/checkout-options'
 import { formatMoney } from '@/lib/money'
-import { evaluateOrderEligibility, NOT_PURCHASABLE_MESSAGE } from '@/lib/orders/order-eligibility'
+import { evaluateOrderEligibility } from '@/lib/orders/order-eligibility'
 import { newIdempotencyKey, patchCheckout, readCheckout, type StoredCheckout } from '@/lib/checkout/session-state'
 import { PREFERRED_BOOSTER_KEY } from '@/components/boosters/ChooseBoosterButton'
 import { redirectToStripeCheckout } from '@/lib/checkout/redirect'
+import { useTranslations } from 'next-intl'
+import { rankLabel, useCatalogText } from '@/lib/i18n/catalog'
+import { useCurrency } from '@/lib/currency/client'
 
 interface CheckoutPanelProps {
   game: { slug: string; name: string; accent?: string }
@@ -62,11 +64,11 @@ type Phase = 'idle' | 'quoting' | 'creating' | 'paying' | 'redirecting'
 
 const QUOTE_DEBOUNCE_MS = 350
 
-async function requestQuote(payloadJson: string, signal?: AbortSignal): Promise<QuoteOutcome> {
+async function requestQuote(payloadJson: string, fallbackError: string, signal?: AbortSignal): Promise<QuoteOutcome> {
   const res = await fetch('/api/orders/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payloadJson, signal })
   const data = await res.json().catch(() => ({}))
   if (res.status === 401) return { kind: 'signin' }
-  if (!res.ok) return { kind: 'error', error: data.error || 'The price could not be calculated.' }
+  if (!res.ok) return { kind: 'error', error: data.error || fallbackError }
   return { kind: 'ok', quote: data.quote as ServerQuote }
 }
 
@@ -76,6 +78,10 @@ function loginHref() {
 }
 
 export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated }: CheckoutPanelProps) {
+  const t = useTranslations('Checkout')
+  const ct = useCatalogText()
+  // Priced and charged in the visitor's currency (header picker).
+  const currency = useCurrency()
   const config = getCheckoutConfig(game.slug, offer.serviceSlug)
   const enabledModes = useMemo(() => (config?.modes ?? []).filter((m) => m.enabled), [config])
   const [mode, setMode] = useState<CheckoutMode>(() => (enabledModes[0]?.id as CheckoutMode) ?? 'solo')
@@ -160,6 +166,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const visibleOptions = (config ? getCheckoutOptionsForMode(config, mode) : [])
     .filter((o) => !priceTags || o.id in priceTags.options)
     .map((o) => (priceTags ? { ...o, badge: priceTags.options[o.id] } : o))
+    // Shown texts in the visitor's language (the id is what is sent).
+    .map((o) => ({ ...o, label: ct(o.label), description: o.description && ct(o.description), descriptionDuo: o.descriptionDuo && ct(o.descriptionDuo) }))
 
   const summaryLines = useMemo(() => {
     const lines: { key: string; label: string; value: string; iconSrc?: string }[] = []
@@ -170,19 +178,19 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         const sel = raw as { tierId: string; divisionId: string | null }
         const sys = field.rankSystemId ? rankSystems.find((s) => s.id === field.rankSystemId) : undefined
         const tier = sys && sel ? getTier(sys.id, sel.tierId) : undefined
-        lines.push({ key: field.key, label: field.label, value: sys ? formatSelection(sys.id, sel) : `${sel.tierId}`, iconSrc: tier?.iconSrc })
+        lines.push({ key: field.key, label: field.label, value: sys ? rankLabel(ct, sys.id, sel) : `${sel.tierId}`, iconSrc: tier?.iconSrc })
       } else if (field.type === 'select' || field.type === 'multi-select') {
         const opts: { label: string; value: string }[] = field.options ?? []
         const label = (v: unknown) => opts.find((o) => o.value === v)?.label ?? String(v)
         lines.push({ key: field.key, label: field.label, value: Array.isArray(raw) ? raw.map(label).join(', ') : label(raw) })
       } else if (field.type === 'checkbox') {
-        lines.push({ key: field.key, label: field.label, value: raw ? 'Yes' : 'No' })
+        lines.push({ key: field.key, label: field.label, value: raw ? t('yes') : t('no') })
       } else {
         lines.push({ key: field.key, label: field.label, value: String(raw) })
       }
     }
     return lines
-  }, [values, offer, rankSystems])
+  }, [values, offer, rankSystems, ct, t])
 
   // Server-computed eligibility from the page (catalog + Stripe mode + price).
   // Without it, fall back to the strictest (live) form of the pure rule.
@@ -213,6 +221,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       return selectedOptions.includes('otp-champion') && otpChampion ? { ...rest, otpChampion } : rest
     })(),
     ...(couponCode ? { couponCode } : {}),
+    currency,
   }
   const payloadJson = JSON.stringify(payload)
   const ready = canOrder && missing.length === 0
@@ -221,8 +230,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   useEffect(() => {
     if (!ready) return
     const ctrl = new AbortController()
-    const t = setTimeout(() => {
-      requestQuote(payloadJson, ctrl.signal)
+    const timer = setTimeout(() => {
+      requestQuote(payloadJson, t('priceError'), ctrl.signal)
         .then((r) => {
           setQuoteResult({ ...r, payloadJson } as QuoteResult)
           // A code the server refused is shown with its reason and not sent
@@ -230,32 +239,32 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
           const c = r.kind === 'ok' ? r.quote.coupon : null
           if (c && !c.applied) {
             setCouponCode(null)
-            setLastCouponError(`${c.code}: ${c.reason ?? 'not valid'}`)
+            setLastCouponError(`${c.code}: ${c.reason ?? t('notValid')}`)
           }
         })
         .catch((e) => {
-          if ((e as Error)?.name !== 'AbortError') setQuoteResult({ payloadJson, kind: 'error', error: 'The price could not be calculated. Check your connection.' })
+          if ((e as Error)?.name !== 'AbortError') setQuoteResult({ payloadJson, kind: 'error', error: t('priceErrorNetwork') })
         })
     }, QUOTE_DEBOUNCE_MS)
     return () => {
-      clearTimeout(t)
+      clearTimeout(timer)
       ctrl.abort()
     }
-  }, [payloadJson, ready, quoteNonce])
+  }, [payloadJson, ready, quoteNonce, t])
 
   // Boosters the customer may choose for this exact configuration.
   const boosterKey = JSON.stringify({ gameSlug: game.slug, serviceSlug: offer.serviceSlug, configuration: values })
   useEffect(() => {
     if (!ready) return
     const ctrl = new AbortController()
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       fetch('/api/checkout/preferred-boosters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: boosterKey, signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : { boosters: [] }))
         .then((d: { boosters?: { id: string; displayName: string }[] }) => setBoosters(d.boosters ?? []))
         .catch(() => {})
     }, QUOTE_DEBOUNCE_MS)
     return () => {
-      clearTimeout(t)
+      clearTimeout(timer)
       ctrl.abort()
     }
   }, [boosterKey, ready])
@@ -293,19 +302,19 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     setErrorMsg(null)
 
     // 1. Validate.
-    if (!canOrder) return fail(offer.purchase?.reason === 'unpriced' ? 'Pricing for this service is not available yet.' : NOT_PURCHASABLE_MESSAGE)
-    if (missing.length) return fail(`Please complete: ${missing.join(', ')}.`)
+    if (!canOrder) return fail(offer.purchase?.reason === 'unpriced' ? t('unpriced') : t('notPurchasable'))
+    if (missing.length) return fail(t('complete', { fields: missing.join(', ') }))
 
     try {
       // 2. Quote for exactly this configuration (fresh, or refreshed now).
       let q = quote
       if (!q) {
         setPhase('quoting')
-        const r = await requestQuote(payloadJson)
+        const r = await requestQuote(payloadJson, t('priceError'))
         setQuoteResult({ ...r, payloadJson } as QuoteResult)
         if (r.kind === 'signin') {
           setNeedsSignIn(true)
-          return fail('Please sign in to continue to payment. Your selections are saved.')
+          return fail(t('signInToPay'))
         }
         if (r.kind === 'error') return fail(r.error)
         q = r.quote
@@ -329,7 +338,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       }
       if (res.status === 401) {
         setNeedsSignIn(true)
-        return fail('Please sign in to continue to payment. Your selections are saved.')
+        return fail(t('signInToPay'))
       }
       if (res.status === 409) {
         // Price changed since it was shown: show the new price, never charge the old one.
@@ -337,9 +346,9 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         setQuoteNonce((n) => n + 1)
         attemptRef.current = undefined
         remember({ attempt: undefined })
-        return fail(data.error || 'The price has changed. Please review the new total.')
+        return fail(data.error || t('priceChanged'))
       }
-      if (!res.ok || !data.order?.id) return fail(data.error || 'Your order could not be created. Please try again.')
+      if (!res.ok || !data.order?.id) return fail(data.error || t('orderFailed'))
       const orderId: string = data.order.id
       attempt = { ...attempt, orderId }
       attemptRef.current = attempt
@@ -352,7 +361,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       const coData = await co.json().catch(() => ({}))
       if (!co.ok || !coData.url) {
         return fail(
-          `${coData.error || 'The payment could not be started.'} Nothing was charged. Press "Continue to Payment" to try again.`,
+          `${coData.error || t('paymentFailed')} ${t('paymentRetry')}`,
         )
       }
 
@@ -360,18 +369,18 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       setPhase('redirecting')
       redirectToStripeCheckout(coData.url)
     } catch {
-      fail('Network error. Your selections are saved: please try again.')
+      fail(t('network'))
     }
   }
 
   const busy = phase !== 'idle'
   const buttonLabel =
-    phase === 'quoting' ? 'Calculating price…'
-    : phase === 'creating' ? 'Creating your order…'
-    : phase === 'paying' ? 'Preparing secure payment…'
-    : phase === 'redirecting' ? 'Redirecting to Stripe…'
-    : canOrder ? 'Continue to Payment'
-    : 'Unavailable'
+    phase === 'quoting' ? t('quoting')
+    : phase === 'creating' ? t('creating')
+    : phase === 'paying' ? t('paying')
+    : phase === 'redirecting' ? t('redirecting')
+    : canOrder ? t('buyNow')
+    : t('unavailable')
 
   // Headline: current rank -> target rank, or the quantity bought.
   const fieldOf = (key: string) => (offer.fields || []).find((x: { key: string }) => x.key === key)
@@ -379,19 +388,19 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const masteryChampion = typeof values.champion === 'string' ? championCatalog.find((c) => c.id === values.champion) : undefined
   const levels =
     typeof values.currentLevel === 'number' && typeof values.targetLevel === 'number'
-      ? `Level ${values.currentLevel} → Level ${values.targetLevel}`
+      ? t('levels', { from: values.currentLevel, to: values.targetLevel })
       : null
   const fromLine = masteryChampion
-    ? { key: 'champion', label: 'Champion', value: masteryChampion.name, iconSrc: masteryChampion.iconSrc }
+    ? { key: 'champion', label: t('champion'), value: masteryChampion.name, iconSrc: masteryChampion.iconSrc }
     : summaryLines.find((l) => l.key === 'currentRank')
   const toLine =
-    (levels ? { key: 'levels', label: 'Mastery', value: levels, iconSrc: undefined } : undefined) ??
+    (levels ? { key: 'levels', label: t('mastery'), value: levels, iconSrc: undefined } : undefined) ??
     summaryLines.find((l) => l.key === 'targetRank') ??
     (() => {
       const unitField = (offer.fields || []).find((x: { type: string; key: string }) => x.type === 'number' && values[x.key] != null && values[x.key] !== '')
       if (!unitField) return undefined
       const plural = (fieldOf(unitField.key) as { unit?: string } | undefined)?.unit ?? ''
-      // "1 win", "3 wins"
+      // "1 win", "3 wins" (also "1 victoire", "3 victoires")
       const unit = Number(values[unitField.key]) === 1 && plural.endsWith('s') ? plural.slice(0, -1) : plural
       return { key: unitField.key, label: unitField.label, value: `${values[unitField.key]} ${unit}`.trim(), iconSrc: undefined }
     })()
@@ -429,7 +438,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#111319]">
       <div className="flex items-center gap-2 px-4 pt-4">
         <ShoppingCart className="size-4 text-orange-400" aria-hidden />
-        <h2 className="text-base font-semibold text-white">Order summary</h2>
+        <h2 className="text-base font-semibold text-white">{t('orderSummary')}</h2>
       </div>
 
       <div className="space-y-3 p-4">
@@ -455,7 +464,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         ) : null}
 
         {modeChoices.length > 1 ? (
-          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/20 p-1" role="radiogroup" aria-label="Session type">
+          <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/20 p-1" role="radiogroup" aria-label={t('sessionType')}>
             {modeChoices.map((m) => {
               const active = m.id === mode
               const Icon = m.id === 'duo' ? Users : User
@@ -473,7 +482,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                   }
                 >
                   <Icon className="size-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{m.label}</span>
+                  <span className="truncate">{ct(m.label)}</span>
                 </button>
               )
             })}
@@ -495,8 +504,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                 <UserRound className="size-4" aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-zinc-500">Handled by</p>
-                <p className="truncate text-sm font-semibold text-white">{chosenName ?? 'Anyone available'}</p>
+                <p className="text-[11px] text-zinc-500">{t('handledBy')}</p>
+                <p className="truncate text-sm font-semibold text-white">{chosenName ?? t('anyone')}</p>
               </div>
               {boosters.length > 0 ? (
                 <button
@@ -505,13 +514,13 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                   aria-expanded={boosterPickerOpen}
                   className="text-xs font-semibold text-orange-300 hover:text-orange-200"
                 >
-                  Change ›
+                  {t('change')}
                 </button>
               ) : null}
             </div>
             {boosterPickerOpen && boosters.length > 0 ? (
-              <div className="mt-2 space-y-1 border-t border-white/10 pt-2" role="radiogroup" aria-label="Booster">
-                {[{ id: '', displayName: 'Anyone available (fastest)' }, ...boosters].map((b) => (
+              <div className="mt-2 space-y-1 border-t border-white/10 pt-2" role="radiogroup" aria-label={t('booster')}>
+                {[{ id: '', displayName: t('anyoneFastest') }, ...boosters].map((b) => (
                   <button
                     key={b.id || 'any'}
                     type="button"
@@ -529,7 +538,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                     {b.displayName}
                   </button>
                 ))}
-                <p className="px-2 text-[11px] text-zinc-500">Your booster gets the order first for a short time; if they do not take it, anyone can.</p>
+                <p className="px-2 text-[11px] text-zinc-500">{t('boosterNote')}</p>
               </div>
             ) : null}
           </div>
@@ -538,28 +547,28 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         <div className="border-t border-white/10 pt-3" aria-live="polite">
           {quote?.discountAmount && quote.coupon?.applied ? (
             <div className="mb-1 flex justify-between text-xs">
-              <span className="text-emerald-300">Discount ({quote.coupon.code})</span>
+              <span className="text-emerald-300">{t('discount', { code: quote.coupon.code })}</span>
               <span className="text-emerald-300">-{formatMoney(quote.discountAmount, quote.currency)}</span>
             </div>
           ) : null}
-          <p className="text-[11px] text-zinc-500">Total price</p>
+          <p className="text-[11px] text-zinc-500">{t('totalPrice')}</p>
           <p className="flex items-center gap-2 text-3xl font-black tracking-tight text-white">
-            {quoteLoading ? <Loader2 className="size-5 animate-spin text-zinc-400" aria-label="Calculating price" /> : null}
+            {quoteLoading ? <Loader2 className="size-5 animate-spin text-zinc-400" aria-label={t('calculatingAria')} /> : null}
             {quote ? formatMoney(quote.totalAmount, quote.currency) : '—'}
           </p>
           {!quote || missing.length || signInRequired || current?.kind === 'error' || !canOrder ? (
             <p className="mt-0.5 text-xs text-zinc-500">
               {!canOrder
                 ? offer.purchase?.reason === 'unpriced'
-                  ? 'Pricing for this service is not available yet.'
-                  : 'This service is not available for purchase yet.'
+                  ? t('unpriced')
+                  : t('notPurchasable')
                 : missing.length
-                  ? `Complete: ${missing.join(', ')}`
+                  ? t('completeShort', { fields: missing.join(', ') })
                   : signInRequired
-                    ? 'Sign in to see your price.'
+                    ? t('signInForPrice')
                     : current?.kind === 'error'
                       ? current.error
-                      : 'Calculating your price…'}
+                      : t('calculating')}
             </p>
           ) : null}
 
@@ -576,9 +585,9 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
               <input
                 value={couponDraft}
                 onChange={(e) => setCouponDraft(e.target.value)}
-                placeholder="Discount code"
+                placeholder={t('discountCode')}
                 maxLength={32}
-                aria-label="Discount code"
+                aria-label={t('discountCode')}
                 autoFocus={!couponCode}
                 className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-1.5 text-sm uppercase text-white outline-none placeholder:normal-case placeholder:text-zinc-500 focus:border-white/30"
               />
@@ -591,17 +600,17 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
                   }}
                   className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
                 >
-                  Remove
+                  {t('remove')}
                 </button>
               ) : (
                 <button type="submit" disabled={!couponDraft.trim() || busy} className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:opacity-50">
-                  Apply
+                  {t('apply')}
                 </button>
               )}
             </form>
           ) : (
             <button type="button" onClick={() => setDiscountOpen(true)} className="mt-1 text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-200">
-              Have a discount code?
+              {t('haveCode')}
             </button>
           )}
           {lastCouponError ? <p role="alert" className="mt-1 text-xs text-amber-300">{lastCouponError}</p> : null}
@@ -612,7 +621,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             href={loginHref()}
             className="block w-full rounded-xl bg-orange-500 px-4 py-3 text-center text-sm font-bold text-white hover:bg-orange-400"
           >
-            Sign in to continue
+            {t('signInContinue')}
           </Link>
         ) : (
           <button
@@ -624,7 +633,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Lock className="size-4" aria-hidden />}
-            {busy ? buttonLabel : canOrder ? 'Buy now' : 'Unavailable'}
+            {busy ? buttonLabel : canOrder ? t('buyNow') : t('unavailable')}
           </button>
         )}
         {errorMsg ? (
@@ -632,8 +641,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             {errorMsg}
           </p>
         ) : null}
-        {testMode ? <p className="text-center text-xs text-amber-400">Test mode: payments use Stripe test cards and no real money is charged.</p> : null}
-        <p className="text-center text-[11px] text-zinc-500">Secure payment on Stripe</p>
+        {testMode ? <p className="text-center text-xs text-amber-400">{t('testMode')}</p> : null}
+        <p className="text-center text-[11px] text-zinc-500">{t('secure')}</p>
       </div>
 
       <ChampionsRolesModal

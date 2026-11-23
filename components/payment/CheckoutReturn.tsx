@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 import { useSearchParams } from 'next/navigation'
 import { CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react'
 import { SiteHeader } from '@/components/layout/site-header'

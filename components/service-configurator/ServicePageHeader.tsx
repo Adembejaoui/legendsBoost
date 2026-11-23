@@ -6,6 +6,7 @@ import type { ServiceTemplate } from '@/types/catalog'
 import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { getServiceTemplate } from '@/lib/catalog/service-templates'
 import { Trophy, Target, FileText, Star, Gamepad2, Medal, ShieldCheck, User } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface ServicePageHeaderProps {
   game: GameDefinition
@@ -25,6 +26,7 @@ const iconMap: Record<string, any> = {
 }
 
 export function ServicePageHeader({ game, offer, template }: ServicePageHeaderProps) {
+  const t = useTranslations('Service')
   const title = offer.title ?? template.title
   const Icon = iconMap[offer.serviceSlug] ?? Trophy
 
@@ -32,7 +34,7 @@ export function ServicePageHeader({ game, offer, template }: ServicePageHeaderPr
     <div className="space-y-2">
       <Breadcrumb
         items={[
-          { label: 'Games', href: '/games' },
+          { label: t('games'), href: '/games' },
           { label: game.name, href: `/games/${game.slug}` },
           { label: title },
         ]}

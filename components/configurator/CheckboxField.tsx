@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 interface CheckboxFieldProps {
   label: string
   description?: string
@@ -17,6 +19,7 @@ export function CheckboxField({
   required,
   disabled = false,
 }: CheckboxFieldProps) {
+  const t = useTranslations('Service')
   return (
     <div className="space-y-2">
       <label
@@ -35,7 +38,7 @@ export function CheckboxField({
         <p className="ml-8 text-xs text-zinc-500">{description}</p>
       )}
       {required && !value && (
-        <p className="ml-8 text-xs text-rose-400">This field is required.</p>
+        <p className="ml-8 text-xs text-rose-400">{t('required')}</p>
       )}
     </div>
   )

@@ -1,13 +1,15 @@
 import { ChevronDown } from 'lucide-react'
 import type { FaqItem } from '@/lib/content/faqAC'
+import { useTranslations } from 'next-intl'
 
 /** Short FAQ under the order form (text in lib/content/faqAC.ts). */
 export function ServiceFaq({ title, items }: { title: string; items: FaqItem[] }) {
+  const t = useTranslations('Service')
   if (items.length === 0) return null
   return (
     <section aria-labelledby="service-faq" className="rounded-xl border border-white/10 bg-[#111319] p-4 sm:p-5">
       <h2 id="service-faq" className="mb-3 text-base font-semibold text-white">
-        {title} FAQ
+        {t('faqTitle', { title })}
       </h2>
       <div className="divide-y divide-white/[0.06]">
         {items.map((item) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast";
 
 /** Admin: complete a submitted order, or send it back to the booster with a note. */

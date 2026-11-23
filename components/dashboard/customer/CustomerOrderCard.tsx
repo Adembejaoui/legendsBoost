@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { $Enums } from "@/app/generated/prisma/client";
 import { formatRankLabel } from "@/lib/catalog/rank-systems";
 import { getGame, getServiceTemplate, getGameServiceOffer } from "@/lib/catalog/catalog-utils";

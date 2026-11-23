@@ -1,6 +1,7 @@
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 
 /**
  * Four-step progress indicator: Game -> Service -> Configure -> Payment.
@@ -18,14 +19,15 @@ export function CheckoutSteps({
   gameSlug?: string
   serviceSlug?: string
 }) {
+  const t = useTranslations('Steps')
   const steps: { n: 1 | 2 | 3 | 4; label: string; href?: string }[] = [
-    { n: 1, label: 'Choose game', href: '/games' },
-    { n: 2, label: 'Choose service', href: gameSlug ? `/games/${gameSlug}` : undefined },
-    { n: 3, label: 'Configure', href: gameSlug && serviceSlug ? `/games/${gameSlug}/services/${serviceSlug}` : undefined },
-    { n: 4, label: 'Payment' },
+    { n: 1, label: t('chooseGame'), href: '/games' },
+    { n: 2, label: t('chooseService'), href: gameSlug ? `/games/${gameSlug}` : undefined },
+    { n: 3, label: t('configure'), href: gameSlug && serviceSlug ? `/games/${gameSlug}/services/${serviceSlug}` : undefined },
+    { n: 4, label: t('payment') },
   ]
   return (
-    <nav aria-label="Checkout progress" className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10">
+    <nav aria-label={t('aria')} className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10">
       <ol className="flex items-center gap-1.5 overflow-x-auto py-1 text-xs sm:gap-3 sm:text-sm">
         {steps.map((s, i) => {
           const done = s.n < current
@@ -52,7 +54,7 @@ export function CheckoutSteps({
               {done && s.href ? (
                 <Link href={s.href} className="rounded-md hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-400">
                   {content}
-                  <span className="sr-only"> (completed, go back)</span>
+                  <span className="sr-only"> {t('completed')}</span>
                 </Link>
               ) : (
                 content

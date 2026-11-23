@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { Bell, BellOff } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { LiveChannel, type LiveState } from "@/lib/realtime/live-client";

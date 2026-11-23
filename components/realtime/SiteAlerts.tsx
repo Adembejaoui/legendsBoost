@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useSession } from "next-auth/react";
 import { ToastProvider } from "@/components/ui/toast";
 import { BoosterNewOrderAlert } from "@/components/realtime/BoosterNewOrderAlert";

@@ -13,6 +13,7 @@ import {
   Wallet,
   Bell,
   LifeBuoy,
+  Newspaper,
 } from "lucide-react";
 
 export type UserRole = "ADMIN" | "BOOSTER" | "CUSTOMER";
@@ -41,6 +42,7 @@ export const iconMap: Record<string, any> = {
   Wallet,
   Bell,
   LifeBuoy,
+  Newspaper,
 };
 
 export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
@@ -109,6 +111,7 @@ export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
     { id: "admin-fines", label: "Fines", href: "/dashboard/admin/fines", icon: "Wallet" },
     { id: "admin-users", label: "Users", href: "/dashboard/admin/users", icon: "Users" },
     { id: "admin-boosters", label: "Boosters", href: "/dashboard/admin/boosters", icon: "Shield" },
+    { id: "admin-blog", label: "Blog", href: "/dashboard/admin/blog", icon: "Newspaper" },
     { id: "admin-support", label: "Support Tickets", href: "/dashboard/admin/support", icon: "LifeBuoy" },
     { id: "admin-notifications", label: "Notifications", href: "/dashboard/notifications", icon: "Bell" },
     { id: "admin-settings", label: "Settings", href: "/dashboard/admin/settings", icon: "Settings" },

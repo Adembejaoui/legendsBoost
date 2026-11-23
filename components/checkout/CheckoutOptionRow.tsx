@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils'
 import type { CheckoutMode, CheckoutOption, ChampionsRolesConfig } from '@/lib/config/checkout-options'
 import { champions } from '@/lib/catalog/champions'
+import { useTranslations } from 'next-intl'
 
 const ICONS: Record<string, LucideIcon> = { User, Trophy, Zap, Video, Swords, Globe, EyeOff, Drama, LineChart, Crosshair, Mic }
 
@@ -44,6 +45,8 @@ const champName = (id: string) => champions.find((c) => c.id === id)?.name ?? id
  * icon with the hover text, price badge from the server and a switch.
  */
 export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel, disabled = false, championsRoles, onConfigure }: CheckoutOptionRowProps) {
+  const t = useTranslations('Checkout')
+  const tRole = useTranslations('Roles')
   const [tip, setTip] = useState(false)
   const tipId = useId()
   const Icon = (option.icon && ICONS[option.icon]) || Sparkles
@@ -53,12 +56,12 @@ export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel,
 
   let detail: string | null = null
   if (checked && option.configurationType === 'champions-roles' && championsRoles) {
-    const roles = championsRoles.roles.map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(', ')
+    const roles = championsRoles.roles.map((r) => (tRole.has(r as 'top') ? tRole(r as 'top') : r)).join(', ')
     const champs = championsRoles.champions.map(champName).join(', ')
-    detail = [roles && `Roles: ${roles}`, champs && `Champions: ${champs}`].filter(Boolean).join(' · ') || 'Choose your champions and roles'
+    detail = [roles && t('roles', { list: roles }), champs && t('champions', { list: champs })].filter(Boolean).join(' · ') || t('chooseChampionsRoles')
   }
   if (checked && option.configurationType === 'otp-champion') {
-    detail = championsRoles?.otpChampion ? `Champion: ${champName(championsRoles.otpChampion)}` : 'Choose your champion'
+    detail = championsRoles?.otpChampion ? t('championOne', { name: champName(championsRoles.otpChampion) }) : t('chooseChampion')
   }
 
   return (
@@ -85,7 +88,7 @@ export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel,
             <span className="relative inline-flex">
               <button
                 type="button"
-                aria-label={`About ${option.label}`}
+                aria-label={t('about', { name: option.label })}
                 aria-describedby={tip ? tipId : undefined}
                 onMouseEnter={() => setTip(true)}
                 onMouseLeave={() => setTip(false)}
@@ -117,7 +120,7 @@ export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel,
             free ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-zinc-300',
           )}
         >
-          {priceLabel}
+          {free ? t('free') : priceLabel}
         </span>
       ) : null}
       <button

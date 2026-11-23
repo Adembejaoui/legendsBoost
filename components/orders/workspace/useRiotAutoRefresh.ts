@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 
 /** How often the open page asks "was a new game played?". */

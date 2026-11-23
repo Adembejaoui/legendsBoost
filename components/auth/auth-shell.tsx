@@ -1,5 +1,7 @@
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { Barlow_Condensed } from "next/font/google";
+import { useTranslations } from "next-intl";
+import { useCatalogText } from "@/lib/i18n/catalog";
 
 export const display = Barlow_Condensed({
   subsets: ["latin"],
@@ -22,13 +24,15 @@ const TIERS = [
 
 function RankLadder() {
   // Highest tier on top, widest bar on top: the staircase reads as a climb.
+  const t = useTranslations("Auth");
+  const ct = useCatalogText();
   const rungs = TIERS.map((tier, i) => ({ ...tier, width: 26 + i * 8 })).reverse();
 
   return (
-    <ol className="space-y-2" aria-label="Ranked tiers from Challenger down to Iron">
+    <ol className="space-y-2" aria-label={t("ladder")}>
       {rungs.map((tier) => (
         <li key={tier.name} className="flex items-center gap-4">
-          <span className="w-24 text-right text-sm text-zinc-500">{tier.name}</span>
+          <span className="w-24 text-right text-sm text-zinc-500">{ct(tier.name)}</span>
           <span
             className="h-3.5 rounded-r-sm"
             style={{ width: `${tier.width}%`, backgroundColor: tier.color, opacity: 0.85 }}

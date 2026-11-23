@@ -1,7 +1,7 @@
 import type { Service } from '@/types/service'
 import { cn } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 
 interface ServiceCardProps {
   service: Service

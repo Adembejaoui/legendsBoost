@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 /**
  * Content-Security-Policy (production audit, 2026-11-15). Only the services
@@ -55,24 +58,31 @@ const nextConfig: NextConfig = {
     remotePatterns: [{ protocol: "https", hostname: "ddragon.leagueoflegends.com" }],
   },
   // Short page addresses (client PDFs 2026-11-19). The browser keeps the short
-  // address; the old /games/... links keep working.
+  // address; the old /games/... links keep working. The language proxy runs
+  // first and turns /lol-boosting into /en/lol-boosting (or /fr/...), so the
+  // short addresses are matched with the language in front.
   async rewrites() {
-    const lol = (slug: string) => `/games/league-of-legends/services/${slug}`;
-    return [
-      { source: "/league-of-legends-rank-boost", destination: lol("rank-boost") },
-      { source: "/lol-boosting", destination: lol("win-boost") },
-      { source: "/lol-placement-boost", destination: lol("placement-boost") },
-      { source: "/lol-arena-boost", destination: lol("arena-boost") },
-      { source: "/champion-mastery", destination: lol("champion-mastery") },
-      { source: "/normal-games", destination: lol("normal-matches") },
+    const short: [string, string][] = [
+      ["league-of-legends-rank-boost", "rank-boost"],
+      ["lol-boosting", "win-boost"],
+      ["lol-placement-boost", "placement-boost"],
+      ["lol-arena-boost", "arena-boost"],
+      ["champion-mastery", "champion-mastery"],
+      ["normal-games", "normal-matches"],
     ];
+    return short.map(([from, slug]) => ({
+      source: `/:locale(en|fr)/${from}`,
+      destination: `/:locale/games/league-of-legends/services/${slug}`,
+    }));
   },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Signed-in pages and API answers must never be cached by shared caches.
       { source: "/dashboard/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
-      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
+      { source: "/:locale(fr)/dashboard/:path*", headers: [{ key: "Cache-Control", value: "private, no-store" }] },
+      // Public blog images are cached for a year (their own header); every other API answer is not.
+      { source: "/api/:path((?!blog/images/).*)", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];
   },
   turbopack: {
@@ -85,4 +95,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

@@ -66,6 +66,7 @@ model User {
   sessionVersion        Int              @default(0) @map("sessionVersion")
 
   accounts              Account[]
+  blogPosts             BlogPost[]       @relation("blogPostAuthor")
   sessions              Session[]
   customerProfile       CustomerProfile?
   boosterProfile        BoosterProfile?
@@ -1709,4 +1710,53 @@ model OrderProgressUpdate {
 
   @@index([orderId, createdAt])
   @@map("orderProgressUpdate")
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// Blog (2026-11-23). One row per language; translations of the same article
+/// share `translationGroup`. Written by admins in Markdown (no raw HTML is
+/// ever rendered). Visible once PUBLISHED and `publishedAt` is reached
+/// (a future date schedules it).
+model BlogPost {
+  id               String         @id @default(cuid())
+  translationGroup String         @map("translationGroup")
+  locale           String
+  slug             String
+  title            String
+  excerpt          String
+  body             String
+  coverImageId     String?        @map("coverImageId")
+  /// Catalog game slug, or null for general posts.
+  gameSlug         String?        @map("gameSlug")
+  tags             String[]       @default([])
+  status           BlogPostStatus @default(DRAFT)
+  publishedAt      DateTime?      @map("publishedAt")
+  seoTitle         String?        @map("seoTitle")
+  seoDescription   String?        @map("seoDescription")
+  authorId         String         @map("authorId")
+  createdAt        DateTime       @default(now()) @map("createdAt")
+  updatedAt        DateTime       @updatedAt @map("updatedAt")
+
+  author           User           @relation("blogPostAuthor", fields: [authorId], references: [id])
+
+  @@unique([locale, slug])
+  @@unique([translationGroup, locale])
+  @@index([status, locale, publishedAt])
+  @@map("blogPost")
+}
+
+/// Image uploaded for the blog (public, served by /api/blog/images/[id]).
+model BlogImage {
+  id           String   @id @default(cuid())
+  storagePath  String   @unique @map("storagePath")
+  contentType  String   @map("contentType")
+  sizeBytes    Int      @map("sizeBytes")
+  uploadedById String   @map("uploadedById")
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  @@map("blogImage")
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 interface NumberFieldProps {
   label: string
   description?: string
@@ -41,6 +43,7 @@ export function NumberField({
   optionLabel,
   bare = false,
 }: NumberFieldProps) {
+  const t = useTranslations('Service')
   const lo = min ?? 1
   const hi = max ?? lo
 
@@ -57,7 +60,7 @@ export function NumberField({
           disabled={disabled}
           className="h-10 w-full rounded-md border border-white/10 bg-[#0b0c10] px-3 text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50"
         >
-          {value == null ? <option value="">Select</option> : null}
+          {value == null ? <option value="">{t('select')}</option> : null}
           {range(lo, hi).map((n) => (
             <option key={n} value={n}>
               {optionLabel ? optionLabel.replace('{n}', String(n)) : n}

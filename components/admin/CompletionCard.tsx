@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { getGame } from "@/lib/catalog/games";
 import { getServiceTemplate } from "@/lib/catalog/service-templates";
 import { proofUrl } from "@/lib/orders/completion-request.service";

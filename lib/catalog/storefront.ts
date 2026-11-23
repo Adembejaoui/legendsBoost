@@ -23,6 +23,8 @@ import type { GameServiceOffer } from "@/types/catalog";
 import type { StorefrontService } from "./storefront-types";
 import { cachedCatalog } from "./price-cache";
 import { parseRangeKey } from "@/lib/pricing/units";
+import { getConfig } from "@/lib/config";
+import { conversionFactor, convertPriceConfig, getFxRates } from "@/lib/currency/rates";
 export type { ServiceAvailability, StorefrontService } from "./storefront-types";
 export { AVAILABILITY_LABEL } from "./storefront-types";
 
@@ -73,22 +75,27 @@ export function computeStartingPrice(
 }
 
 /** Active prices and commission; throws when the database is unreachable. */
-async function loadPricingStrict(gameSlug?: string) {
-  const [rows, policy] = await Promise.all([
+async function loadPricingStrict(gameSlug?: string, currency?: string) {
+  const [rows, policy, fx, markup] = await Promise.all([
     prisma.servicePrice.findMany({ where: { status: "ACTIVE", ...(gameSlug ? { gameSlug } : {}) } }),
     getActiveCommissionPolicy(),
+    currency ? getFxRates() : Promise.resolve(null),
+    currency ? getConfig("fx_markup_bps") : Promise.resolve(0),
   ]);
   const prices = new Map<string, ServicePriceConfig>();
   for (const r of rows) {
-    const p = parseServicePriceRow(r);
+    let p = parseServicePriceRow(r);
+    // "From ..." in the visitor's currency, exactly as the quote will convert it.
+    const factor = p && currency ? conversionFactor(p.currency, currency, fx, markup) : null;
+    if (p && currency && factor !== null) p = convertPriceConfig(p, currency, factor);
     if (p) prices.set(`${r.gameSlug}:${r.serviceSlug}`, p);
   }
   return { prices, policy };
 }
 
-async function loadPricing(gameSlug?: string) {
+async function loadPricing(gameSlug?: string, currency?: string) {
   try {
-    return await loadPricingStrict(gameSlug);
+    return await loadPricingStrict(gameSlug, currency);
   } catch (e) {
     // The storefront still renders without prices; the quote API stays authoritative.
     logger.error("Storefront pricing unavailable", { error: e instanceof Error ? e.name : "unknown" });
@@ -106,29 +113,29 @@ function describe(offer: GameServiceOffer, pricing: Awaited<ReturnType<typeof lo
   return { serviceSlug: offer.serviceSlug, availability: "available", startingPrice: computeStartingPrice(offer, checkout, price, pricing.policy) };
 }
 
-async function storefrontServices(gameSlug: string, strict: boolean): Promise<StorefrontService[]> {
-  const pricing = strict ? await loadPricingStrict(gameSlug) : await loadPricing(gameSlug);
+async function storefrontServices(gameSlug: string, strict: boolean, currency?: string): Promise<StorefrontService[]> {
+  const pricing = strict ? await loadPricingStrict(gameSlug, currency) : await loadPricing(gameSlug, currency);
   return getGameServiceOffers(gameSlug).map((o) => describe(o, pricing));
 }
 
-async function storefrontService(gameSlug: string, serviceSlug: string, strict: boolean): Promise<StorefrontService | null> {
+async function storefrontService(gameSlug: string, serviceSlug: string, strict: boolean, currency?: string): Promise<StorefrontService | null> {
   const offer = gameServices.find((o) => o.gameSlug === gameSlug && o.serviceSlug === serviceSlug);
   if (!offer) return null;
-  return describe(offer, strict ? await loadPricingStrict(gameSlug) : await loadPricing(gameSlug));
+  return describe(offer, strict ? await loadPricingStrict(gameSlug, currency) : await loadPricing(gameSlug, currency));
 }
 
-/** Services of a game with their starting price (cached 60 s, see price-cache.ts). */
+/** Services of a game with their starting price, in `currency` when given (cached 60 s, see price-cache.ts). */
 export const getStorefrontServices = cachedCatalog(
   "services",
-  (gameSlug: string) => storefrontServices(gameSlug, true),
-  (gameSlug: string) => storefrontServices(gameSlug, false)
+  (gameSlug: string, currency?: string) => storefrontServices(gameSlug, true, currency),
+  (gameSlug: string, currency?: string) => storefrontServices(gameSlug, false, currency)
 );
 
-/** One service with its starting price (cached 60 s). */
+/** One service with its starting price, in `currency` when given (cached 60 s). */
 export const getStorefrontService = cachedCatalog(
   "service",
-  (gameSlug: string, serviceSlug: string) => storefrontService(gameSlug, serviceSlug, true),
-  (gameSlug: string, serviceSlug: string) => storefrontService(gameSlug, serviceSlug, false)
+  (gameSlug: string, serviceSlug: string, currency?: string) => storefrontService(gameSlug, serviceSlug, true, currency),
+  (gameSlug: string, serviceSlug: string, currency?: string) => storefrontService(gameSlug, serviceSlug, false, currency)
 );
 
 /** Step 1: number of services that can be bought right now, per game (cached 60 s). */

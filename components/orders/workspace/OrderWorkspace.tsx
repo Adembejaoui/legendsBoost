@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { AlertTriangle, ArrowLeft, ClipboardList, KeyRound, LayoutGrid, MessageSquare, PauseCircle, TrendingUp } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import type { RawServerMessage } from "@/lib/chat/message-sync";

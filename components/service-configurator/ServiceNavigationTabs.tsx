@@ -1,7 +1,8 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 import type { OfferWithTemplate } from '@/lib/catalog/catalog-utils'
 
 interface ServiceNavigationTabsProps {
@@ -11,10 +12,11 @@ interface ServiceNavigationTabsProps {
 }
 
 export function ServiceNavigationTabs({ gameSlug, activeServiceSlug, offers }: ServiceNavigationTabsProps) {
+  const t = useTranslations('Service')
   if (offers.length === 0) return null
 
   return (
-    <nav aria-label="Service tabs" className="overflow-x-auto">
+    <nav aria-label={t('tabs')} className="overflow-x-auto">
       <ul className="flex items-center gap-1 rounded-lg border border-white/10 bg-[#111319] p-1">
         {offers.map((entry) => {
           const slug = entry.offer.serviceSlug

@@ -35,6 +35,11 @@ export interface Quote {
    * order summary can show "+$1.96" before an extra is switched on.
    */
   optionAmounts: Record<string, number>;
+  /**
+   * Set when the price list was converted to the customer's currency
+   * (lib/currency/rates.ts): the rate used, kept with the order.
+   */
+  fx?: { from: string; to: string; rate: number; date: string } | null;
 }
 
 export type QuoteResult = { ok: true; quote: Quote } | { ok: false; reason: string };

@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
 import { ArrowRight, Check, LayoutDashboard } from 'lucide-react'
 import { formatMoney } from '@/lib/money'
 import type { OrderSummary, OrderSummaryRank } from '@/lib/orders/order-summary'

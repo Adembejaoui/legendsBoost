@@ -13,6 +13,7 @@ import type { GameCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem, isTargetAboveCurrent } from "@/lib/catalog/rank-systems";
 import { getChampion, LOL_ROLE_IDS, normalizeChampionId } from "@/lib/catalog/champions";
 import { MAX_AMOUNT } from "@/lib/money";
+import { SITE_CURRENCIES } from "@/lib/currency/currencies";
 
 export const orderRequestSchema = z
   .object({
@@ -45,6 +46,11 @@ export const orderRequestSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Currency the customer pays in (multi-currency 2026-11-23). Absent: the
+     * service's own price-list currency.
+     */
+    currency: z.enum(SITE_CURRENCIES).optional(),
     /** The total the customer was shown; must equal the server quote. */
     expectedTotal: z
       .object({ amount: z.number().int().min(0).max(MAX_AMOUNT), currency: z.string().length(3) })
@@ -63,6 +69,8 @@ export interface NormalizedOrderInput {
   championsRoles: { roles: string[]; champions: string[]; otpChampion?: string } | null;
   /** Upper-case coupon code; absent when none (keeps older request hashes stable). */
   couponCode?: string;
+  /** Currency to charge; absent = the price list's own (keeps older request hashes stable). */
+  currency?: string;
 }
 
 type Result = { ok: true; value: NormalizedOrderInput } | { ok: false; errors: string[] };
@@ -226,6 +234,7 @@ export function validateOrderInput(
       selectedOptions: [...input.selectedOptions].sort(),
       championsRoles,
       ...(input.couponCode ? { couponCode: input.couponCode.trim().toUpperCase() } : {}),
+      ...(input.currency ? { currency: input.currency } : {}),
     },
   };
 }

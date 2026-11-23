@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 
 /** Key read by the checkout to preselect the booster (if they can do the order). */
 export const PREFERRED_BOOSTER_KEY = "lb.preferredBooster";

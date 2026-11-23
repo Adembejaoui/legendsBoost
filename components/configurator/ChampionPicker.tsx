@@ -5,6 +5,7 @@ import { Check, Search, X } from 'lucide-react'
 import type { Champion } from '@/types/catalog'
 import { ImageFallback } from '@/components/ui/image-fallback'
 import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 
 interface ChampionPickerProps {
   label: string
@@ -38,6 +39,7 @@ function Portrait({ champion, className }: { champion: Champion; className?: str
  * a search box and every champion in a scrollable grid.
  */
 export function ChampionPicker({ label, description, champions, value, onChange, required, disabled = false, children }: ChampionPickerProps) {
+  const t = useTranslations('Service')
   const [query, setQuery] = useState('')
   const selected = champions.find((c) => c.id === value) ?? null
   const sorted = useMemo(() => [...champions].sort((a, b) => a.name.localeCompare(b.name)), [champions])
@@ -69,13 +71,13 @@ export function ChampionPicker({ label, description, champions, value, onChange,
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search a champion…"
-          aria-label="Search a champion"
+          placeholder={t('searchChampion')}
+          aria-label={t('searchChampionAria')}
           disabled={disabled}
           className="h-9 w-full rounded-md border border-white/10 bg-[#0b0c10] pl-8 pr-8 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-violet-400/60"
         />
         {query ? (
-          <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-500 hover:text-white">
+          <button type="button" aria-label={t('clearSearch')} onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-500 hover:text-white">
             <X className="size-3.5" />
           </button>
         ) : null}
@@ -87,7 +89,7 @@ export function ChampionPicker({ label, description, champions, value, onChange,
         className="grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto rounded-lg border border-white/[0.06] bg-black/20 p-1.5 sm:grid-cols-6 lg:grid-cols-7"
       >
         {shown.length === 0 ? (
-          <p className="col-span-full py-6 text-center text-sm text-zinc-500">No champion matches “{query}”.</p>
+          <p className="col-span-full py-6 text-center text-sm text-zinc-500">{t('noChampion', { query })}</p>
         ) : (
           shown.map((champion) => {
             const isSelected = champion.id === value

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Mail, AlertTriangle, Clock, CheckCircle, X, ChevronLeft, ChevronRight, Filter, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 
 interface Ticket {
   id: string;

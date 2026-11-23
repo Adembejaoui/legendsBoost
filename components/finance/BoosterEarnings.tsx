@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { Loader2 } from "lucide-react";
 import { formatMoney } from "@/lib/money";
 import type { boosterFinance } from "@/lib/finance/queries";

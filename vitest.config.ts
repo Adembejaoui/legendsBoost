@@ -6,6 +6,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./__tests__/setup.ts'],
     include: ['__tests__/**/*.test.ts'],
+    // next-intl imports "next/navigation" without an extension, which plain
+    // Node cannot resolve; let Vite process it like app code.
+    server: { deps: { inline: ['next-intl'] } },
   },
   resolve: {
     alias: {

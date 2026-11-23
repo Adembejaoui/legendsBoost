@@ -6,7 +6,7 @@ import { NotificationIcon } from "./NotificationIcon";
 import { notificationTone, TONE_CLASSES } from "@/lib/notifications/tones";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 
 interface Notification {
   id: string;

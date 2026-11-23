@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { Eye, EyeOff, Gamepad2, Loader2, ShieldCheck } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";

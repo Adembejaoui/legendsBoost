@@ -83,6 +83,10 @@ export const CONFIG_SCHEMA = {
   // Not enforced yet (Phase 7).
   earnings_hold_hours: z.number().int().min(0),
   min_payout_minor: z.number().int().min(0),
+  // Multi-currency (2026-11-23): margin added to the exchange rate when an
+  // order is priced in another currency than its price list (covers Stripe's
+  // conversion fee). 0 = the plain daily rate.
+  fx_markup_bps: z.number().int().min(0).max(1000),
 } as const;
 
 export type ConfigKey = keyof typeof CONFIG_SCHEMA;
@@ -120,6 +124,7 @@ export const CONFIG_DEFAULTS: { [K in ConfigKey]: ConfigValue<K> } = {
   auto_confirm_hours: 72,
   earnings_hold_hours: 24,
   min_payout_minor: 2000,
+  fx_markup_bps: 0,
 };
 
 export function isConfigKey(key: string): key is ConfigKey {

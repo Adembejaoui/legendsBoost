@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils'
 import { formatMoney } from '@/lib/money'
 import { AVAILABILITY_LABEL, type StorefrontService } from '@/lib/catalog/storefront-types'
 import { ArrowRight } from 'lucide-react'
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
+import { useTranslations } from 'next-intl'
+import { useCatalogText } from '@/lib/i18n/catalog'
 
 interface ServiceCardProps {
   offer: GameServiceOffer
@@ -22,6 +24,8 @@ interface ServiceCardProps {
  * visible with their status, but are not a dead-end link.
  */
 export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefront }: ServiceCardProps) {
+  const t = useTranslations('Game')
+  const ct = useCatalogText()
   const title = offer.title ?? template.title
   const availability = storefront?.availability ?? 'unknown'
   const selectable = availability === 'available' || availability === 'unknown'
@@ -38,7 +42,7 @@ export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefr
               availability === 'available' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-zinc-400',
             )}
           >
-            {AVAILABILITY_LABEL[availability]}
+            {ct(AVAILABILITY_LABEL[availability])}
           </span>
         </div>
         <p className="mt-2 text-sm leading-5 text-zinc-400">{offer.description ?? template.description}</p>
@@ -46,14 +50,14 @@ export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefr
           <span className="text-sm text-zinc-300">
             {price ? (
               <>
-                <span className="text-xs text-zinc-500">From </span>
+                <span className="text-xs text-zinc-500">{t('from')} </span>
                 <span className="font-semibold text-white">{formatMoney(price.amount, price.currency)}</span>
               </>
             ) : null}
           </span>
           {selectable ? (
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-white transition-colors group-hover:text-orange-300">
-              Select
+              {t('select')}
               <ArrowRight className="size-4" aria-hidden />
             </span>
           ) : null}
@@ -69,7 +73,7 @@ export function ServiceCard({ offer, template, game, accent = '#8b5cf6', storefr
     <Link
       href={`/games/${game.slug}/services/${offer.serviceSlug}`}
       className={cn(base, 'hover:border-white/25 hover:bg-[#14161e] focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-400')}
-      aria-label={`Select ${title}${price ? `, from ${formatMoney(price.amount, price.currency)}` : ''}`}
+      aria-label={price ? t('selectAriaPrice', { title, price: formatMoney(price.amount, price.currency) }) : t('selectAria', { title })}
     >
       {body}
     </Link>

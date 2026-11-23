@@ -5,7 +5,7 @@
  * an ADMIN-only API that re-checks the role on the server.
  */
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { Loader2 } from "lucide-react";
 
 const btn = "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50";

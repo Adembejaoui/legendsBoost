@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { Link } from "@/i18n/navigation";
+import { useTranslations } from 'next-intl'
 
 interface BreadcrumbItem {
   label: string
@@ -7,8 +8,9 @@ interface BreadcrumbItem {
 }
 
 export function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
+  const t = useTranslations('Service')
   return (
-    <nav aria-label="Breadcrumb" className="mb-6">
+    <nav aria-label={t('breadcrumb')} className="mb-6">
       <ol className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
         {items.map((item, index) => {
           const isLast = index === items.length - 1

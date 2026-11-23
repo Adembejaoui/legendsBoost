@@ -445,7 +445,7 @@ export const gameServices: GameServiceOffer[] = [
         step: 1,
         unit: 'matches',
       },
-      rankField('currentRank', 'Current rank', 'tft-ranked', false, 'Your rank .'),
+      rankField('currentRank', 'Current rank', 'tft-ranked', false, 'Your rank before placements, if known.'),
     ],
   },
   {

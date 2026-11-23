@@ -2,6 +2,39 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-23 · Blog
+
+- **Admin → Blog** (`/dashboard/admin/blog`): articles in Markdown with live preview, cover and inline images (PNG/JPG/WebP, checked by their bytes, private bucket `blog-images`, served by `/api/blog/images/[id]` with a one-year cache), game, tags, Google title and description, draft / publish / schedule (future date), delete one language (audited).
+- **Languages:** one version per language, linked as translations (`translationGroup`); "Add the French version" starts from the English text. Opening an article in the other language goes to its translation.
+- **Order boxes:** a line with only `[service:game/service]` shows the service with its live "From" price (visitor's currency) and an order button.
+- **Public:** `/blog` (filters by game and tag, search, 12 per page) and `/blog/[slug]` (table of contents from `##` headings, reading time, related articles, call to action, BlogPosting structured data, hreflang). Header and footer link to the blog; the sitemap lists every published article with its translations (rebuilt hourly).
+- **Safety:** raw HTML is never rendered (react-markdown), `javascript:` links are dropped, outside links open in a new tab with `nofollow`, only our own uploaded images are shown.
+- **Migration** `20261123120000_blog` (tables `blogPost`, `blogImage`, RLS on). Tests: `__tests__/blog/blog.test.ts`.
+
+## 2026-11-23 · Multi-currency: USD, EUR, GBP
+
+- **Choice:** currency picker in the header (cookie `NEXT_CURRENCY`, 1 year). Default: EUR on the French site, USD otherwise.
+- **Charged in that currency:** the admin price list (still one currency per service; today 11 in USD, 3 in EUR) is converted at the daily ECB rate before the price is calculated (`lib/currency/rates.ts`), so the order, Stripe payment, refunds, booster share and platform fee are all whole amounts in the customer's currency. The rate is kept in the order's price breakdown (`breakdown.fx`). Booster earnings follow the order currency (payouts were already per currency).
+- **Rates:** Frankfurter (ECB), stored in `appConfig` key `fx_rates`, refreshed on the first quote after 24 h or by the `fx-rates` job. If the source is down, stored rates are used up to 7 days; after that only a service's own currency can be bought.
+- **Admin setting `fx_markup_bps`** (default 0): margin added to the rate on conversions (e.g. 200 = 2 % to cover Stripe's conversion fee).
+- Coupons set in another currency are converted at the plain rate. "From" prices and fixed-price extras badges use the visitor's currency.
+- Test: `__tests__/payments/multi-currency.test.ts`.
+
+## 2026-11-23 · Multi-language, phase 2: games, order page, sign-in
+
+- **Translated:** games list, game page, service (order) page with the order summary, extras and champion picker, checkout steps, sign in, sign up, forgot / reset password, email confirmation.
+- **Catalog texts** (games, services, form fields and options, extras, servers, rank names, FAQs) stay in English in `lib/catalog` / `lib/config` and are translated by their English text in `lib/i18n/catalog/fr.ts` (`catalogText`, `useCatalogText`, `localizeField`, `rankLabel` in `lib/i18n/catalog.ts`). Only shown texts change: keys, option values and what is sent to the server stay the same. `__tests__/i18n/catalog.test.ts` fails when a catalog text has no French.
+- Fixed the TFT Placement form text "Your rank ." (now "Your rank before placements, if known.").
+- Still English inside `/fr`: messages that come from the server (API errors, coupon reasons), prices formatted as `$52.80`, the checkout return pages, boosters pages, dashboards and emails.
+
+## 2026-11-23 · Multi-language, phase 1 (English + French)
+
+- **next-intl 4.16.0.** Languages are in `i18n/routing.ts`; texts in `messages/<code>.json` (a missing French text falls back to English).
+- **Addresses:** English keeps every existing link (`/games`, `/dashboard/...`, emails, Stripe returns); French uses `/fr/...`. All pages moved to `app/[locale]/`; `proxy.ts` now does language routing plus the signed-out redirect (to `/fr/login` for French). A browser asking for French, or a saved choice (`NEXT_LOCALE` cookie, 1 year), opens the French address. Search engines get `hreflang` links per page.
+- **Links:** `Link`, `useRouter` and `usePathname` come from `@/i18n/navigation`, so they keep the visitor's language (pathname without `/fr`). Short addresses (`/lol-boosting`, ...) work in both languages.
+- **Translated:** header (with a language picker, desktop and mobile), footer, home page, cookie notice, 404 and error pages. Everything else still shows English inside `/fr` until its phase.
+- **Test:** `__tests__/i18n/messages.test.ts`: French has every English text with the same placeholders.
+
 ## 2026-11-22 · Notification sound test: alerts, pause email, tips 85/15, released orders
 
 Client PDF "Notification sound test" plus a realtime check of every pop-up and sound.

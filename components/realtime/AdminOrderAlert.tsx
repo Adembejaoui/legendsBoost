@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast";
 import { useNotificationAlerts } from "@/components/realtime/useNotificationAlerts";
 import { armSoundUnlock, playAlertSound, soundUnlocked } from "@/components/realtime/new-order-alert";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { BellRing, CheckCircle2, Coins, ImagePlus, LogOut, Pause, Play, UserRoundCog, X } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";

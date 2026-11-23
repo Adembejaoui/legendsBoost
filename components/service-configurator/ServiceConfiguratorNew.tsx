@@ -19,6 +19,8 @@ import { getRankSystem } from '@/lib/catalog/catalog-utils'
 import { getOffersWithTemplate } from '@/lib/catalog/catalog-utils'
 import { Image } from 'lucide-react'
 import { isTargetAboveCurrent } from '@/lib/catalog/catalog-utils'
+import { useTranslations } from 'next-intl'
+import { useCatalogText } from '@/lib/i18n/catalog'
 
 /** Fields shown side by side in the current-rank box. */
 const INLINE_FIELD_KEYS = new Set(['currentLp', 'lpGain', 'server', 'queueType', 'gameMode'])
@@ -34,6 +36,8 @@ interface ServiceConfiguratorNewProps {
 }
 
 export function ServiceConfiguratorNew({ game, offer, template, rankSystems, champions }: ServiceConfiguratorNewProps) {
+  const t = useTranslations('Service')
+  const ct = useCatalogText()
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const next: Record<string, unknown> = {}
     for (const field of offer.fields) {
@@ -61,7 +65,11 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
     if (restored.current) patchCheckout(game.slug, offer.serviceSlug, { values })
   }, [game.slug, offer.serviceSlug, values])
 
-  const allOffers = getOffersWithTemplate(game.slug)
+  const allOffers = getOffersWithTemplate(game.slug).map((e) => ({
+    ...e,
+    offer: { ...e.offer, title: e.offer.title && ct(e.offer.title) },
+    template: { ...e.template, title: ct(e.template.title) },
+  }))
 
   // Determine rank fields
   const rankFields = offer.fields.filter((f) => f.type === 'rank-picker')
@@ -106,8 +114,8 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
             rankSystem={rs}
             value={(values[currentField.key] as any) ?? null}
             onChange={(sel) => setValues((v) => ({ ...v, [currentField.key]: sel }))}
-            label="Current Rank"
-            description={(currentField as any).description || 'Select your current rank and division'}
+            label={t('currentRank')}
+            description={(currentField as any).description || t('selectCurrent')}
           >
             {currentField.key === 'currentRank' ? inlineRow : null}
           </RankPicker>,
@@ -123,8 +131,8 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
             rankSystem={rs}
             value={(values[targetField.key] as any) ?? null}
             onChange={(sel) => setValues((v) => ({ ...v, [targetField.key]: sel }))}
-            label="Desired Rank"
-            description={(targetField as any).description || 'Select the rank you want to reach'}
+            label={t('desiredRank')}
+            description={(targetField as any).description || t('selectTarget')}
           />,
         )
       }
@@ -254,14 +262,14 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
       const rs = getRankSystem((currentField as any).rankSystemId)
       if (rs && current && target) {
         if (!isTargetAboveCurrent(rs.id, current, target)) {
-          rankError = 'Target rank must be above your current rank.'
+          rankError = t('targetAbove')
         }
       }
     }
   }
 
   if (typeof values.currentLevel === 'number' && typeof values.targetLevel === 'number' && values.targetLevel <= values.currentLevel) {
-    rankError = 'Desired mastery must be above your current mastery.'
+    rankError = t('masteryAbove')
   }
 
   const canRequest = true // allow draft creation even if pending review
@@ -276,7 +284,7 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
           {rankError ? <p className="text-xs text-rose-400">{rankError}</p> : null}
         </div>
       }
-      footer={<ServiceFaq title={offer.title ?? template.title} items={faqFor(game.slug, offer.serviceSlug)} />}
+      footer={<ServiceFaq title={offer.title ?? template.title} items={faqFor(game.slug, offer.serviceSlug).map((f) => ({ question: ct(f.question), answer: ct(f.answer) }))} />}
       right={
         <CheckoutPanel
           game={{ slug: game.slug, name: game.name, accent: game.accent }}

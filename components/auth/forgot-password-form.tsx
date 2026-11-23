@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Field, inputClass } from "./auth-ui";
+import { useTranslations } from "next-intl";
 
 export function ForgotPasswordForm() {
+  const t = useTranslations("Auth");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,7 @@ export function ForgotPasswordForm() {
     e.preventDefault();
     setError(null);
     if (!email.trim()) {
-      setError("Enter your email address.");
+      setError(t("login.enterEmail"));
       return;
     }
     setBusy(true);
@@ -27,10 +29,10 @@ export function ForgotPasswordForm() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong. Please try again.");
+      if (!res.ok) throw new Error(data.error ?? t("error"));
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setError(err instanceof Error ? err.message : t("error"));
     } finally {
       setBusy(false);
     }
@@ -40,12 +42,14 @@ export function ForgotPasswordForm() {
     return (
       <div className="space-y-4 text-sm text-zinc-300">
         <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4 text-emerald-100">
-          If an account exists for <span className="font-semibold">{email.trim().toLowerCase()}</span>, we sent a link to choose a new
-          password. It works once and expires in 1 hour.
+          {t.rich("forgot.sent", {
+            email: email.trim().toLowerCase(),
+            b: (chunks) => <span className="font-semibold">{chunks}</span>,
+          })}
         </p>
-        <p className="text-zinc-400">Nothing in your inbox? Check the spam folder, or try again in a few minutes.</p>
+        <p className="text-zinc-400">{t("forgot.spam")}</p>
         <Link href="/login" className="inline-block text-[#C8AA6E] hover:underline">
-          Back to sign in
+          {t("forgot.back")}
         </Link>
       </div>
     );
@@ -53,7 +57,7 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5" noValidate>
-      <Field id="email" label="Email" error={error ?? undefined}>
+      <Field id="email" label={t("email")} error={error ?? undefined}>
         <Input
           id="email"
           type="email"
@@ -61,18 +65,18 @@ export function ForgotPasswordForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={busy}
-          placeholder="you@example.com"
+          placeholder={t("emailPlaceholder")}
           aria-invalid={error ? true : undefined}
           className={inputClass}
         />
       </Field>
       <Button type="submit" disabled={busy} className="h-11 w-full bg-[#C8AA6E] font-semibold text-[#0A0E14] hover:bg-[#d8bc85]">
-        {busy ? "Sending…" : "Send reset link"}
+        {busy ? t("forgot.sending") : t("forgot.send")}
       </Button>
       <p className="text-center text-sm text-zinc-500">
-        Remembered it?{" "}
+        {t("forgot.remembered")}{" "}
         <Link href="/login" className="text-[#C8AA6E] hover:underline">
-          Sign in
+          {t("signIn")}
         </Link>
       </p>
     </form>

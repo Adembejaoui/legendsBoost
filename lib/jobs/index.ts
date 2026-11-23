@@ -13,6 +13,7 @@ import { runInactivityWarnings, runSlaWarnings } from "@/lib/pool/sla";
 import { purgeOldTrackerData } from "@/lib/services/games/league-of-legends/retention";
 import { runProgressReminders } from "@/lib/orders/progress-updates.service";
 import { acquireLease, releaseLease, type RawDb } from "./lease";
+import { refreshFxRates } from "@/lib/currency/rates";
 
 export interface JobDefinition {
   /** Lease length: longer than the job can ever take. */
@@ -45,6 +46,14 @@ export const JOBS: Record<string, JobDefinition> = {
   "auto-confirm": {
     leaseMs: 60_000,
     run: async () => ({ skipped: "completions are decided by an admin" }),
+  },
+  /** Daily exchange rates for prices in EUR / GBP (also refreshed on demand by quotes). */
+  "fx-rates": {
+    leaseMs: 60_000,
+    run: async () => {
+      const fx = await refreshFxRates();
+      return fx ? { date: fx.date, rates: fx.rates } : { error: "source unavailable, stored rates kept" };
+    },
   },
   /** Delete match and rank history N days after an order ends (config match_retention_days). */
   "tracker-retention": {

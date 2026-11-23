@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { ArrowLeft, Send, Loader2, Clock, CheckCircle, X, AlertTriangle, Mail, Shield, MoreVertical, Edit, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { DELETED_USER_LABEL } from "@/lib/messages/sender";
 
 interface Message {

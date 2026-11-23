@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast";
 import { armSoundUnlock, playMessageSound, playPauseSound, playTipSound } from "@/components/realtime/new-order-alert";
 import { useNotificationAlerts } from "@/components/realtime/useNotificationAlerts";
 import { NOTIFICATION_TITLES } from "@/lib/notifications/types";
+import { stripLocale } from "@/lib/i18n/alternates";
 
 /**
  * Customer and booster alerts on every page:
@@ -40,7 +41,7 @@ export function MessageSoundAlert({ userId }: { userId: string }) {
       return;
     }
     if (n.type !== "NEW_MESSAGE") return;
-    if (n.orderId && window.location.pathname === `/dashboard/${n.orderId}`) return;
+    if (n.orderId && stripLocale(window.location.pathname) === `/dashboard/${n.orderId}`) return;
     playMessageSound();
   });
   return null;

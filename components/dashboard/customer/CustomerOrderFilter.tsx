@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, Link } from "@/i18n/navigation";
 import { $Enums } from "@/app/generated/prisma/client";
 import { formatStatusLabel } from "@/lib/orders/status-display";
 

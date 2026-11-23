@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 
 const KEY = "lb.cookieNotice";
 let listeners: (() => void)[] = [];
@@ -20,6 +21,7 @@ function read(): boolean {
  * information, not a consent form.
  */
 export function CookieNotice() {
+  const t = useTranslations("CookieNotice");
   const seen = useSyncExternalStore(
     (cb) => {
       listeners.push(cb);
@@ -32,11 +34,11 @@ export function CookieNotice() {
   );
   if (seen) return null;
   return (
-    <div role="region" aria-label="Cookie notice" className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-xl border border-white/10 bg-[#111319]/95 p-4 text-sm text-zinc-300 shadow-xl backdrop-blur">
+    <div role="region" aria-label={t("region")} className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-xl border border-white/10 bg-[#111319]/95 p-4 text-sm text-zinc-300 shadow-xl backdrop-blur">
       <p>
-        We only use cookies that the site needs to work (signing in, checkout). Page statistics are anonymous and use no cookies.{" "}
+        {t("text")}{" "}
         <Link href="/privacy" className="text-violet-300 underline-offset-2 hover:underline">
-          Privacy
+          {t("privacy")}
         </Link>
       </p>
       <button
@@ -51,7 +53,7 @@ export function CookieNotice() {
         }}
         className="mt-3 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black"
       >
-        OK
+        {t("ok")}
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { ClipboardList, Copy, Check, LifeBuoy } from "lucide-react";
 import { useState } from "react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";

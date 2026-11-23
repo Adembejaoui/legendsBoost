@@ -130,7 +130,7 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
           commissionPolicyId: quote.commissionPolicyId,
           servicePriceId: quote.servicePriceId,
           servicePriceVersion: quote.servicePriceVersion,
-          breakdown: { lines: quote.lines } as unknown as Prisma.InputJsonValue,
+          breakdown: { lines: quote.lines, ...(quote.fx ? { fx: quote.fx } : {}) } as unknown as Prisma.InputJsonValue,
           ...(server.coupon?.applied ? { couponId: server.coupon.couponId, couponCode: server.coupon.code } : {}),
         },
       });

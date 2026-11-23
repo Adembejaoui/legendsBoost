@@ -3,6 +3,7 @@ import type { GameServiceOffer } from '@/types/catalog'
 import type { ServiceTemplate } from '@/types/catalog'
 import type { StorefrontService } from '@/lib/catalog/storefront-types'
 import { ServiceCard } from '@/components/games/ServiceCard'
+import { useTranslations } from 'next-intl'
 
 interface ServiceGridProps {
   game: GameDefinition
@@ -11,11 +12,12 @@ interface ServiceGridProps {
 }
 
 export function ServiceGrid({ game, entries, storefront }: ServiceGridProps) {
+  const t = useTranslations('Game')
   if (entries.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-white/10 bg-[#111319]/50 py-20 text-center">
         <p className="text-sm text-zinc-500">
-          No services are available for {game.name}.
+          {t('noServices', { name: game.name })}
         </p>
       </div>
     )

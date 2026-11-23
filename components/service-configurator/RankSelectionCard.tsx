@@ -4,6 +4,8 @@ import type { RankDivision, RankSelection, RankSystem } from '@/types/catalog'
 import { ImageFallback } from '@/components/ui/image-fallback'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
+import { useTranslations } from 'next-intl'
+import { useCatalogText } from '@/lib/i18n/catalog'
 
 interface RankPickerProps {
   rankSystem: RankSystem
@@ -21,12 +23,14 @@ export function RankPicker({
   rankSystem,
   value,
   onChange,
-  label = 'Rank',
+  label,
   description,
   icon,
   disabled = false,
   children,
 }: RankPickerProps) {
+  const tr = useTranslations('Service')
+  const ct = useCatalogText()
   const selectedTierId = value?.tierId ?? null
   const selectedDivisionId = value?.divisionId ?? null
 
@@ -60,7 +64,7 @@ export function RankPicker({
           {icon}
         </div>
         <div>
-          <h3 className="text-base font-semibold text-white">{label}</h3>
+          <h3 className="text-base font-semibold text-white">{label ?? tr('rank')}</h3>
           {description ? <p className="text-xs text-zinc-400">{description}</p> : null}
         </div>
       </div>
@@ -80,16 +84,17 @@ export function RankPicker({
                   ? 'border-violet-400 bg-violet-500/10 shadow-[0_0_15px_rgba(139,92,246,0.25)]'
                   : 'border-white/10 bg-[#0b0c10] hover:border-white/20',
               )}
-              aria-label={t.name}
+              aria-label={ct(t.name)}
+              title={ct(t.name)}
             >
               {t.iconSrc ? (
-                <Image src={t.iconSrc} alt={t.name} width={28} height={28} className="size-7 object-contain" />
+                <Image src={t.iconSrc} alt={ct(t.name)} width={28} height={28} className="size-7 object-contain" />
               ) : (
                 <ImageFallback
                   src={t.iconSrc}
-                  alt={t.name}
+                  alt={ct(t.name)}
                   className="size-7 object-contain"
-                  fallback={<span className="text-xs font-semibold text-white">{t.name.charAt(0)}</span>}
+                  fallback={<span className="text-xs font-semibold text-white">{ct(t.name).charAt(0)}</span>}
                 />
               )}
             </button>
@@ -99,7 +104,7 @@ export function RankPicker({
 
       {hasDivisions && tier ? (
         <div className="space-y-2">
-          <p className="text-xs text-zinc-400">Division</p>
+          <p className="text-xs text-zinc-400">{tr('division')}</p>
           <div className="flex flex-wrap gap-2">
             {(tier.divisions ?? []).map((d) => {
               const selected = d.id === selectedDivisionId
@@ -126,7 +131,7 @@ export function RankPicker({
               onClick={() => selectDivision(null)}
               className="flex h-9 items-center justify-center rounded-md border border-white/10 bg-[#0b0c10] px-2 text-xs text-zinc-400 hover:border-white/20 hover:text-white"
             >
-              Clear
+              {tr('clear')}
             </button>
           </div>
         </div>
