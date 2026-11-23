@@ -2,6 +2,10 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-23 · Home FAQ rewritten
+
+- The home FAQ described an early version ("no payment functionality", "order tracking planned"). Now six true answers in English and French: how it works, price, games and services, order tracking, refunds and problems, account safety (`Home.faq` in messages, list in `lib/content/home-faq.ts`). Also sent to Google as FAQPage data.
+
 ## 2026-11-23 · SEO
 
 - **One address per page:** the short League addresses (`/lol-boosting`, ...) are the main ones (`lib/seo/short-paths.ts`, also used by the rewrites, links, sitemap and canonical tags); the long `/games/.../services/...` address points to them.
