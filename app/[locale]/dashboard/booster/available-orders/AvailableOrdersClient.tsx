@@ -276,6 +276,7 @@ function OrderCard({
           {server ? <DetailRow label="Server">{server}</DetailRow> : null}
           {queue ? <DetailRow label="Queue type">{queue}</DetailRow> : null}
           <DetailRow label="Mode">{mode}</DetailRow>
+          {games?.kind === "arena-wins" ? <DetailRow label="Win rule">1st place only</DetailRow> : null}
           {lpGain ? <DetailRow label="LP gains">{lpGain}</DetailRow> : null}
           {currentLp ? <DetailRow label="Current LP">{currentLp}</DetailRow> : null}
           {roles.length > 2 ? (

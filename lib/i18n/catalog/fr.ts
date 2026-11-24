@@ -123,6 +123,8 @@ export const catalogFr: Record<string, string> = {
   "Select your current Arena rank.": "Choisissez votre rang Arena actuel.",
   "Win Amounts": "Nombre de victoires",
   "Select your desired amount of wins.": "Choisissez le nombre de victoires voulu.",
+  "Arena mode wins (1st place finishes) on League of Legends, on your account or together with a pro.": "Victoires en Arena (1re place) sur League of Legends, sur votre compte ou avec un pro.",
+  "Select your desired amount of wins. A win is a 1st place finish.": "Choisissez le nombre de victoires voulu. Une victoire correspond à une 1re place.",
   "Number of matches": "Nombre de parties",
   "How many normal matches should be played.": "Combien de parties normales à jouer.",
   "How many unrated matches should be played.": "Combien de parties non classées à jouer.",

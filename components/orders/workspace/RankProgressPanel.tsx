@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, ChevronsRight, ExternalLink, TrendingUp } from "luc
 import type { WorkspaceDTO, WorkspaceRankDTO } from "@/lib/orders/workspace-types";
 import { cn } from "@/lib/utils";
 import { GameArt, Pill } from "./Panel";
+import { GAME_COUNT_TEXT } from "@/lib/orders/game-count";
 
 const SOURCE_LABEL: Record<WorkspaceRankDTO["source"], { text: string; tone: "green" | "neutral" }> = {
   riot: { text: "Riot data", tone: "green" },
@@ -189,7 +190,7 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
       <header className="relative flex shrink-0 items-center justify-between gap-2 px-4 pt-3">
         <h2 className="flex items-center gap-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
           <TrendingUp className="size-3.5 text-[var(--g-accent)]" />
-          {games ? (games.kind === "placements" ? "Placement progress" : "Net win progress") : "Rank progression"}
+          {games ? GAME_COUNT_TEXT[games.kind].progress : "Rank progression"}
         </h2>
         {updates.selfCheck ? (
           <a
@@ -260,7 +261,7 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
         </div>
 
         {games ? (
-          <CountBlock heading={games.kind === "placements" ? "Placement games ordered" : "Net wins ordered"} total={games.total} unit={games.unit} />
+          <CountBlock heading={GAME_COUNT_TEXT[games.kind].ordered} total={games.total} unit={games.unit} />
         ) : (
           <RankBlock
             heading="Target rank"

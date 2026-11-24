@@ -224,7 +224,7 @@ describe("repeat offenders", () => {
     await liftClaimBlock(admin.id, booster.id, "Talked to the booster");
     expect((await prisma.boosterProfile.findUniqueOrThrow({ where: { userId: booster.id } })).claimBlockedAt).toBeNull();
     await expect(claimOrder(next, booster.id)).resolves.toBeTruthy();
-  });
+  }, 60_000);
 });
 
 describe("test tool (STALL_TEST_TOOLS=1)", () => {

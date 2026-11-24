@@ -29,7 +29,7 @@ export interface WorkspaceProgressDTO {
   startLpAssumed: boolean;
   wins?: { attributed: number; ordered: number | null };
   /** Net Win / Placement Boost (client PDFs 2026-11-24): games done by the booster's updates. */
-  games?: { kind: "net-wins" | "wins" | "placements"; done: number; total: number; unit: string };
+  games?: { kind: import("./game-count").GameCountKind; done: number; total: number; unit: string };
   /**
    * Rank orders: the target rank the booster still has to post in Rank
    * Update before completing ("Gold IV"), or null when nothing is missing.
@@ -229,7 +229,7 @@ export interface WorkspaceDTO {
   updates: {
     list: { id: string; label: string; tierId: string; divisionId: string | null; lp: number | null; gamesDone: number | null; iconSrc: string | null; at: string }[];
     /** Net Win / Placement Boost: the update posts the games done (0..total) instead of a rank. */
-    games: { kind: "net-wins" | "wins" | "placements"; total: number; unit: string; caption: string } | null;
+    games: { kind: import("./game-count").GameCountKind; total: number; unit: string; caption: string } | null;
     /** The working booster may post an update now. */
     canPost: boolean;
     /** "LP" (League, TFT) or "RR" (VALORANT). */

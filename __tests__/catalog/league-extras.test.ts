@@ -115,11 +115,20 @@ describe("Arena", () => {
     selectedMode: "solo" as const,
     selectedOptions: [],
   };
-  it("uses the Arena ranks with their icons and 1 to 3 wins", () => {
+  it("uses the Arena ranks with their icons and 1 to 5 wins (client 2026-11-24)", () => {
     const rank = offer.fields.find((f) => f.key === "currentRank") as { rankSystemId?: string };
     expect(rank.rankSystemId).toBe("lol-arena");
     expect(validateOrderInput(offer, lol("arena-boost"), base).ok).toBe(true);
-    expect(validateOrderInput(offer, lol("arena-boost"), { ...base, configuration: { ...base.configuration, arenaWins: 4 } }).ok).toBe(false);
+    expect(validateOrderInput(offer, lol("arena-boost"), { ...base, configuration: { ...base.configuration, arenaWins: 5 } }).ok).toBe(true);
+    expect(validateOrderInput(offer, lol("arena-boost"), { ...base, configuration: { ...base.configuration, arenaWins: 6 } }).ok).toBe(false);
+  });
+  it("is counted in Arena wins (1st place) on order cards and progress", async () => {
+    const { orderGameCount, countLabel, GAME_COUNT_TEXT } = await import("@/lib/orders/game-count");
+    const g = orderGameCount("league-of-legends", "arena-boost", base.configuration)!;
+    expect(g).toMatchObject({ kind: "arena-wins", fieldKey: "arenaWins", total: 3, unit: "Arena wins", caption: "Arena wins ordered" });
+    expect(countLabel(1, g.unit)).toBe("1 Arena win");
+    expect(GAME_COUNT_TEXT["arena-wins"].howToCount).toMatch(/1st place/);
+    expect(orderGameCount("league-of-legends", "arena-boost", { arenaWins: 0 })).toBeNull();
   });
   it("Solo and Duo extras of the PDF", () => {
     expect(lol("arena-boost").modes?.map((m) => m.id)).toEqual(["solo", "duo"]);

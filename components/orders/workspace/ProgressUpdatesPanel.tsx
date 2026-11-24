@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { GameArt } from "./Panel";
+import { GAME_COUNT_TEXT } from "@/lib/orders/game-count";
 
 /** Fired by the session panel after "End session": ask for a rank update. */
 export const OPEN_RANK_UPDATE_EVENT = "lb:open-rank-update";
@@ -145,7 +146,6 @@ function GamesUpdateDialog({ data, open, onClose, prompt }: { data: WorkspaceDTO
   const [done, setDone] = useState(Math.min(g.total, lastDone + 1));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const placements = g.kind === "placements";
 
   async function save() {
     setBusy(true);
@@ -183,9 +183,7 @@ function GamesUpdateDialog({ data, open, onClose, prompt }: { data: WorkspaceDTO
       onClose={onClose}
     >
       <p>
-        {placements
-          ? "Count every placement game played so far, won or lost."
-          : "Count the net wins so far (wins minus losses since the start of the order)."}{" "}
+        {GAME_COUNT_TEXT[g.kind].howToCount}{" "}
         The customer sees the same count on the order page.
       </p>
       <div className="flex items-center justify-center gap-4 py-2">
