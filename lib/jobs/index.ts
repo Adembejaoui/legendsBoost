@@ -14,6 +14,7 @@ import { purgeOldTrackerData } from "@/lib/services/games/league-of-legends/rete
 import { runProgressReminders } from "@/lib/orders/progress-updates.service";
 import { acquireLease, releaseLease, type RawDb } from "./lease";
 import { refreshFxRates } from "@/lib/currency/rates";
+import { runAdminAlerts } from "@/lib/automation/admin-alerts";
 
 export interface JobDefinition {
   /** Lease length: longer than the job can ever take. */
@@ -37,10 +38,19 @@ export const JOBS: Record<string, JobDefinition> = {
     leaseMs: 2 * 60_000,
     run: async () => closeDueBidding(),
   },
-  /** Contact / start SLA warnings after a claim, inactivity and missing rank updates (warnings only). */
+  /**
+   * Contact / start SLA warnings after a claim, inactivity and missing rank
+   * updates (warnings only), plus the admin alerts: late or failed jobs,
+   * unclaimed orders, completions and tickets waiting (2026-11-24).
+   */
   "sla-warnings": {
     leaseMs: 4 * 60_000,
-    run: async () => ({ ...(await runSlaWarnings()), ...(await runInactivityWarnings()), ...(await runProgressReminders()) }),
+    run: async () => ({
+      ...(await runSlaWarnings()),
+      ...(await runInactivityWarnings()),
+      ...(await runProgressReminders()),
+      ...(await runAdminAlerts()),
+    }),
   },
   /** Removed 2026-11-22: an admin completes every order (kept so old cron calls answer). */
   "auto-confirm": {

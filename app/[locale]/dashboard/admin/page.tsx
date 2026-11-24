@@ -4,6 +4,7 @@ import { adminAnalytics, type AnalyticsRange } from "@/lib/admin/analytics";
 import { formatMoney } from "@/lib/money";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
 import { devLogRedirect, getRoleHomePath } from "@/lib/dashboard/role-routing";
+import { jobProblems } from "@/lib/automation/admin-alerts";
 
 function moneyLine(m: Record<string, number>) {
   const entries = Object.entries(m).filter(([, v]) => v !== 0);
@@ -53,7 +54,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     redirect("/login");
   }
   const days: AnalyticsRange = (await searchParams).days === "30" ? 30 : 7;
-  const a = await adminAnalytics(days);
+  const [a, jobs] = await Promise.all([adminAnalytics(days), jobProblems().catch(() => [])]);
   const tiles: [string, string, string?][] = [
     ["Paid orders", String(a.paidOrders)],
     ["Revenue", moneyLine(a.revenue), "what customers paid"],
@@ -66,6 +67,20 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   ];
   return (
     <div className="space-y-6 text-white">
+      {/* Scheduled jobs late or failing (checked on every visit, so it shows even if the alert job stopped). */}
+      {jobs.length > 0 ? (
+        <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          <p className="font-semibold">Scheduled jobs need attention</p>
+          <ul className="mt-1 list-disc space-y-0.5 ps-5 text-amber-200/90">
+            {jobs.map((j) => (
+              <li key={j.job}>
+                <span className="font-mono">{j.job}</span>:{" "}
+                {j.problem === "late" ? `no run for ${j.minutes} minutes (check cron-job.org)` : `last run failed: ${j.error}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Admin Overview</h1>

@@ -2,6 +2,16 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-24 · Admin alerts (automation)
+
+Four checks in `lib/automation/admin-alerts.ts`, run by the existing `sla-warnings` job (every 5 minutes on cron-job.org, no new cron entry). In-app notifications (bell, sound, list), each sent once (dedupe key, checked before inserting).
+
+- **Job health:** a watched job (`close-bidding`, `outbox-dispatch`, `sla-warnings`, `close-stale-holds`, `tracker-retention`) whose last run failed, or that has not run for about 3x its schedule, alerts admins once per incident. The admin dashboard also shows a warning banner, checked on every visit, so a stopped scheduler is visible even when no job runs.
+- **Unclaimed orders:** a paid order with no booster `unclaimed_alert_min` (30) after payment or after the last booster let it go (not while reserved for a chosen booster or while bidding is open) alerts admins (with the order link) and every booster who can take it now (no link: they claim it in Available Orders). Once per pool round.
+- **Completions waiting:** a completion request (or dispute) waiting `completion_wait_alert_hours` (4) for an admin decision alerts admins, then once a day.
+- **Support tickets:** an open ticket whose last message is from the customer with no reply for `ticket_reply_alert_hours` (12) alerts the assigned admin (or every admin), once per customer message.
+- The three delays are admin settings. The new alert types are stored under existing notification types (no database change).
+
 ## 2026-11-24 · Rank, Net Win and Placement Boost page changes (client PDFs)
 
 - **Net Win Boost:** League "Win Boost" is now "Net Win Boost" (title, tabs, cards, "Number of net wins", "5 net wins"), at `/lol-net-win-boost`; `/lol-boosting` redirects there permanently (with or without a language prefix, `MOVED_SERVICE_PATHS`). Texts in all five languages.

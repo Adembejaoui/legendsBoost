@@ -44,7 +44,12 @@ export type NotificationEventType =
   | "COMPLETION_DISPUTED"
   | "COMPLETION_SENT_BACK"
   | "PROGRESS_UPDATE_DUE"
-  | "CHAT_FLAGGED";
+  | "CHAT_FLAGGED"
+  // Admin alerts (2026-11-24), stored under existing types (no enum migration).
+  | "SYSTEM_JOB_ALERT"
+  | "ORDER_UNCLAIMED"
+  | "COMPLETION_WAITING"
+  | "SUPPORT_TICKET_WAITING";
 
 export interface NotificationEventMetadata {
   orderId?: string;
@@ -89,6 +94,10 @@ const NOTIFICATION_STORED_AS = {
   ORDER_PAUSED_BY_CUSTOMER: "ORDER_PROGRESS_UPDATED",
   ORDER_RESUMED_BY_CUSTOMER: "ORDER_PROGRESS_UPDATED",
   BOOSTER_CHANGE_REQUESTED: "BOOSTER_REASSIGNED",
+  SYSTEM_JOB_ALERT: "FINANCE_ALERT",
+  ORDER_UNCLAIMED: "SLA_WARNING",
+  COMPLETION_WAITING: "COMPLETION_REVIEW",
+  SUPPORT_TICKET_WAITING: "SUPPORT_TICKET_CREATED",
 } as const;
 
 /** Event types that exist as database NotificationType values. */
@@ -147,6 +156,10 @@ export const NOTIFICATION_TITLES: Record<NotificationEventType, string> = {
   COMPLETION_SENT_BACK: "Order Sent Back",
   PROGRESS_UPDATE_DUE: "Update The Rank",
   CHAT_FLAGGED: "Chat Message Flagged",
+  SYSTEM_JOB_ALERT: "Scheduled Job Problem",
+  ORDER_UNCLAIMED: "Order Waiting For A Booster",
+  COMPLETION_WAITING: "Completion Still Waiting",
+  SUPPORT_TICKET_WAITING: "Ticket Waiting For A Reply",
 };
 
 export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: NotificationEventMetadata) => string> = {
@@ -216,6 +229,18 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
     `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} was sent back to the booster${meta?.note ? `: ${String(meta.note)}` : "."}`,
   PROGRESS_UPDATE_DUE: (meta) =>
     `No rank update on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} for ${String(meta?.hours ?? 24)} hours. Post the current rank so the customer can follow the progress.`,
+  SYSTEM_JOB_ALERT: (meta) =>
+    meta?.problem === "failed"
+      ? `The scheduled job "${String(meta?.job ?? "")}" failed: ${String(meta?.error ?? "unknown error")}. Check the logs.`
+      : `The scheduled job "${String(meta?.job ?? "")}" has not run for ${String(meta?.minutes ?? "")} minutes. Check cron-job.org.`,
+  ORDER_UNCLAIMED: (meta) =>
+    meta?.audience === "booster"
+      ? `Order #${meta?.ref ?? ""} (${String(meta?.service ?? "")}) is still waiting for a booster. You can claim it in Available Orders.`
+      : `Order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} has had no booster for ${String(meta?.minutes ?? "")} minutes since it was paid or released.`,
+  COMPLETION_WAITING: (meta) =>
+    `${meta?.disputed ? "A disputed completion" : "A completion"} on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} has been waiting ${String(meta?.hours ?? "")} hours for an admin decision. Open Admin, Completions.`,
+  SUPPORT_TICKET_WAITING: (meta) =>
+    `The support ticket "${meta?.ticketSubject ?? ""}" has been waiting ${String(meta?.hours ?? "")} hours for a reply. Open Admin, Support.`,
   CHAT_FLAGGED: (meta) =>
     `A message on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} contained ${String(meta?.kinds ?? "contact details")}; it was hidden.`,
 };
