@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { OrderInfoPanel } from "./OrderInfoPanel";
 import { FeedbackPanel } from "./FeedbackPanel";
+import { OrderCompleteModal } from "./OrderCompleteModal";
 import { GameAccountPanel } from "./GameAccountPanel";
 import { CancellationBanner } from "./CancellationBanner";
 import { CompletionPanel } from "./CompletionPanel";
@@ -277,6 +278,7 @@ export default function OrderWorkspace({
     >
       {/* Height = viewport - shell header - main padding. Nothing scrolls the
           page; only the match list, chat and (if needed) the details card do. */}
+      <OrderCompleteModal data={data} />
 
       {/* Header: game-themed banner with identity, status and the order actions. */}
       <header className="relative shrink-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d0f15]">

@@ -170,7 +170,9 @@ function OrderCard({
   onBid,
   onWithdraw,
   blocked,
+  position,
 }: {
+  position: number;
   order: AvailableOrder;
   now: number;
   championsById: Map<string, Champion>;
@@ -255,6 +257,12 @@ function OrderCard({
     <article className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0b0f19]">
       <header className="flex items-start justify-between gap-3 border-b border-white/10 p-5">
         <div className="flex min-w-0 items-center gap-3">
+          <span
+            aria-label={`Order ${position} in the list`}
+            className="grid h-10 min-w-10 shrink-0 place-items-center rounded-lg border border-[#C8AA6E]/40 bg-[#C8AA6E]/10 px-1.5 text-sm font-bold tabular-nums text-[#e3c98f]"
+          >
+            #{position}
+          </span>
           <Avatar src={game?.image} name={gameName} />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-white">{serviceTitle}</h3>
@@ -625,10 +633,13 @@ export default function AvailableOrdersClient({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleOrders.map((order) => (
+        // Numbered from #1 (oldest, after chosen-for-you and priority orders),
+        // always filled from the left (client 2026-11-24), also in Arabic.
+        <div dir="ltr" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {visibleOrders.map((order, i) => (
             <OrderCard
               key={order.id}
+              position={i + 1}
               order={order}
               now={now}
               championsById={championsById}

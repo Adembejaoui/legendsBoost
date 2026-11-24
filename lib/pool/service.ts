@@ -209,7 +209,8 @@ export async function getPoolForBooster(boosterId: string, filters: { gameSlug?:
       OR: [{ preferredBoosterId: null }, { preferredUntil: null }, { preferredUntil: { lte: now } }, { preferredBoosterId: boosterId }],
     },
     select: POOL_ORDER_SELECT,
-    orderBy: { createdAt: "desc" },
+    // Oldest first (client 2026-11-24): #1 is the order waiting longest.
+    orderBy: { createdAt: "asc" },
     take: 200,
   });
 
@@ -265,7 +266,7 @@ export async function getPoolForBooster(boosterId: string, filters: { gameSlug?:
     (a, b) =>
       Number(b.preferredForMe) - Number(a.preferredForMe) ||
       Number(b.isPriority) - Number(a.isPriority) ||
-      b.createdAt.getTime() - a.createdAt.getTime()
+      a.createdAt.getTime() - b.createdAt.getTime()
   );
   return { orders, blockedReason, limit: booster.limit, activeCount: booster.activeCount, bidWindowSec: cfg.windowSec };
 }

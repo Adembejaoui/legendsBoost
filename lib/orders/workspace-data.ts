@@ -54,6 +54,7 @@ import { credentialsConfigured } from "@/lib/security/account-credentials";
 import { getOpenSession, listSessions, SESSION_RULES } from "./sessions.service";
 import { getConfig } from "@/lib/config";
 import { REVIEW_TAGS } from "@/lib/reviews/service";
+import { availableCashback } from "@/lib/cashback/service";
 import { latestCompletionRequest } from "./completion-request.service";
 import { vpnCountryName } from "@/lib/catalog/vpn-countries";
 
@@ -65,6 +66,13 @@ async function feedbackFor(orderId: string, status: string, role: string, viewer
   ]);
   const completed = status === "COMPLETED";
   const isCustomer = role === "customer";
+  const earn =
+    isCustomer && completed
+      ? await prisma.cashbackEntry.findFirst({ where: { orderId, userId: viewerId, kind: "EARN" }, select: { amount: true, currency: true, expiresAt: true } })
+      : null;
+  const cashback = earn
+    ? { earned: earn.amount, currency: earn.currency, expiresAt: earn.expiresAt?.toISOString() ?? null, available: await availableCashback(viewerId, earn.currency) }
+    : null;
   const isBooster = role === "booster";
   // The review is shown to the people of the order; a hidden one only to admins and its booster/customer with a note.
   const shown = review && (role === "admin" || isCustomer || (isBooster && review.boosterId === viewerId)) ? review : null;
@@ -81,6 +89,7 @@ async function feedbackFor(orderId: string, status: string, role: string, viewer
     // Processing or Completed (client PDF 2026-11-22).
     canTip: isCustomer && (TIPPABLE_ORDER as readonly string[]).includes(status),
     tipped: (isCustomer || isBooster) && tippedAmount > 0 ? { amount: tippedAmount, currency: mine[0].currency } : null,
+    cashback,
   };
 }
 

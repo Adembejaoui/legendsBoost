@@ -297,6 +297,8 @@ export interface WorkspaceDTO {
     canTip: boolean;
     /** Customer: total they tipped; booster: their share of tips. */
     tipped: { amount: number; currency: string } | null;
+    /** Customer of a completed order: cashback earned on it and the balance now (minor units). */
+    cashback: { earned: number; currency: string; expiresAt: string | null; available: number } | null;
   };
   /** Customer cancellation request (admin-reviewed); customers never cancel directly. */
   cancellation: {

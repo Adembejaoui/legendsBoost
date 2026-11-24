@@ -143,6 +143,12 @@ describe("cashback flow", () => {
     expect(await ledgerSum({ orderId: a, account: "CUSTOMER_CREDIT" })).toBe(500);
     expect(await ledgerSum({ orderId: a, type: "CASHBACK_EARNED", account: "PLATFORM_REVENUE" })).toBe(-500);
 
+    // The completed order page shows it to the customer (order complete modal), never to others.
+    const { getOrderWorkspace } = await import("@/lib/orders/workspace-data");
+    const ws = await getOrderWorkspace(a, { id: customer.id, email: null, role: "CUSTOMER" } as any);
+    expect(ws?.feedback.cashback).toMatchObject({ earned: 500, currency: "EUR", available: 500 });
+    expect(ws?.feedback.canReview).toBe(true);
+
     // Quote: the balance is shown; used only when asked.
     const plain = await buildServerQuote(request(), prisma, { customerId: customer.id });
     expect(plain.cashback).toMatchObject({ available: 500, applied: 0 });

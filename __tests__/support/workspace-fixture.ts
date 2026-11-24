@@ -179,6 +179,6 @@ export function workspaceFixture(
     completion: { request: null, canConfirm: false, canDispute: false, canDecide: false, autoConfirmHours: 72 },
     updates: { list: [], games: null, canPost: false, pointsLabel: "LP", rankOptions: [], selfCheck: null, stale: false },
     releaseGraceUntil: null,
-    feedback: { review: null, tags: [], canReview: false, canReply: false, canHide: false, canTip: false, tipped: null },
+    feedback: { review: null, tags: [], canReview: false, canReply: false, canHide: false, canTip: false, tipped: null, cashback: null },
   };
 }
