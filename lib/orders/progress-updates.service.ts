@@ -18,6 +18,7 @@ import { formatRankLabel, getRankSystem, getRankSystemsByGame, getTier, rankScor
 import { enqueueOutbox, dispatchOutbox } from "@/lib/payments/outbox";
 import { createNotification } from "@/lib/notifications/service";
 import { logger } from "@/lib/logger";
+import { countLabel, orderGameCount, type GameCount } from "./game-count";
 
 export class ProgressUpdateError extends Error {
   constructor(message: string, public readonly status = 400) {
@@ -185,7 +186,9 @@ export function selfCheckLink(
 /* Post / list                                                         */
 /* ------------------------------------------------------------------ */
 
-export async function postProgressUpdate(p: { orderId: string; boosterId: string; tierId: string; divisionId?: string | null; lp?: number | null }) {
+export async function postProgressUpdate(
+  p: { orderId: string; boosterId: string } & ({ tierId: string; divisionId?: string | null; lp?: number | null } | { gamesDone: number })
+) {
   const order = await prisma.order.findUnique({
     where: { id: p.orderId },
     select: {
@@ -203,6 +206,15 @@ export async function postProgressUpdate(p: { orderId: string; boosterId: string
 
   const rankSystemId = orderRankSystemId(order.gameSlug, order.serviceSlug);
   if (!rankSystemId) throw new ProgressUpdateError("This game has no ranks to report.", 400);
+
+  // Net Win / Placement Boost: the games done so far, not a rank.
+  const games = orderGameCount(order.gameSlug, order.serviceSlug, order.configuration);
+  if (games) {
+    if (!("gamesDone" in p)) throw new ProgressUpdateError(`Enter the ${games.unit} done so far.`);
+    return postGamesUpdate({ ...order, assignmentId: order.assignments[0].id }, p.boosterId, rankSystemId, games, p.gamesDone);
+  }
+  if (!("tierId" in p)) throw new ProgressUpdateError("Choose a rank.");
+
   const tier = getTier(rankSystemId, p.tierId);
   if (!tier) throw new ProgressUpdateError("Choose a rank.");
   const divs = tier.divisions ?? [];
@@ -249,24 +261,75 @@ export async function postProgressUpdate(p: { orderId: string; boosterId: string
   return { id: update.id, label };
 }
 
+/** Net Win / Placement Boost update: "3/5 net wins" (0..ordered, may go down to correct a mistake). */
+async function postGamesUpdate(
+  order: { id: string; userId: string; configuration: unknown; assignmentId: string },
+  boosterId: string,
+  rankSystemId: string,
+  games: GameCount,
+  gamesDone: number
+) {
+  if (!Number.isInteger(gamesDone) || gamesDone < 0 || gamesDone > games.total) {
+    throw new ProgressUpdateError(`Enter a number from 0 to ${games.total}.`);
+  }
+  const last = await prisma.orderProgressUpdate.findFirst({ where: { orderId: order.id }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+  if (last && Date.now() - last.createdAt.getTime() < MIN_GAP_MS) throw new ProgressUpdateError("You just posted an update. Wait a few seconds.", 429);
+
+  // The row keeps the order's starting rank (the column is required).
+  const cfg = (order.configuration ?? {}) as Record<string, unknown>;
+  const system = getRankSystem(rankSystemId);
+  const lowest = system ? [...system.tiers].sort((a, b) => a.order - b.order)[0] : undefined;
+  const start = rankRefOf(rankSystemId, cfg.currentRank) ?? (lowest ? { tierId: lowest.id, divisionId: lowest.divisions?.[0]?.id ?? null } : null);
+  if (!start) throw new ProgressUpdateError("This game has no ranks to report.", 400);
+
+  const label = `${gamesDone}/${games.total} ${games.unit}`;
+  const update = await prisma.$transaction(async (tx) => {
+    const u = await tx.orderProgressUpdate.create({
+      data: { orderId: order.id, assignmentId: order.assignmentId, boosterId, rankSystemId, tierId: start.tierId, divisionId: start.divisionId, lp: null, gamesDone },
+    });
+    await tx.order.update({ where: { id: order.id }, data: { updatedAt: new Date() } });
+    await tx.orderEvent.create({
+      data: { orderId: order.id, type: "ORDER_PROGRESS_UPDATED", message: `Booster reported ${label}`, metadata: { updateId: u.id, boosterId } },
+    });
+    await enqueueOutbox(tx, [
+      {
+        type: "NOTIFY",
+        dedupeKey: `progress-update:${u.id}`,
+        payload: { notification: "ORDER_PROGRESS_UPDATED", recipients: [order.userId], orderId: order.id, actorId: boosterId, metadata: { rank: label } },
+      },
+    ]);
+    return u;
+  });
+  await dispatchOutbox({ limit: 5 }).catch(() => {});
+  return { id: update.id, label };
+}
+
 export interface ProgressUpdateDTO {
   id: string;
   label: string;
   tierId: string;
   divisionId: string | null;
   lp: number | null;
+  /** Net Win / Placement Boost: games done at this update (null on rank updates). */
+  gamesDone: number | null;
   iconSrc: string | null;
   at: string;
 }
 
-export async function listProgressUpdates(orderId: string, limit = 30): Promise<ProgressUpdateDTO[]> {
+export async function listProgressUpdates(orderId: string, limit = 30, games: GameCount | null = null): Promise<ProgressUpdateDTO[]> {
   const rows = await prisma.orderProgressUpdate.findMany({ where: { orderId }, orderBy: { createdAt: "desc" }, take: limit });
   return rows.map((r) => ({
     id: r.id,
-    label: formatRankLabel(r.rankSystemId, { tierId: r.tierId, divisionId: r.divisionId }),
+    label:
+      r.gamesDone !== null
+        ? games
+          ? `${r.gamesDone}/${games.total} ${games.unit}`
+          : countLabel(r.gamesDone, "games")
+        : formatRankLabel(r.rankSystemId, { tierId: r.tierId, divisionId: r.divisionId }),
     tierId: r.tierId,
     divisionId: r.divisionId,
     lp: r.lp,
+    gamesDone: r.gamesDone,
     iconSrc: getTier(r.rankSystemId, r.tierId)?.iconSrc ?? null,
     at: r.createdAt.toISOString(),
   }));

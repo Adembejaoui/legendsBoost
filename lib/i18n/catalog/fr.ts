@@ -4,6 +4,13 @@
  * __tests__/i18n/catalog.test.ts lists any catalog text without a French entry.
  */
 export const catalogFr: Record<string, string> = {
+  // Client PDFs 2026-11-24 (Net Win Boost, Placement Boost)
+  "Net Win Boost": "Boost de victoires nettes",
+  "A set number of ranked net wins on League of Legends.": "Un nombre défini de victoires nettes en classé sur League of Legends.",
+  "Number of net wins": "Nombre de victoires nettes",
+  "How many net wins should be played (up to 5 per order).": "Combien de victoires nettes jouer (jusqu'à 5 par commande).",
+  "net wins": "victoires nettes",
+  "Your rank and division before placements.": "Votre rang et votre division avant les placements.",
   // Games
   "Ranked support for every stage of your climb.": "Un accompagnement classé à chaque étape de votre ascension.",
   "Explore League of Legends services built around the ranked ladder. Every offer is configured per game and reviewed for eligibility before publication.":

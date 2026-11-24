@@ -40,7 +40,8 @@ export const orderRequestSchema = z
       .optional(),
     championsRoles: z
       .object({
-        roles: z.array(z.string().min(1).max(32)).max(5),
+        /** [main role, secondary role] (client 2026-11-24): at most two, never the same. */
+        roles: z.array(z.string().min(1).max(32)).max(2),
         champions: z.array(z.string().min(1).max(64)).max(20),
         /** "OTP Champ Only" extra: the one champion the booster must play. */
         otpChampion: z.string().min(1).max(64).optional(),
@@ -206,8 +207,10 @@ export function validateOrderInput(
   // Champions & roles: only real lanes and real champions (current ids).
   let championsRoles: { roles: string[]; champions: string[]; otpChampion?: string; vpnCountry?: string } | null = null;
   if (input.championsRoles) {
-    const roles = [...new Set(input.championsRoles.roles)];
+    const roles = input.championsRoles.roles;
     for (const r of roles) if (!LOL_ROLE_IDS.has(r)) errors.push(`Unknown role: ${r}`);
+    if (roles.length > 2) errors.push("Choose at most two roles: a main role and a secondary role.");
+    else if (roles.length === 2 && roles[0] === roles[1]) errors.push("The secondary role must be different from the main role.");
     const champs: string[] = [];
     for (const c of input.championsRoles.champions) {
       const id = normalizeChampionId(c);
@@ -227,6 +230,10 @@ export function validateOrderInput(
       if (!input.selectedOptions.includes("vpn")) vpn = undefined;
     }
     championsRoles = { roles, champions: champs, ...(otp ? { otpChampion: otp } : {}), ...(vpn ? { vpnCountry: vpn } : {}) };
+  }
+  // OTP Champ Only replaces Specific Champion and Role (client PDFs 2026-11-24).
+  if (input.selectedOptions.includes("otp-champion") && input.selectedOptions.includes("champions-roles")) {
+    errors.push("Specific Champion and Role is not available with OTP Champ Only.");
   }
   // OTP Champ Only needs its champion.
   if (input.selectedOptions.includes("otp-champion") && !championsRoles?.otpChampion) {

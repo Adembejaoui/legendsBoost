@@ -41,7 +41,7 @@ vi.mock("@/lib/stripe/server", async (orig) => {
 import { closeTestDb, getTestPrisma, uid } from "../support/pg-test-db";
 import { createFakeStripe, stripeEvent, WEBHOOK_SECRET } from "../support/fake-stripe";
 import { deliver, ledgerFor, seedUser, sessionFor, sum } from "../support/payment-fixtures";
-import { enabledModes, enabledOptionsFor, expectedTotal, fixturePriceInput, pricingModelFor, validConfiguration } from "../support/catalog-fixtures";
+import { buyableTogether, enabledModes, enabledOptionsFor, expectedTotal, fixturePriceInput, pricingModelFor, validConfiguration } from "../support/catalog-fixtures";
 import { gameServices } from "@/lib/catalog/game-services";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem } from "@/lib/catalog/rank-systems";
@@ -94,7 +94,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
 
     // 0. Not purchasable while unpriced (no silent fallback price).
     const { configuration, steps, units } = validConfiguration(offer);
-    const options = enabledOptionsFor(checkout, mode);
+    const options = buyableTogether(enabledOptionsFor(checkout, mode));
     const request = { ...base, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const, ...otpFor(options) };
     const unpriced = await quoteRoute(json("http://t/q", request));
     expect(unpriced.status).toBe(403);
@@ -107,7 +107,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
 
     // 2. Quote returns the server price for every mode with every option of that mode.
     for (const m of modes.length ? modes : [null]) {
-      const opts = enabledOptionsFor(checkout, m);
+      const opts = buyableTogether(enabledOptionsFor(checkout, m));
       const res = await quoteRoute(json("http://t/q", { ...request, selectedMode: m ?? undefined, selectedOptions: opts, ...otpFor(opts) }));
       const body = await res.json();
       expect(res.status, JSON.stringify(body)).toBe(200);
@@ -187,7 +187,7 @@ describe.each(gameServices.map((o) => [`${o.gameSlug}:${o.serviceSlug}`, o] as c
       await createServicePriceVersion(admin.id, fixturePriceInput(offer, checkout, tiers));
     }
     const { configuration, steps, units } = validConfiguration(offer);
-    const options = enabledOptionsFor(checkout, mode);
+    const options = buyableTogether(enabledOptionsFor(checkout, mode));
     const total = expectedTotal(offer, steps, units, mode !== null, options.length);
     const request = { gameSlug: offer.gameSlug, serviceSlug: offer.serviceSlug, configuration, selectedMode: mode ?? undefined, selectedOptions: options, riskAccepted: true as const, ...otpFor(options) };
 

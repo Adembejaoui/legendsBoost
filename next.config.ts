@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
-import { SHORT_SERVICE_PATHS } from "./lib/seo/short-paths";
+import { MOVED_SERVICE_PATHS, SHORT_SERVICE_PATHS } from "./lib/seo/short-paths";
 import { routing } from "./i18n/routing";
 
 /** "en|fr|es|..." for route patterns; OTHER_LOCALES has no English (no prefix). */
@@ -67,6 +67,13 @@ const nextConfig: NextConfig = {
   // address; the old /games/... links keep working. The language proxy runs
   // first and turns /lol-boosting into /en/lol-boosting (or /fr/...), so the
   // short addresses are matched with the language in front.
+  // Moved short addresses: permanent redirect, with or without a language prefix.
+  async redirects() {
+    return Object.entries(MOVED_SERVICE_PATHS).flatMap(([from, to]) => [
+      { source: from, destination: to, permanent: true },
+      { source: `/:locale(${ALL_LOCALES})${from}`, destination: `/:locale${to}`, permanent: true },
+    ]);
+  },
   async rewrites() {
     // One list (lib/seo/short-paths.ts) for these rewrites, links, the sitemap and canonical tags.
     return Object.entries(SHORT_SERVICE_PATHS).map(([key, short]) => ({

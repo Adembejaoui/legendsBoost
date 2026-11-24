@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { ExternalLink, History, TrendingUp } from "lucide-react";
+import { ExternalLink, History, Minus, Plus, TrendingUp } from "lucide-react";
 import type { WorkspaceDTO } from "@/lib/orders/workspace-types";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -134,11 +134,86 @@ function RankUpdateDialog({ data, open, onClose, prompt }: { data: WorkspaceDTO;
 }
 
 /**
+ * Booster: post the games done so far (Net Win / Placement Boost, client PDFs
+ * 2026-11-24). Starts at the latest count + 1; can go down to fix a mistake.
+ */
+function GamesUpdateDialog({ data, open, onClose, prompt }: { data: WorkspaceDTO; open: boolean; onClose: () => void; prompt: boolean }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const g = data.updates.games!;
+  const lastDone = data.updates.list.find((x) => x.gamesDone !== null)?.gamesDone ?? 0;
+  const [done, setDone] = useState(Math.min(g.total, lastDone + 1));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const placements = g.kind === "placements";
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/orders/${data.order.id}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gamesDone: done }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string; update?: { label: string } };
+      if (!res.ok) throw new Error(body.error || "Something went wrong. Try again.");
+      toast({ type: "success", title: "Progress updated", description: `The customer now sees ${body.update?.label ?? "the new count"}.` });
+      onClose();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const step = "grid size-10 place-items-center rounded-lg border border-white/10 text-zinc-200 hover:bg-white/5 disabled:opacity-40";
+  return (
+    <ConfirmDialog
+      open={open}
+      title={prompt ? `Session ended: update the ${g.unit}` : `Update the ${g.unit}`}
+      confirmLabel="Post update"
+      busyLabel="Posting…"
+      cancelLabel={prompt ? "Later" : "Cancel"}
+      busy={busy}
+      confirmDisabled={done === lastDone && data.updates.list.length > 0}
+      error={error}
+      onConfirm={() => void save()}
+      onClose={onClose}
+    >
+      <p>
+        {placements
+          ? "Count every placement game played so far, won or lost."
+          : "Count the net wins so far (wins minus losses since the start of the order)."}{" "}
+        The customer sees the same count on the order page.
+      </p>
+      <div className="flex items-center justify-center gap-4 py-2">
+        <button type="button" aria-label="One less" className={step} disabled={done <= 0} onClick={() => setDone((n) => Math.max(0, n - 1))}>
+          <Minus className="size-4" />
+        </button>
+        <p className="min-w-[6ch] text-center text-3xl font-black tabular-nums text-white" aria-live="polite">
+          {done}/{g.total}
+        </p>
+        <button type="button" aria-label="One more" className={step} disabled={done >= g.total} onClick={() => setDone((n) => Math.min(g.total, n + 1))}>
+          <Plus className="size-4" />
+        </button>
+      </div>
+      <p className="text-center text-xs text-zinc-500">
+        {g.unit} · last posted: {lastDone}/{g.total}
+      </p>
+    </ConfirmDialog>
+  );
+}
+
+/**
  * Rank updates posted by the booster (decision 2026-11-17: replaces the
  * Riot match history). Booster: "Update rank"; everyone: the timeline.
+ * Net Win / Placement Boost: the games done instead of a rank.
  */
 export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; className?: string }) {
   const u = data.updates;
+  const games = u.games;
   const [dialog, setDialog] = useState<"manual" | "prompt" | null>(null);
 
   useEffect(() => {
@@ -148,14 +223,15 @@ export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; 
     return () => window.removeEventListener(OPEN_RANK_UPDATE_EVENT, open);
   }, [u.canPost]);
 
-  if (data.ranks.tracking === "unsupported" && u.list.length === 0) return null;
+  if (data.ranks.tracking === "unsupported" && u.list.length === 0 && !games) return null;
+  const title = games ? "Progress updates" : "Rank updates";
 
   return (
-    <section aria-label="Rank updates" className={cn("flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#10121a]", className)}>
+    <section aria-label={title} className={cn("flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#10121a]", className)}>
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-2.5">
         <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
           <History className="size-3.5 text-[var(--g-accent)]" />
-          Rank updates
+          {title}
         </h2>
         <div className="flex items-center gap-2">
           {u.selfCheck && data.viewer.role !== "booster" && (
@@ -169,7 +245,7 @@ export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; 
               onClick={() => setDialog("manual")}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--g-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--g-on)] hover:bg-[var(--g-hover)]"
             >
-              <TrendingUp className="size-3.5" /> Update rank
+              <TrendingUp className="size-3.5" /> {games ? `Update ${games.unit}` : "Update rank"}
             </button>
           )}
         </div>
@@ -177,21 +253,33 @@ export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; 
 
       {u.stale && u.canPost && (
         <p className="shrink-0 border-b border-amber-400/20 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-200">
-          No rank update for 24 hours. Post the current rank so the customer can follow the progress.
+          {games
+            ? `No update for 24 hours. Post the ${games.unit} done so the customer can follow the progress.`
+            : "No rank update for 24 hours. Post the current rank so the customer can follow the progress."}
         </p>
       )}
 
       <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
         {u.list.length === 0 ? (
           <li className="px-2 py-6 text-center text-sm text-zinc-500">
-            {data.viewer.role === "booster"
-              ? "No update yet. Post the current rank after each session."
-              : "No update yet. Your booster posts the current rank after each play session."}
+            {games
+              ? data.viewer.role === "booster"
+                ? `0/${games.total} ${games.unit}. Post the count after each game.`
+                : `0/${games.total} ${games.unit}. Your booster updates the count after each game.`
+              : data.viewer.role === "booster"
+                ? "No update yet. Post the current rank after each session."
+                : "No update yet. Your booster posts the current rank after each play session."}
           </li>
         ) : (
           u.list.map((x, i) => (
             <li key={x.id} className={cn("flex items-center gap-3 rounded-lg px-2 py-1.5", i === 0 && "bg-[rgba(var(--g-rgb),0.06)]")}>
-              <GameArt src={x.iconSrc} alt="" fallback={x.label} className="size-8 shrink-0 object-contain" />
+              {x.gamesDone !== null ? (
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[rgba(var(--g-rgb),0.15)] text-xs font-bold tabular-nums text-[var(--g-light)]">
+                  {x.gamesDone}
+                </span>
+              ) : (
+                <GameArt src={x.iconSrc} alt="" fallback={x.label} className="size-8 shrink-0 object-contain" />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">
                   {x.label}
@@ -205,9 +293,11 @@ export function ProgressUpdatesPanel({ data, className }: { data: WorkspaceDTO; 
         )}
       </ol>
 
-      {u.canPost && dialog && (
+      {u.canPost && dialog && games ? (
+        <GamesUpdateDialog data={data} open prompt={dialog === "prompt"} onClose={() => setDialog(null)} />
+      ) : u.canPost && dialog ? (
         <RankUpdateDialog data={data} open prompt={dialog === "prompt"} onClose={() => setDialog(null)} />
-      )}
+      ) : null}
     </section>
   );
 }

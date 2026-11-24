@@ -108,8 +108,8 @@ describe("order workspace layout", () => {
   it("lists the booster's rank updates newest first", () => {
     const data = workspaceFixture();
     data.updates.list = [
-      { id: "u2", label: "Gold I", tierId: "gold", divisionId: "i", lp: 64, iconSrc: null, at: "2026-11-17T10:00:00.000Z" },
-      { id: "u1", label: "Gold III", tierId: "gold", divisionId: "iii", lp: null, iconSrc: null, at: "2026-11-16T10:00:00.000Z" },
+      { id: "u2", label: "Gold I", tierId: "gold", divisionId: "i", lp: 64, gamesDone: null, iconSrc: null, at: "2026-11-17T10:00:00.000Z" },
+      { id: "u1", label: "Gold III", tierId: "gold", divisionId: "iii", lp: null, gamesDone: null, iconSrc: null, at: "2026-11-16T10:00:00.000Z" },
     ];
     render(data);
     const rows = Array.from(container.querySelectorAll('section[aria-label="Rank updates"] li'));

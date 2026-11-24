@@ -34,6 +34,11 @@ export function enabledOptionsFor(checkout: GameCheckoutConfig, mode: "solo" | "
     .map((o) => o.id);
 }
 
+/** Extras a customer can buy together: OTP Champ Only replaces Specific Champion and Role (client PDFs 2026-11-24). */
+export function buyableTogether(ids: string[]): string[] {
+  return ids.includes("otp-champion") ? ids.filter((id) => id !== "champions-roles") : ids;
+}
+
 /** Admin input pricing EVERY tier, enabled mode and enabled option with fixture amounts. */
 export function fixturePriceInput(offer: GameServiceOffer, checkout: GameCheckoutConfig, rankTierIds: string[]) {
   const { model, unitFieldKey } = pricingModelFor(offer);

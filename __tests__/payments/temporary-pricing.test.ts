@@ -14,6 +14,7 @@
  *     preparation per service. No payment is completed here.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { buyableTogether } from "../support/catalog-fixtures";
 import type { NextRequest } from "next/server";
 
 const h = vi.hoisted(() => ({ getSessionUser: vi.fn(), stripe: null as any }));
@@ -120,7 +121,7 @@ const otpFor = (selectedOptions: string[]) =>
 
 function optionSets(checkout: any, mode: string | null): string[][] {
   const ids = checkout.options.filter((o: any) => o.enabled && (!mode || !o.availableModes || o.availableModes.includes(mode))).map((o: any) => o.id);
-  return [[], ...ids.map((id: string) => [id]), ...(ids.length > 1 ? [ids] : [])];
+  return [[], ...ids.map((id: string) => [id]), ...(ids.length > 1 ? [buyableTogether(ids)] : [])];
 }
 
 const asConfig = (input: ReturnType<typeof buildTemporaryPriceInput>, id = "p"): ServicePriceConfig => ({

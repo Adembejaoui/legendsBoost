@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { getGame, getGameServiceOffer } from "@/lib/catalog/catalog-utils";
 import { asRecord, RankRoute, readRank } from "@/components/dashboard/rank-route";
+import { countLabel, orderGameCount } from "@/lib/orders/game-count";
 
 interface Assignment {
   id: string;
@@ -89,7 +90,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
   const config = asRecord(order.configuration);
   const currentRank = readRank(order.gameSlug, order.serviceSlug, "currentRank", config);
   const targetRank = readRank(order.gameSlug, order.serviceSlug, "targetRank", config);
-  const isWinBoost = order.serviceSlug === "win-boost";
+  const games = orderGameCount(order.gameSlug, order.serviceSlug, config);
   const isActive = assignment.status === "IN_PROGRESS";
 
   return (
@@ -129,8 +130,7 @@ function AssignmentCard({ assignment }: { assignment: Assignment }) {
         className="mt-5"
         from={currentRank}
         to={targetRank}
-        wins={config["wins"]}
-        isWinBoost={isWinBoost}
+        count={games ? { caption: games.caption, value: countLabel(games.total, games.unit) } : null}
       />
 
       <footer className="mt-5 flex flex-wrap items-center justify-between gap-3">

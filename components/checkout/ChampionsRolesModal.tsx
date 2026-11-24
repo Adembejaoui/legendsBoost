@@ -31,14 +31,15 @@ export const MAX_CHAMPIONS = 20
 export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, single = false }: ChampionsRolesModalProps) {
   const t = useTranslations('ChampionsModal')
   const tRole = useTranslations('Roles')
-  const [draftRoles, setDraftRoles] = useState<string[]>(initialValue.roles)
+  // [main, secondary]: older saved choices may list more lanes; keep the first two.
+  const [draftRoles, setDraftRoles] = useState<string[]>(initialValue.roles.slice(0, 2))
   const [draftChampions, setDraftChampions] = useState<string[]>(initialValue.champions)
   const [query, setQuery] = useState('')
   const [laneFilter, setLaneFilter] = useState<string>('all')
 
   useEffect(() => {
     if (open) {
-      setDraftRoles(initialValue.roles)
+      setDraftRoles(initialValue.roles.slice(0, 2))
       setDraftChampions(initialValue.champions)
       setQuery('')
       setLaneFilter('all')
@@ -56,12 +57,22 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, si
 
   if (!open) return null
 
-  const toggleRole = (roleId: string) => {
-    const selected = draftRoles.includes(roleId)
-    setDraftRoles(selected ? draftRoles.filter((r) => r !== roleId) : [...draftRoles, roleId])
+  const [mainRole, secondaryRole] = draftRoles
+  // Main role: picking it again clears it (and the secondary role with it).
+  const pickMain = (roleId: string) => {
+    if (mainRole === roleId) {
+      setDraftRoles([])
+      if (laneFilter === roleId) setLaneFilter('all')
+      return
+    }
+    setDraftRoles(secondaryRole && secondaryRole !== roleId ? [roleId, secondaryRole] : [roleId])
     // Narrow the grid to the lane just picked (handy default).
-    if (!selected) setLaneFilter(roleId)
-    else if (laneFilter === roleId) setLaneFilter('all')
+    setLaneFilter(roleId)
+  }
+  // Secondary role: any lane but the main one; picking it again clears it.
+  const pickSecondary = (roleId: string) => {
+    if (!mainRole || roleId === mainRole) return
+    setDraftRoles(secondaryRole === roleId ? [mainRole] : [mainRole, roleId])
   }
 
   const full = !single && draftChampions.length >= MAX_CHAMPIONS
@@ -95,25 +106,55 @@ export function ChampionsRolesModal({ open, onClose, onConfirm, initialValue, si
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
           <div className={single ? "hidden" : undefined}>
-            <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">{t('roles')}</p>
-            <div className="flex flex-wrap gap-2">
-              {LOL_ROLES.map((role) => {
-                const selected = draftRoles.includes(role.id)
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => toggleRole(role.id)}
-                    className={cn(
-                      'rounded-lg border px-3 py-1.5 text-sm transition-all',
-                      selected ? 'border-violet-400 bg-violet-500/20 text-white' : 'border-white/10 bg-[#0b0c10] text-zinc-300 hover:border-white/20',
-                    )}
-                  >
-                    {tRole(role.id)}
-                  </button>
-                )
-              })}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div role="group" aria-label={t('mainRole')}>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">{t('mainRole')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LOL_ROLES.map((role) => {
+                    const selected = mainRole === role.id
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => pickMain(role.id)}
+                        className={cn(
+                          'rounded-lg border px-3 py-1.5 text-sm transition-all',
+                          selected ? 'border-violet-400 bg-violet-500/20 text-white' : 'border-white/10 bg-[#0b0c10] text-zinc-300 hover:border-white/20',
+                        )}
+                      >
+                        {tRole(role.id)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div role="group" aria-label={t('secondaryRole')}>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">{t('secondaryRole')}</p>
+                <div className="flex flex-wrap gap-2">
+                  {LOL_ROLES.map((role) => {
+                    const selected = secondaryRole === role.id
+                    const disabled = !mainRole || role.id === mainRole
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={disabled}
+                        onClick={() => pickSecondary(role.id)}
+                        className={cn(
+                          'rounded-lg border px-3 py-1.5 text-sm transition-all',
+                          selected ? 'border-sky-400 bg-sky-500/20 text-white' : 'border-white/10 bg-[#0b0c10] text-zinc-300 hover:border-white/20',
+                          disabled && 'cursor-not-allowed opacity-35 hover:border-white/10',
+                        )}
+                      >
+                        {tRole(role.id)}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!mainRole ? <p className="mt-1.5 text-[11px] text-zinc-500">{t('pickMainFirst')}</p> : null}
+              </div>
             </div>
           </div>
 

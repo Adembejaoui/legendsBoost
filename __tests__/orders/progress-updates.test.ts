@@ -170,3 +170,57 @@ describe("24 h reminder", () => {
     expect(await prisma.notification.count({ where: { userId: w.booster.id, type: "PROGRESS_UPDATE_DUE", orderId: w.orderId } })).toBe(1);
   });
 });
+
+describe("Net Win / Placement Boost: games done (client PDFs 2026-11-24)", () => {
+  /** A working order turned into a League Net Win (or Placement) Boost for 5 games. */
+  async function workingGames(serviceSlug: "win-boost" | "placement-boost") {
+    const { gameServices } = await vi.importActual<typeof import("@/lib/catalog/game-services")>("@/lib/catalog/game-services");
+    const offer = gameServices.find((o) => o.gameSlug === "league-of-legends" && o.serviceSlug === serviceSlug)!;
+    if (!h.offers.includes(offer)) h.offers.push(offer);
+    const w = await working();
+    const key = serviceSlug === "win-boost" ? "wins" : "placementsRemaining";
+    await prisma.order.update({
+      where: { id: w.orderId },
+      data: { serviceSlug, configuration: { currentRank: { tierId: "gold", divisionId: "iv" }, [key]: 5 } },
+    });
+    return w;
+  }
+  const lastUpdate = (orderId: string) => prisma.orderProgressUpdate.findFirstOrThrow({ where: { orderId }, orderBy: { createdAt: "desc" } });
+  const rewind = (orderId: string) =>
+    prisma.orderProgressUpdate.updateMany({ where: { orderId }, data: { createdAt: new Date(Date.now() - 60_000) } });
+
+  it("net wins: 0..5 only, label 1/5 then 2/5, the starting rank is kept on the row", async () => {
+    const w = await workingGames("win-boost");
+    await expect(postProgressUpdate({ orderId: w.orderId, boosterId: w.booster.id, tierId: "gold", divisionId: "iii" })).rejects.toThrow(/net wins done/);
+    await expect(postProgressUpdate({ orderId: w.orderId, boosterId: w.booster.id, gamesDone: 6 })).rejects.toThrow(/from 0 to 5/);
+    expect((await postProgressUpdate({ orderId: w.orderId, boosterId: w.booster.id, gamesDone: 1 })).label).toBe("1/5 net wins");
+    expect(await lastUpdate(w.orderId)).toMatchObject({ gamesDone: 1, tierId: "gold", divisionId: "iv", lp: null });
+    await rewind(w.orderId);
+    expect((await postProgressUpdate({ orderId: w.orderId, boosterId: w.booster.id, gamesDone: 2 })).label).toBe("2/5 net wins");
+  });
+
+  it("placements: the order page shows 0/5, then the same count for the customer and the booster", async () => {
+    const { getOrderWorkspace } = await import("@/lib/orders/workspace-data");
+    const w = await workingGames("placement-boost");
+    const asCustomer = () => getOrderWorkspace(w.orderId, { id: w.customer.id, role: "CUSTOMER" } as any);
+    const asBooster = () => getOrderWorkspace(w.orderId, { id: w.booster.id, role: "BOOSTER" } as any);
+    expect((await asCustomer())!.progress).toMatchObject({ kind: "games", status: "waiting", games: { done: 0, total: 5, unit: "placement games" } });
+    const b0 = (await asBooster())!;
+    expect(b0.updates).toMatchObject({ canPost: true, games: { kind: "placements", total: 5 } });
+    await postProgressUpdate({ orderId: w.orderId, boosterId: w.booster.id, gamesDone: 1 });
+    expect((await asCustomer())!.progress).toMatchObject({ status: "in_progress", percent: 20, games: { done: 1, total: 5 } });
+    expect((await asBooster())!.progress.games).toMatchObject({ done: 1, total: 5 });
+    expect((await asCustomer())!.updates.list[0]).toMatchObject({ label: "1/5 placement games", gamesDone: 1 });
+  });
+
+  it("route: the booster posts { gamesDone }", async () => {
+    const w = await workingGames("placement-boost");
+    h.getSessionUser.mockResolvedValue({ id: w.booster.id, role: "BOOSTER" });
+    const res = await progressRoute(
+      new Request("http://t/x", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gamesDone: 3 }) }),
+      { params: Promise.resolve({ orderId: w.orderId }) }
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).update.label).toBe("3/5 placement games");
+  });
+});

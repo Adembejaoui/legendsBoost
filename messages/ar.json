@@ -232,7 +232,16 @@
     "vpnCountry": "بلد VPN",
     "vpnChoose": "اختر بلدًا",
     "vpnSearch": "ابحث عن بلد",
-    "vpnNone": "لم يُعثر على أي بلد"
+    "vpnNone": "لم يُعثر على أي بلد",
+    "mainRole": "رئيسي: {role}",
+    "secondaryRole": "ثانوي: {role}",
+    "vpnTitle": "VPN",
+    "vpnText": "يتصل البوستر من الدولة التي تختارها، فلا يسجّل الحساب الدخول أبدًا من مكان جديد.",
+    "vpnSelect": "اختر دولة",
+    "vpnSave": "حفظ الاختيار",
+    "vpnCancel": "إلغاء",
+    "vpnIn": "الدولة: {country}",
+    "lockedByOtp": "غير متاح مع OTP Champ Only."
   },
   "ChampionsModal": {
     "aria": "الأبطال والأدوار",
@@ -248,7 +257,10 @@
     "all": "الكل",
     "none": "لم يُعثر على أبطال",
     "remove": "إزالة",
-    "confirm": "تأكيد"
+    "confirm": "تأكيد",
+    "mainRole": "الدور الرئيسي",
+    "secondaryRole": "الدور الثانوي",
+    "pickMainFirst": "اختر الدور الرئيسي أولًا."
   },
   "Roles": {
     "top": "توب",

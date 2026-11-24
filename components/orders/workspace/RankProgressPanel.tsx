@@ -99,9 +99,28 @@ function RankBlock({
   );
 }
 
+/** Right side for orders counted in games: the number ordered ("5 net wins"). */
+function CountBlock({ heading, total, unit }: { heading: string; total: number; unit: string }) {
+  return (
+    <div className="flex min-w-0 flex-col items-center text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--g-light)]">{heading}</p>
+      <div className="relative my-1.5 grid place-items-center">
+        <div aria-hidden className="absolute inset-[-30%] rounded-full bg-[radial-gradient(circle,rgba(var(--g-rgb),0.35),transparent_65%)] blur-md" />
+        <span className={cn("relative grid place-items-center rounded-full border border-[var(--g-accent)]/40 text-3xl font-black tabular-nums text-white", EMBLEM)}>
+          {total}
+        </span>
+      </div>
+      <p className="max-w-full truncate text-sm font-bold leading-tight text-white sm:text-base">
+        {total} {total === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit}
+      </p>
+    </div>
+  );
+}
+
 /** The hero of the workspace: current rank -> progress -> target rank. */
 export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; className?: string }) {
   const { ranks, progress, order, updates } = data;
+  const games = progress.kind === "games" && progress.games ? progress.games : null;
   const pct = progress.percent;
   const unsupported = ranks.tracking === "unsupported";
 
@@ -115,7 +134,14 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
   }
 
   let caption: string;
-  if (unsupported) {
+  if (games) {
+    caption =
+      progress.status === "waiting"
+        ? `Waiting for the first update (after each game)`
+        : progress.status === "complete"
+          ? `All ${games.total} ${games.unit} done`
+          : `${games.done} of ${games.total} ${games.unit} done`;
+  } else if (unsupported) {
     caption = ranks.start ? "Ordered progression" : "Target rank";
   } else {
     switch (progress.status) {
@@ -135,9 +161,10 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
         caption = ranks.current ? "Latest rank from your booster" : "Progress appears with the first rank update";
     }
   }
-  const showBar = progress.kind !== "none" && !unsupported;
-  const value =
-    progress.kind === "wins" && progress.wins
+  const showBar = !!games || (progress.kind !== "none" && !unsupported);
+  const value = games
+    ? `${games.done}/${games.total}`
+    : progress.kind === "wins" && progress.wins
       ? `${progress.wins.attributed}/${progress.wins.ordered ?? "?"}`
       : pct !== null
         ? `${pct}%`
@@ -162,7 +189,7 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
       <header className="relative flex shrink-0 items-center justify-between gap-2 px-4 pt-3">
         <h2 className="flex items-center gap-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
           <TrendingUp className="size-3.5 text-[var(--g-accent)]" />
-          Rank progression
+          {games ? (games.kind === "placements" ? "Placement progress" : "Net win progress") : "Rank progression"}
         </h2>
         {updates.selfCheck ? (
           <a
@@ -181,12 +208,13 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
 
       <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-2 px-3 pb-4 pt-2 sm:gap-4 sm:px-5">
         <RankBlock
-          heading={unsupported ? "Starting rank" : "Current rank"}
+          heading={unsupported || games ? "Starting rank" : "Current rank"}
           points={updates.pointsLabel}
-          rank={unsupported ? ranks.start : ranks.current}
-          emptyTitle={currentEmptyTitle}
-          emptyText={currentEmptyText}
+          rank={unsupported || games ? ranks.start : ranks.current}
+          emptyTitle={games ? "Not given" : currentEmptyTitle}
+          emptyText={games ? "The customer did not choose a rank." : currentEmptyText}
           accent="current"
+          showLp={!games}
         />
 
         <div className="flex min-w-0 flex-col items-center gap-1.5">
@@ -231,14 +259,18 @@ export function RankProgressPanel({ data, className }: { data: WorkspaceDTO; cla
           </div>
         </div>
 
-        <RankBlock
-          heading="Target rank"
-          rank={ranks.target}
-          emptyTitle="No target rank"
-          emptyText="This service has no rank target."
-          accent="target"
-          showLp={false}
-        />
+        {games ? (
+          <CountBlock heading={games.kind === "placements" ? "Placement games ordered" : "Net wins ordered"} total={games.total} unit={games.unit} />
+        ) : (
+          <RankBlock
+            heading="Target rank"
+            rank={ranks.target}
+            emptyTitle="No target rank"
+            emptyText="This service has no rank target."
+            accent="target"
+            showLp={false}
+          />
+        )}
       </div>
     </section>
   );

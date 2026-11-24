@@ -123,7 +123,7 @@ describe("per-unit services", () => {
     expect(quote("league-of-legends", "win-boost", { currentRank: { tierId: "gold", divisionId: "iv" }, wins: 3 }).totalAmount).toBe(3 * 450);
   });
   it("placements are priced per match", () => {
-    expect(quote("league-of-legends", "placement-boost", { placementsRemaining: 5 }).totalAmount).toBe(5 * 400);
+    expect(quote("league-of-legends", "placement-boost", { placementsRemaining: 5, currentRank: { tierId: "gold", divisionId: "iv" } }).totalAmount).toBe(5 * 400);
   });
 });
 

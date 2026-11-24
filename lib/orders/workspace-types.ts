@@ -17,7 +17,7 @@ export interface WorkspaceRankDTO {
 }
 
 export interface WorkspaceProgressDTO {
-  kind: "rank" | "wins" | "none";
+  kind: "rank" | "wins" | "games" | "none";
   /** waiting = no rank reported by the booster yet. */
   status: "unavailable" | "invalid" | "waiting" | "in_progress" | "complete" | "indeterminate";
   percent: number | null;
@@ -28,6 +28,8 @@ export interface WorkspaceProgressDTO {
   stale: boolean;
   startLpAssumed: boolean;
   wins?: { attributed: number; ordered: number | null };
+  /** Net Win / Placement Boost (client PDFs 2026-11-24): games done by the booster's updates. */
+  games?: { kind: "net-wins" | "wins" | "placements"; done: number; total: number; unit: string };
   /**
    * Rank orders: the target rank the booster still has to post in Rank
    * Update before completing ("Gold IV"), or null when nothing is missing.
@@ -225,7 +227,9 @@ export interface WorkspaceDTO {
   };
   /** Booster progress updates (decision 2026-11-17: replaces Riot tracking). */
   updates: {
-    list: { id: string; label: string; tierId: string; divisionId: string | null; lp: number | null; iconSrc: string | null; at: string }[];
+    list: { id: string; label: string; tierId: string; divisionId: string | null; lp: number | null; gamesDone: number | null; iconSrc: string | null; at: string }[];
+    /** Net Win / Placement Boost: the update posts the games done (0..total) instead of a rank. */
+    games: { kind: "net-wins" | "wins" | "placements"; total: number; unit: string; caption: string } | null;
     /** The working booster may post an update now. */
     canPost: boolean;
     /** "LP" (League, TFT) or "RR" (VALORANT). */

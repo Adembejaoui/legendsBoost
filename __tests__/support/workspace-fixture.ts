@@ -177,7 +177,7 @@ export function workspaceFixture(
     sessions: { canManage: false, open: null, recent: [], rules: [] },
     adminCompletion: null,
     completion: { request: null, canConfirm: false, canDispute: false, canDecide: false, autoConfirmHours: 72 },
-    updates: { list: [], canPost: false, pointsLabel: "LP", rankOptions: [], selfCheck: null, stale: false },
+    updates: { list: [], games: null, canPost: false, pointsLabel: "LP", rankOptions: [], selfCheck: null, stale: false },
     releaseGraceUntil: null,
     feedback: { review: null, tags: [], canReview: false, canReply: false, canHide: false, canTip: false, tipped: null },
   };

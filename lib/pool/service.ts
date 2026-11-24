@@ -8,6 +8,8 @@
  *     the earliest bid. A round with no bid stays open.
  *   - "Claim now" skips bidding: the booster takes the order at the payout
  *     ceiling minus `claim_now_discount_bps` (25 %).
+ *   - Bids go from the ceiling minus 24.5 % (`min_bid_bps` 7550) up to the
+ *     ceiling (2026-11-24).
  *   - Priority orders: no bidding, instant claim at the full payout.
  *   - Preferred booster: during `preferredUntil` only that booster sees the
  *     order and claims it at the full payout; then it joins the pool.
@@ -26,6 +28,7 @@
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { getConfig } from "@/lib/config";
+import { toDecimalString } from "@/lib/money";
 import { VERIFIED_PAYMENT_WHERE } from "@/lib/orders/payment-gate";
 import { transitionOrder } from "@/lib/orders/transitions";
 import { canClaimNewOrders } from "@/lib/boosters/status";
@@ -313,7 +316,11 @@ async function placeBidTx(boosterId: string, orderId: string, amount: number) {
     const { ceiling, currency } = payoutCeilingOf(order);
     const { minBid } = payoutAmounts(ceiling, cfg);
     if (!Number.isSafeInteger(amount) || amount < minBid || amount > ceiling) {
-      throw new PoolError(`Bid between ${minBid} and ${ceiling} (minor units).`, 422, "AMOUNT_OUT_OF_RANGE");
+      throw new PoolError(
+        `Your bid must be between ${toDecimalString(minBid, currency)} and ${toDecimalString(ceiling, currency)} ${currency}.`,
+        422,
+        "AMOUNT_OUT_OF_RANGE",
+      );
     }
     const round = Math.max(order.biddingRound, 1);
     // Bids are visible: a new bid must beat the lowest bid of the other boosters.

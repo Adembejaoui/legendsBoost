@@ -14,6 +14,8 @@ import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { asRecord, RankRoute, readRank } from "@/components/dashboard/rank-route";
 import { formatMoney, toDecimalString } from "@/lib/money";
 import { vpnCountryName } from "@/lib/catalog/vpn-countries";
+import { LOL_ROLES } from "@/lib/catalog/champions";
+import { countLabel, orderGameCount } from "@/lib/orders/game-count";
 import { useLiveRefresh } from "@/components/realtime/LiveRefresh";
 import { poolChannel } from "@/lib/realtime/channel-names";
 
@@ -148,6 +150,16 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+const ROLE_LABEL = new Map(LOL_ROLES.map((r) => [r.id as string, r.label]));
+const roleLabel = (id: string) => ROLE_LABEL.get(id) ?? id;
+
+/** Amount typed by the booster ("12,40" or "12.40") in minor units, or null. */
+function parseAmount(text: string): number | null {
+  const trimmed = text.trim().replace(",", ".");
+  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return null;
+  return Math.round(Number(trimmed) * 100);
+}
+
 function OrderCard({
   order,
   now,
@@ -171,24 +183,42 @@ function OrderCard({
 }) {
   const [bidText, setBidText] = useState(order.myBid !== null ? (order.myBid / 100).toFixed(2) : "");
   const [bidBusy, setBidBusy] = useState(false);
-  // Bidding is folded under "Or bid" (open when the booster already bid).
-  const [bidOpen, setBidOpen] = useState(order.myBid !== null);
   const money = (n: number) => moneyCode(n, order.currency);
+  const plain = (n: number) => (n / 100).toFixed(2);
   const left = secondsLeft(order.biddingClosesAt, now);
   const prefLeft = secondsLeft(order.preferredUntil, now);
   const directOnly = order.isPriority || order.preferredForMe;
+  // Claim: the order price minus 25 % (priority and "chosen for you": full price).
   const claimAmount = directOnly ? order.payoutCeiling : order.claimNowAmount;
-  // A bid can never exceed the payout, and must beat the current lowest bid.
-  const maxBid = order.lowestBid !== null && order.lowestBid !== order.myBid ? Math.min(order.payoutCeiling, order.lowestBid - 1) : order.payoutCeiling;
+  // Bids: from the order price minus 24.5 % up to the order price, and below
+  // the lowest bid of the other boosters.
+  const otherLowest = order.lowestBid !== null && order.lowestBid !== order.myBid ? order.lowestBid : null;
+  const maxBid = otherLowest !== null ? Math.min(order.payoutCeiling, otherLowest - 1) : order.payoutCeiling;
+  const bidAmount = parseAmount(bidText);
+  const bidProblem =
+    bidText.trim() === ""
+      ? null
+      : bidAmount === null
+        ? "Enter an amount, e.g. 12.40."
+        : bidAmount < order.minBid
+          ? `The lowest bid is ${money(order.minBid)}.`
+          : bidAmount > maxBid
+            ? otherLowest !== null && maxBid < order.payoutCeiling
+              ? `Bid lower than the current lowest bid (${money(otherLowest)}).`
+              : `The highest bid is ${money(order.payoutCeiling)}.`
+            : null;
+  const canBid = !blocked && !bidBusy && bidAmount !== null && bidProblem === null && maxBid >= order.minBid;
+
   async function submitBid() {
-    const cents = Math.round(Number(bidText.replace(",", ".")) * 100);
+    if (bidAmount === null) return;
     setBidBusy(true);
     try {
-      await onBid(order.id, cents);
+      await onBid(order.id, bidAmount);
     } finally {
       setBidBusy(false);
     }
   }
+
   const game = getGame(order.gameSlug);
   const gameName = game?.name ?? order.gameSlug;
   const serviceTitle = getGameServiceOffer(order.gameSlug, order.serviceSlug)?.title ?? order.serviceSlug;
@@ -196,6 +226,7 @@ function OrderCard({
   const config = asRecord(order.configuration);
   const cr = asRecord(order.championsRoles);
   const champions = asStringArray(cr.champions);
+  // Roles are saved in order: [main, secondary] (older orders may list more).
   const roles = asStringArray(cr.roles);
   const otpId = typeof cr.otpChampion === "string" ? cr.otpChampion : null;
   const selectedIds = asStringArray(order.selectedOptions);
@@ -209,48 +240,52 @@ function OrderCard({
 
   const currentRank = readRank(order.gameSlug, order.serviceSlug, "currentRank", config);
   const targetRank = readRank(order.gameSlug, order.serviceSlug, "targetRank", config);
-  const wins = config["wins"];
-  const isWinBoost = order.serviceSlug === "win-boost";
+  const games = orderGameCount(order.gameSlug, order.serviceSlug, config);
+  const count = games ? { caption: games.caption, value: countLabel(games.total, games.unit) } : null;
   const mode = getCheckoutConfig(order.gameSlug, order.serviceSlug)?.modes?.find((m) => m.id === (order.selectedMode ?? "solo"))?.label ?? order.selectedMode ?? "Solo";
-  const server = selectLabel(order.gameSlug, order.serviceSlug, "server", config.server) ?? order.region;
-  const queue = selectLabel(order.gameSlug, order.serviceSlug, "queueType", config.queueType) ?? selectLabel(order.gameSlug, order.serviceSlug, "gameMode", config.gameMode);
+  const field = (key: string) => selectLabel(order.gameSlug, order.serviceSlug, key, config[key]);
+  const server = field("server") ?? order.region;
+  const queue = field("queueType") ?? field("gameMode");
+  const lpGain = field("lpGain");
+  const currentLp = field("currentLp");
   const otp = otpId ? championsById.get(otpId) : undefined;
+  const isLeague = order.gameSlug === "league-of-legends";
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0b0f19]">
-      {/* Payout first */}
-      <header className="border-b border-white/10 bg-gradient-to-br from-[#C8AA6E]/[0.08] to-transparent p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar src={game?.image} name={gameName} />
-            <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold text-white">{serviceTitle}</h3>
-              <p className="truncate text-xs text-zinc-400">{gameName}</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-            {order.preferredForMe && <Chip tone="gold">Chosen for you</Chip>}
-            {order.isPriority && <Chip tone="gold">Priority</Chip>}
+      <header className="flex items-start justify-between gap-3 border-b border-white/10 p-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar src={game?.image} name={gameName} />
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-white">{serviceTitle}</h3>
+            <p className="truncate text-xs text-zinc-400">
+              {gameName} · <span className="font-mono">#{order.id.slice(-8).toUpperCase()}</span>
+            </p>
           </div>
         </div>
-        <div className="mt-4 flex items-baseline justify-between gap-2">
-          <span className="text-2xl font-bold tracking-tight text-white">{money(order.payoutCeiling)}</span>
-          <span className="text-xs text-zinc-500">{directOnly ? "your payout" : "your payout, up to"}</span>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          {order.preferredForMe && <Chip tone="gold">Chosen for you</Chip>}
+          {order.isPriority && <Chip tone="gold">Priority</Chip>}
         </div>
-        {order.preferredForMe && prefLeft !== null && (
-          <p className="mt-1 text-xs text-[#C8AA6E]" suppressHydrationWarning>
-            Reserved for you for {formatCountdown(prefLeft)}, then it goes to the pool.
-          </p>
-        )}
       </header>
 
       <div className="flex flex-1 flex-col p-5">
-        <RankRoute from={currentRank} to={targetRank} wins={wins} isWinBoost={isWinBoost} />
+        <RankRoute from={currentRank} to={targetRank} count={count} />
 
         <dl className="mt-4 divide-y divide-white/[0.06] border-y border-white/[0.06]">
           {server ? <DetailRow label="Server">{server}</DetailRow> : null}
           {queue ? <DetailRow label="Queue type">{queue}</DetailRow> : null}
           <DetailRow label="Mode">{mode}</DetailRow>
+          {lpGain ? <DetailRow label="LP gains">{lpGain}</DetailRow> : null}
+          {currentLp ? <DetailRow label="Current LP">{currentLp}</DetailRow> : null}
+          {roles.length > 2 ? (
+            <DetailRow label="Roles">{roles.map(roleLabel).join(", ")}</DetailRow>
+          ) : isLeague || roles.length > 0 ? (
+            <>
+              <DetailRow label="Main role">{roles[0] ? roleLabel(roles[0]) : <span className="text-zinc-500">Any</span>}</DetailRow>
+              <DetailRow label="Secondary role">{roles[1] ? roleLabel(roles[1]) : <span className="text-zinc-500">Any</span>}</DetailRow>
+            </>
+          ) : null}
           {selectedIds.includes("otp-champion") ? (
             <DetailRow label="OTP Champ">
               {otp?.iconSrc ? <Image src={otp.iconSrc} alt="" width={20} height={20} className="size-5 rounded-full" /> : null}
@@ -260,7 +295,6 @@ function OrderCard({
           {selectedIds.includes("vpn") ? (
             <DetailRow label="VPN">{vpnCode ? vpnCountryName(vpnCode) : "Customer's country"}</DetailRow>
           ) : null}
-          {roles.length > 0 ? <DetailRow label="Roles"><span className="capitalize">{roles.join(", ")}</span></DetailRow> : null}
         </dl>
 
         {champions.length > 0 && (
@@ -291,78 +325,97 @@ function OrderCard({
           </ul>
         )}
 
+        {/* Price, then bid, then claim. */}
         <footer className="mt-auto pt-5">
-          <Button
-            className="h-11 w-full bg-[#C8AA6E] font-semibold text-[#0A0E14] hover:bg-[#d8bc85] disabled:opacity-70"
-            onClick={() => onClaim(order.id)}
-            disabled={anyClaiming || blocked}
-          >
-            {claiming ? "Claiming…" : `Claim for ${money(claimAmount)}`}
-          </Button>
-
-          {directOnly ? (
-            <p className="mt-2 text-center text-xs text-zinc-500">
-              {order.preferredForMe
-                ? "The customer chose you: no bidding, full payout."
-                : "Priority order: no bidding, the first booster to claim gets the full payout."}
-            </p>
-          ) : (
-            <div className="mt-2">
-              <button
-                type="button"
-                onClick={() => setBidOpen((v) => !v)}
-                aria-expanded={bidOpen}
-                className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
-              >
-                <span>
-                  Or bid (lowest wins){order.bidCount > 0 ? ` · ${order.bidCount} bid${order.bidCount === 1 ? "" : "s"}` : ""}
-                  {order.myBid !== null ? ` · yours ${money(order.myBid)}` : ""}
-                </span>
-                <span aria-hidden>{bidOpen ? "▴" : "▾"}</span>
-              </button>
-              {bidOpen ? (
-                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                  <p className="mb-2 text-xs text-zinc-400" suppressHydrationWarning>
-                    {left !== null ? `Closes in ${formatCountdown(left)}` : "Starts with the first bid"}
-                    {order.lowestBid !== null ? ` · lowest ${money(order.lowestBid)}` : ""}
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      inputMode="decimal"
-                      aria-label="Your bid"
-                      value={bidText}
-                      onChange={(e) => setBidText(e.target.value)}
-                      placeholder={`${(order.minBid / 100).toFixed(2)} – ${(maxBid / 100).toFixed(2)} ${order.currency}`}
-                      className="h-9 min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2.5 text-sm text-white outline-none focus:border-white/30"
-                      disabled={blocked || bidBusy}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 border-white/15 bg-transparent text-white hover:bg-white/[0.06]"
-                      onClick={() => void submitBid()}
-                      disabled={blocked || bidBusy || bidText.trim() === "" || Math.round(Number(bidText.replace(",", ".")) * 100) > maxBid}
-                    >
-                      {order.myBid !== null ? "Update" : "Bid"}
-                    </Button>
-                  </div>
-                  {order.myBid !== null && (
-                    <p className="mt-2 flex items-center justify-between text-xs text-zinc-400">
-                      <span>Your bid: {money(order.myBid)}</span>
-                      <button type="button" className="text-zinc-500 hover:text-zinc-300" onClick={() => void onWithdraw(order.id)}>
-                        Withdraw
-                      </button>
-                    </p>
-                  )}
-                </div>
+          <div className="rounded-xl border border-[#C8AA6E]/25 bg-gradient-to-b from-[#C8AA6E]/[0.10] to-[#C8AA6E]/[0.02] p-4">
+            <div className="text-center">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#C8AA6E]/80">Order price</p>
+              <p className="mt-1 text-3xl font-bold tracking-tight text-white">{money(order.payoutCeiling)}</p>
+              {order.preferredForMe && prefLeft !== null ? (
+                <p className="mt-1 text-xs text-[#C8AA6E]" suppressHydrationWarning>
+                  Reserved for you for {formatCountdown(prefLeft)}, then it goes to the pool.
+                </p>
               ) : null}
             </div>
-          )}
 
-          <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-600">
-            <span suppressHydrationWarning>Posted {formatAge(order.createdAt, now)}</span>
-            <span className="font-mono">#{order.id.slice(-8).toUpperCase()}</span>
+            {directOnly ? (
+              <p className="mt-4 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-center text-xs text-zinc-400">
+                {order.preferredForMe
+                  ? "The customer chose you: no bidding, you get the full price."
+                  : "Priority order: no bidding, the first booster to claim gets the full price."}
+              </p>
+            ) : (
+              <div className="mt-4">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+                  <label htmlFor={`bid-${order.id}`} className="font-medium text-zinc-200">
+                    Your bid <span className="font-normal text-zinc-500">(lowest wins)</span>
+                  </label>
+                  <span className="text-zinc-500">
+                    {plain(order.minBid)} – {plain(order.payoutCeiling)} {order.currency}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <input
+                      id={`bid-${order.id}`}
+                      inputMode="decimal"
+                      value={bidText}
+                      onChange={(e) => setBidText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && canBid) void submitBid();
+                      }}
+                      placeholder={plain(maxBid)}
+                      aria-invalid={bidProblem !== null}
+                      className={cn(
+                        "h-10 w-full rounded-lg border bg-black/30 ps-3 pe-12 text-sm text-white outline-none placeholder:text-zinc-600",
+                        bidProblem ? "border-red-400/50 focus:border-red-400/70" : "border-white/10 focus:border-[#C8AA6E]/60",
+                      )}
+                      disabled={blocked || bidBusy}
+                    />
+                    <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">{order.currency}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 border-[#C8AA6E]/40 bg-transparent px-4 text-[#C8AA6E] hover:bg-[#C8AA6E]/10 hover:text-[#d8bc85]"
+                    onClick={() => void submitBid()}
+                    disabled={!canBid}
+                  >
+                    {bidBusy ? "…" : order.myBid !== null ? "Update" : "Bid"}
+                  </Button>
+                </div>
+                {bidProblem ? <p className="mt-1.5 text-xs text-red-300">{bidProblem}</p> : null}
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-zinc-500">
+                  <span suppressHydrationWarning>
+                    {order.bidCount > 0 ? `${order.bidCount} bid${order.bidCount === 1 ? "" : "s"}` : "No bids yet"}
+                    {order.lowestBid !== null ? ` · lowest ${money(order.lowestBid)}` : ""}
+                    {left !== null ? ` · closes in ${formatCountdown(left)}` : ""}
+                  </span>
+                  {order.myBid !== null ? (
+                    <span className="flex items-center gap-2">
+                      <span className="text-zinc-300">Yours: {money(order.myBid)}</span>
+                      <button type="button" className="underline-offset-2 hover:text-zinc-300 hover:underline" onClick={() => void onWithdraw(order.id)}>
+                        Withdraw
+                      </button>
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            <Button
+              className="mt-4 h-11 w-full bg-[#C8AA6E] text-base font-semibold text-[#0A0E14] hover:bg-[#d8bc85] disabled:opacity-70"
+              onClick={() => onClaim(order.id)}
+              disabled={anyClaiming || blocked}
+            >
+              {claiming ? "Claiming…" : `Claim for ${money(claimAmount)}`}
+            </Button>
+            {!directOnly ? <p className="mt-1.5 text-center text-[11px] text-zinc-500">Claim now: order price − 25%, no waiting.</p> : null}
           </div>
+
+          <p className="mt-3 text-end text-[11px] text-zinc-600" suppressHydrationWarning>
+            Posted {formatAge(order.createdAt, now)}
+          </p>
         </footer>
       </div>
     </article>

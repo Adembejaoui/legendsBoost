@@ -4,6 +4,13 @@
  * __tests__/i18n/catalog.test.ts lists any catalog text without an entry.
  */
 export const catalogAr: Record<string, string> = {
+  // Client PDFs 2026-11-24 (Net Win Boost, Placement Boost)
+  "Net Win Boost": "بوست الانتصارات الصافية",
+  "A set number of ranked net wins on League of Legends.": "عدد محدد من الانتصارات الصافية المصنفة في League of Legends.",
+  "Number of net wins": "عدد الانتصارات الصافية",
+  "How many net wins should be played (up to 5 per order).": "كم انتصارًا صافيًا يجب لعبه (حتى 5 لكل طلب).",
+  "net wins": "انتصارات صافية",
+  "Your rank and division before placements.": "رتبتك وقسمك قبل مباريات التصنيف.",
   "Ranked support for every stage of your climb.": "دعم في التصنيف في كل مرحلة من صعودك.",
   "Explore League of Legends services built around the ranked ladder. Every offer is configured per game and reviewed for eligibility before publication.": "اكتشف خدمات League of Legends المبنية حول سلم التصنيف. يتم إعداد كل عرض لكل لعبة ومراجعته قبل نشره.",
   "Eligibility under review": "الأهلية قيد المراجعة",

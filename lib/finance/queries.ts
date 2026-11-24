@@ -4,6 +4,7 @@
  * payout / payment / refund / dispute records; nothing is a stored balance.
  */
 import prisma from "@/lib/prisma";
+import { countLabel, orderGameCount } from "@/lib/orders/game-count";
 import { getGame } from "@/lib/catalog/games";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
 import { formatRankLabel } from "@/lib/catalog/rank-systems";
@@ -42,7 +43,9 @@ export function earningReason(e: {
       : null;
   const from = rank(cfg.currentRank);
   const to = rank(cfg.targetRank);
-  const units = typeof cfg.wins === "number" ? `${cfg.wins} win${cfg.wins === 1 ? "" : "s"}` : null;
+  // "3 net wins", "5 placement games" (client PDFs 2026-11-24).
+  const games = orderGameCount(e.order.gameSlug, e.order.serviceSlug, cfg);
+  const units = games ? countLabel(games.total, games.unit) : null;
   const detail = from && to ? `${from} → ${to}` : units;
   return `${service}${detail ? ` (${detail})` : ""} · ${state}`;
 }

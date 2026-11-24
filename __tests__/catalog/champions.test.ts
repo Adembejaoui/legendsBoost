@@ -40,9 +40,14 @@ describe("champions & roles validation on orders", () => {
     selectedOptions: ["champions-roles"],
   };
 
-  it("accepts real lanes and champions, normalizes legacy ids and removes duplicates", () => {
-    const v = validateOrderInput(offer, checkout, { ...base, championsRoles: { roles: ["jungle", "jungle"], champions: ["kaihasa", "kaisa", "wukong"] } });
-    expect(v.ok && v.value.championsRoles).toEqual({ roles: ["jungle"], champions: ["kaisa", "wukong"] });
+  it("accepts real lanes and champions, normalizes legacy ids and removes duplicate champions", () => {
+    const v = validateOrderInput(offer, checkout, { ...base, championsRoles: { roles: ["jungle", "mid"], champions: ["kaihasa", "kaisa", "wukong"] } });
+    expect(v.ok && v.value.championsRoles).toEqual({ roles: ["jungle", "mid"], champions: ["kaisa", "wukong"] });
+  });
+
+  it("the same lane cannot be both the main and the secondary role", () => {
+    const v = validateOrderInput(offer, checkout, { ...base, championsRoles: { roles: ["jungle", "jungle"], champions: [] } });
+    expect(v.ok).toBe(false);
   });
 
   it("rejects unknown lanes and champions", () => {

@@ -41,7 +41,11 @@ export function readRank(
 ): Rank | null {
   const raw = config[key];
   if (!raw || typeof raw !== "object") return null;
-  const rankSystemId = getGameServiceOffer(gameSlug, serviceSlug)?.rankSystemId;
+  // The field's own rank system first: Net Win Boost has none at service
+  // level, only on its "Current rank" field (client PDF 2026-11-24).
+  const offer = getGameServiceOffer(gameSlug, serviceSlug);
+  const field = offer?.fields.find((f) => f.key === key);
+  const rankSystemId = (field && "rankSystemId" in field && typeof field.rankSystemId === "string" ? field.rankSystemId : undefined) ?? offer?.rankSystemId;
   if (!rankSystemId) return null;
   const selection = raw as RankSelection;
   return { label: formatSelection(rankSystemId, selection), tierId: selection.tierId };
@@ -83,18 +87,19 @@ function Side({
   );
 }
 
-/** "From → To" panel. For win boosts the right side shows the wins needed. */
+/**
+ * "From → To" panel. Orders counted in games (net wins, placement games)
+ * show the count ordered on the right instead of a target rank.
+ */
 export function RankRoute({
   from,
   to,
-  wins,
-  isWinBoost = false,
+  count,
   className,
 }: {
   from: Rank | null;
   to?: Rank | null;
-  wins?: unknown;
-  isWinBoost?: boolean;
+  count?: { caption: string; value: string } | null;
   className?: string;
 }) {
   return (
@@ -117,8 +122,8 @@ export function RankRoute({
       >
         <path d="M5 12h14M13 6l6 6-6 6" />
       </svg>
-      {isWinBoost ? (
-        <Side caption="Wins needed" text={wins != null ? String(wins) : undefined} align="right" />
+      {count ? (
+        <Side caption={count.caption} text={count.value} align="right" />
       ) : (
         <Side caption="To" rank={to} align="right" />
       )}

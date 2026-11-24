@@ -35,7 +35,7 @@ import { useTranslations } from 'next-intl'
 import { rankLabel, useCatalogText } from '@/lib/i18n/catalog'
 import { useCurrency } from '@/lib/currency/client'
 import { isVpnCountry } from '@/lib/catalog/vpn-countries'
-import { VpnCountryPicker } from './VpnCountryPicker'
+import { VpnCountryDialog } from './VpnCountryPicker'
 
 interface CheckoutPanelProps {
   game: { slug: string; name: string; accent?: string }
@@ -102,6 +102,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const [lastCouponError, setLastCouponError] = useState<string | null>(null)
   // No risk checkbox at checkout (client decision 2026-11-19).
   const [otpModalOpen, setOtpModalOpen] = useState(false)
+  const [vpnOpen, setVpnOpen] = useState(false)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [boosterPickerOpen, setBoosterPickerOpen] = useState(false)
   // Optional preferred booster (exclusive for a short time after payment).
@@ -149,8 +150,37 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     const option = config?.options.find((o) => o.id === id)
     if (on && option?.configurationType === 'champions-roles') setModalOpen(true)
     if (option?.configurationType === 'otp-champion') {
-      if (on) setOtpModalOpen(true)
-      else setOtpChampion(undefined)
+      if (on) {
+        // OTP Champ Only replaces Specific Champion and Role: clear and turn it off.
+        clearChampionsRoles()
+        setOtpModalOpen(true)
+      } else setOtpChampion(undefined)
+    }
+    // VPN: the country popup opens right away (client PDFs 2026-11-24).
+    if (id === 'vpn' && on) setVpnOpen(true)
+  }
+  const clearChampionsRoles = () => {
+    setExtrasByMode((prev) => {
+      const ids = (config?.options ?? []).filter((o) => o.configurationType === 'champions-roles').map((o) => o.id)
+      const next = { ...prev, [mode]: { ...(prev[mode] || {}), ...Object.fromEntries(ids.map((x) => [x, false])) } }
+      remember({ extras: next })
+      return next
+    })
+    setChampionsRolesByMode((prev) => {
+      const next = { ...prev, [mode]: { ...prev[mode], roles: [], champions: [] } }
+      remember({ championsRoles: next })
+      return next
+    })
+  }
+  // Cancel without a saved country: VPN goes back off.
+  const cancelVpn = () => {
+    setVpnOpen(false)
+    if (!isVpnCountry(championsRolesByMode[mode].vpnCountry)) {
+      setExtrasByMode((prev) => {
+        const next = { ...prev, [mode]: { ...(prev[mode] || {}), vpn: false } }
+        remember({ extras: next })
+        return next
+      })
     }
   }
   const setVpnCountry = (country: string) => {
@@ -422,6 +452,9 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
     })()
 
   const priceLabelFor = (o: CheckoutOption): string | undefined => {
+    // Percentage extras show their percentage (client PDFs 2026-11-24); fixed
+    // amounts show the amount in the chosen currency.
+    if (o.badge === 'Free' || (o.badge && /%$/.test(o.badge))) return o.badge
     const amount = quote?.optionAmounts?.[o.id]
     if (amount !== undefined && quote) return amount === 0 ? 'Free' : `+${formatMoney(amount, quote.currency)}`
     return o.badge === 'Free' ? 'Free' : quoteLoading ? undefined : o.badge
@@ -430,7 +463,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   const secondaryOptions = visibleOptions.filter((o) => o.group === 'secondary')
   const modeChoices = priceTags ? enabledModes.filter((m) => m.id in priceTags.modes) : enabledModes
   const chosenName = boosters.find((b) => b.id === chosenBooster)?.displayName
-  const vpnPicker = <VpnCountryPicker value={championsRolesByMode[mode].vpnCountry} onChange={setVpnCountry} disabled={busy} />
+  const otpOn = !!extrasByMode[mode]?.['otp-champion']
   const optionRow = (option: CheckoutOption) => [
     <CheckoutOptionRow
       key={`${game.slug}-${offer.serviceSlug}-${option.id}-${mode}`}
@@ -439,18 +472,22 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       checked={extrasByMode[mode]?.[option.id] ?? false}
       onToggle={(v) => toggleExtra(option.id, Boolean(v))}
       priceLabel={priceLabelFor(option)}
-      disabled={option.enabled === false || busy}
+      // OTP Champ Only on: Specific Champion and Role is cleared and locked.
+      disabled={option.enabled === false || busy || (otpOn && option.configurationType === 'champions-roles')}
+      lockedNote={otpOn && option.configurationType === 'champions-roles' ? t('lockedByOtp') : undefined}
       championsRoles={championsRolesByMode[mode]}
       onConfigure={
         option.configurationType === 'champions-roles'
-          ? () => setModalOpen(true)
+          ? otpOn
+            ? undefined
+            : () => setModalOpen(true)
           : option.configurationType === 'otp-champion'
             ? () => setOtpModalOpen(true)
-            : undefined
+            : option.id === 'vpn'
+              ? () => setVpnOpen(true)
+              : undefined
       }
     />,
-    // VPN on: the country it must be set to, right under the switch.
-    option.id === 'vpn' && extrasByMode[mode]?.vpn ? <div key={`${option.id}-country-${mode}`}>{vpnPicker}</div> : null,
   ]
 
   return (
@@ -670,7 +707,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         initialValue={championsRolesByMode[mode]}
         onConfirm={(cfg) => {
           setChampionsRolesByMode((prev) => {
-            const next = { ...prev, [mode]: { ...cfg, otpChampion: prev[mode].otpChampion } }
+            // Keep the OTP champion and the VPN country.
+            const next = { ...prev, [mode]: { ...prev[mode], ...cfg } }
             remember({ championsRoles: next })
             return next
           })
@@ -685,6 +723,15 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         onConfirm={(cfg) => {
           setOtpChampion(cfg.champions[0])
           setOtpModalOpen(false)
+        }}
+      />
+      <VpnCountryDialog
+        open={vpnOpen}
+        value={championsRolesByMode[mode].vpnCountry}
+        onCancel={cancelVpn}
+        onSave={(code) => {
+          setVpnCountry(code)
+          setVpnOpen(false)
         }}
       />
     </div>

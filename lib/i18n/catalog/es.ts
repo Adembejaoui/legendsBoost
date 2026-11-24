@@ -4,6 +4,13 @@
  * __tests__/i18n/catalog.test.ts lists any catalog text without an entry.
  */
 export const catalogEs: Record<string, string> = {
+  // Client PDFs 2026-11-24 (Net Win Boost, Placement Boost)
+  "Net Win Boost": "Boost de victorias netas",
+  "A set number of ranked net wins on League of Legends.": "Un número fijo de victorias netas en clasificatoria en League of Legends.",
+  "Number of net wins": "Número de victorias netas",
+  "How many net wins should be played (up to 5 per order).": "Cuántas victorias netas se deben jugar (hasta 5 por pedido).",
+  "net wins": "victorias netas",
+  "Your rank and division before placements.": "Tu rango y división antes de las partidas de posicionamiento.",
   "Ranked support for every stage of your climb.": "Apoyo clasificatorio en cada etapa de tu ascenso.",
   "Explore League of Legends services built around the ranked ladder. Every offer is configured per game and reviewed for eligibility before publication.": "Descubre los servicios de League of Legends pensados para la clasificatoria. Cada oferta se configura por juego y se revisa antes de publicarse.",
   "Eligibility under review": "Elegibilidad en revisión",

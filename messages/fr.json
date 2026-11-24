@@ -232,7 +232,16 @@
     "vpnCountry": "Pays du VPN",
     "vpnChoose": "Choisissez un pays",
     "vpnSearch": "Rechercher un pays",
-    "vpnNone": "Aucun pays trouvé"
+    "vpnNone": "Aucun pays trouvé",
+    "mainRole": "principal {role}",
+    "secondaryRole": "secondaire {role}",
+    "vpnTitle": "VPN",
+    "vpnText": "Votre booster se connecte depuis le pays choisi, pour que le compte ne se connecte jamais depuis un nouvel endroit.",
+    "vpnSelect": "Choisissez un pays",
+    "vpnSave": "Enregistrer",
+    "vpnCancel": "Annuler",
+    "vpnIn": "Pays : {country}",
+    "lockedByOtp": "Indisponible avec OTP Champ Only."
   },
   "ChampionsModal": {
     "aria": "Champions et rôles",
@@ -248,7 +257,10 @@
     "all": "Tous",
     "none": "Aucun champion trouvé",
     "remove": "Retirer",
-    "confirm": "Confirmer"
+    "confirm": "Confirmer",
+    "mainRole": "Rôle principal",
+    "secondaryRole": "Rôle secondaire",
+    "pickMainFirst": "Choisissez d'abord le rôle principal."
   },
   "Roles": {
     "top": "Top",

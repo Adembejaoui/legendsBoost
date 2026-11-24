@@ -1704,6 +1704,8 @@ model OrderProgressUpdate {
   tierId       String   @map("tierId")
   divisionId   String?  @map("divisionId")
   lp           Int?
+  /// Net Win / Placement Boost: games done so far (0..ordered). Null on rank updates.
+  gamesDone    Int?     @map("gamesDone")
   createdAt    DateTime @default(now()) @map("createdAt")
 
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)

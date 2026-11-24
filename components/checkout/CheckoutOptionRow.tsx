@@ -21,7 +21,8 @@ import {
 import { cn } from '@/lib/utils'
 import type { CheckoutMode, CheckoutOption, ChampionsRolesConfig } from '@/lib/config/checkout-options'
 import { champions } from '@/lib/catalog/champions'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
+import { isVpnCountry, vpnCountryName } from '@/lib/catalog/vpn-countries'
 
 const ICONS: Record<string, LucideIcon> = { User, Trophy, Zap, Video, Swords, Globe, EyeOff, Drama, LineChart, Crosshair, Mic }
 
@@ -36,6 +37,8 @@ interface CheckoutOptionRowProps {
   championsRoles?: ChampionsRolesConfig
   /** Opens the champion picker of a configurable extra. */
   onConfigure?: () => void
+  /** Why the extra is locked (shown instead of its detail). */
+  lockedNote?: string
 }
 
 const champName = (id: string) => champions.find((c) => c.id === id)?.name ?? id
@@ -44,22 +47,33 @@ const champName = (id: string) => champions.find((c) => c.id === id)?.name ?? id
  * One extra in the order summary (client PDFs 2026-11-19): icon, name, info
  * icon with the hover text, price badge from the server and a switch.
  */
-export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel, disabled = false, championsRoles, onConfigure }: CheckoutOptionRowProps) {
+export function CheckoutOptionRow({ option, mode, checked, onToggle, priceLabel, disabled = false, championsRoles, onConfigure, lockedNote }: CheckoutOptionRowProps) {
   const t = useTranslations('Checkout')
   const tRole = useTranslations('Roles')
+  const locale = useLocale()
   const [tip, setTip] = useState(false)
   const tipId = useId()
   const Icon = (option.icon && ICONS[option.icon]) || Sparkles
   const hover = (mode === 'duo' && option.descriptionDuo) || option.description
   const free = priceLabel === 'Free'
-  const configurable = option.type === 'configurable-toggle' && !!onConfigure
+  // VPN opens its country popup from the name too (client PDFs 2026-11-24).
+  const configurable = (option.type === 'configurable-toggle' || option.id === 'vpn') && !!onConfigure
 
   let detail: string | null = null
   if (checked && option.configurationType === 'champions-roles' && championsRoles) {
-    const roles = championsRoles.roles.map((r) => (tRole.has(r as 'top') ? tRole(r as 'top') : r)).join(', ')
+    const roleName = (r: string) => (tRole.has(r as 'top') ? tRole(r as 'top') : r)
+    const [main, secondary] = championsRoles.roles
+    const roles =
+      championsRoles.roles.length > 2
+        ? championsRoles.roles.map(roleName).join(', ')
+        : [main && t('mainRole', { role: roleName(main) }), secondary && t('secondaryRole', { role: roleName(secondary) })].filter(Boolean).join(', ')
     const champs = championsRoles.champions.map(champName).join(', ')
     detail = [roles && t('roles', { list: roles }), champs && t('champions', { list: champs })].filter(Boolean).join(' · ') || t('chooseChampionsRoles')
   }
+  if (checked && option.id === 'vpn') {
+    detail = isVpnCountry(championsRoles?.vpnCountry) ? t('vpnIn', { country: vpnCountryName(championsRoles!.vpnCountry!, locale) }) : t('vpnChoose')
+  }
+  if (lockedNote) detail = lockedNote
   if (checked && option.configurationType === 'otp-champion') {
     detail = championsRoles?.otpChampion ? t('championOne', { name: champName(championsRoles.otpChampion) }) : t('chooseChampion')
   }

@@ -56,8 +56,9 @@ export const gameServices: GameServiceOffer[] = [
   {
     gameSlug: 'league-of-legends',
     serviceSlug: 'win-boost',
-    title: 'Win Boost',
-    description: 'A set number of ranked wins on League of Legends.',
+    // Client PDF 2026-11-24: "Net Win Boost" (wins minus losses).
+    title: 'Net Win Boost',
+    description: 'A set number of ranked net wins on League of Legends.',
     rankSystemId: undefined,
     availability: 'available',
     order: 2,
@@ -73,14 +74,14 @@ export const gameServices: GameServiceOffer[] = [
       {
         type: 'number',
         key: 'wins',
-        label: 'Number of wins',
-        description: 'How many wins should be played (up to 5 per order).',
+        label: 'Number of net wins',
+        description: 'How many net wins should be played (up to 5 per order).',
         required: true,
         defaultValue: 1,
         min: 1,
         max: 5,
         step: 1,
-        unit: 'wins',
+        unit: 'net wins',
         display: 'slider',
       },
       {
@@ -110,9 +111,8 @@ export const gameServices: GameServiceOffer[] = [
     orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
-      rankField('currentRank', 'Current rank', 'lol-ranked', false, 'Your rank before placements, if known.'),
-      // Client PDF 2026-11-19: LP, Queue Type and Server under the division.
-      lpFields('LP')[0],
+      // Client PDF 2026-11-24: the rank and division are required, no Current LP.
+      rankField('currentRank', 'Current rank', 'lol-ranked', true, 'Your rank and division before placements.'),
       queueTypeField(),
       serverField(),
       {

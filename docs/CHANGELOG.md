@@ -2,6 +2,23 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-24 · Rank, Net Win and Placement Boost page changes (client PDFs)
+
+- **Net Win Boost:** League "Win Boost" is now "Net Win Boost" (title, tabs, cards, "Number of net wins", "5 net wins"), at `/lol-net-win-boost`; `/lol-boosting` redirects there permanently (with or without a language prefix, `MOVED_SERVICE_PATHS`). Texts in all five languages.
+- **Placement Boost:** the rank and division are required before payment (server and checkout); the Current LP field is removed.
+- **VPN popup:** turning VPN on opens a popup (title, explanation, searchable country list, Cancel / Save selection). Cancel without a saved country turns VPN back off; the row shows "Country: …" and reopens the popup.
+- **OTP Champ Only:** turning it on clears and locks Specific Champion and Role ("Not available with OTP Champ Only"); the server refuses both together. Fixed: saving Champions & Roles no longer drops the chosen VPN country.
+- **Extra prices:** percentage extras show their percentage ("+30%") instead of the amount; free extras stay "Free"; fixed-amount extras still show the amount. (Prices already applied the percentages.)
+- **Booster cards (available and claimed):** Net Win Boost shows the customer's rank (was "Not specified": the rank system is read from the field) and "Net wins ordered: 5 net wins"; Placement Boost shows the rank and "Placement games ordered: 3 placement games". Payments reasons say "3 net wins" / "5 placement games".
+- **Order page progress for these orders:** "Net win progress" / "Placement progress" with the starting rank, `done/total` and a bar, and the number ordered on the right. The booster's update button becomes "Update net wins" / "Update placement games": a −/+ counter from 0 to the total (starts at the last count + 1). Both views show the same count and the timeline ("2/5 net wins").
+- **Database:** `orderProgressUpdate.gamesDone` (optional integer, migration `20261124120000_progress_games_done`); the row keeps the order's starting rank.
+
+## 2026-11-24 · Order card bidding and main/secondary roles
+
+- **Available Orders card:** one panel at the bottom with the order price (large), then the bid input (always visible, range shown, checked as you type: too low, above the price, or not below the current lowest bid), then "Claim for …". The details now also show LP gains, Current LP, Main role and Secondary role.
+- **Bid range:** from the order price minus 24.5 % up to the order price (`min_bid_bps` default 5000 → 7550, no database override existed). "Claim now" stays the order price minus 25 % (priority and "chosen for you" orders: full price, no bidding). The server's out-of-range error now names the amounts in the order currency.
+- **Roles at checkout:** the Champions & Roles picker has a Main role and a Secondary role row; the secondary can be any lane except the main one and needs a main role first. Saved as `roles: [main, secondary]`; the server refuses more than two roles or the same lane twice. Older orders with more lanes still show them as "Roles". Texts in all five languages.
+
 ## 2026-11-23 · Booster fixes and additions (client PDF)
 
 - **Available Orders card redesigned:** payout first with the currency code ("12.40 EUR"), rank route, a details grid (Server, Queue type, Mode, OTP Champ with portrait, VPN country, roles), champions and extras, "Claim for …" as the main button, bidding folded under "Or bid".

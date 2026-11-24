@@ -25,6 +25,7 @@ import {
   rankRefOf,
   selfCheckLink,
 } from "./progress-updates.service";
+import { orderGameCount } from "./game-count";
 import { getRiotCapabilities, publicRiotCapabilities } from "@/lib/services/games/league-of-legends/capabilities";
 import {
   RIOT_PLATFORMS,
@@ -295,9 +296,13 @@ export async function getOrderWorkspace(
   // Riot tracking is off (decision 2026-11-17): stored matches only count for the Riot ID lock.
   const matchesTotal = await prisma.orderMatch.count({ where: { orderId } });
 
-  // Progress from the booster's reported ranks.
-  const updates = await listProgressUpdates(orderId);
-  const latest = updates[0] ?? null;
+  // Progress from the booster's reported ranks, or games done (Net Win /
+  // Placement Boost, client PDFs 2026-11-24).
+  const games = orderGameCount(order.gameSlug, order.serviceSlug, cfg);
+  const updates = await listProgressUpdates(orderId, 30, games);
+  const gamesDone = updates.find((u) => u.gamesDone !== null)?.gamesDone ?? 0;
+  // A games order has no reported rank: the rank rows keep its starting rank.
+  const latest = games ? null : updates[0] ?? null;
   const startRef = rankRefOf(rankSystemId, cfg.currentRank);
   const targetRef = rankRefOf(rankSystemId, cfg.targetRank);
   const reported = computeReportedProgress(
@@ -313,9 +318,10 @@ export async function getOrderWorkspace(
   const finalRankMissing = targetRef ? await missingFinalRank(orderId) : null;
   const progress: WorkspaceDTO["progress"] = {
     finalRankMissing,
-    kind: startRef && targetRef ? "rank" : "none",
-    status: reported.status,
-    percent: reported.percent,
+    kind: games ? "games" : startRef && targetRef ? "rank" : "none",
+    status: games ? (gamesDone >= games.total ? "complete" : updates.length ? "in_progress" : "waiting") : reported.status,
+    percent: games ? Math.round((Math.min(gamesDone, games.total) / games.total) * 100) : reported.percent,
+    ...(games ? { games: { kind: games.kind, done: Math.min(gamesDone, games.total), total: games.total, unit: games.unit } } : {}),
     lpDelta: null,
     lpRemaining: null,
     stepsDelta: reported.stepsDelta,
@@ -547,8 +553,9 @@ export async function getOrderWorkspace(
     },
     updates: {
       list: updates,
-      // Only rank boosts (start + target) get updates, within the bought range.
-      canPost: viewerIsWorkingBooster && rankOptions.length > 0,
+      // Rank boosts (start + target, within the bought range) and orders counted in games.
+      canPost: viewerIsWorkingBooster && (rankOptions.length > 0 || !!games),
+      games: games ? { kind: games.kind, total: games.total, unit: games.unit, caption: games.caption } : null,
       pointsLabel: pts,
       rankOptions,
       selfCheck: hideAccountFromBooster ? null : selfCheckLink(order.gameSlug, ra ? { gameName: ra.gameName, tagLine: ra.tagLine, platform: platform } : legacyName ? { gameName: legacyName, tagLine: legacyTag, platform } : null),

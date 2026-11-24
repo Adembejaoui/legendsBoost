@@ -57,13 +57,15 @@ describe("Net Wins and Placements extras", () => {
     ]);
     expect(labels(service, "duo")).toEqual(["Priority Order +25%", "Voice Chat +20%", "Moderate KDA +25%", "Hidden Duo +50%"]);
   });
-  it("Net Wins and Placements go up to 5 games with a slider; Placements has LP, Queue Type and Server", () => {
+  it("Net Wins and Placements go up to 5 games with a slider; Placements needs its rank, has Queue Type and Server, no Current LP", () => {
     const field = (service: string, key: string) =>
       getGameServiceOffer("league-of-legends", service)!.fields.find((f) => f.key === key) as { min?: number; max?: number; display?: string };
     expect(field("win-boost", "wins")).toMatchObject({ min: 1, max: 5, display: "slider" });
     expect(field("placement-boost", "placementsRemaining")).toMatchObject({ max: 5, display: "slider" });
     const keys = getGameServiceOffer("league-of-legends", "placement-boost")!.fields.map((f) => f.key);
-    expect(keys).toEqual(expect.arrayContaining(["currentLp", "queueType", "server"]));
+    expect(keys).toEqual(expect.arrayContaining(["currentRank", "queueType", "server"]));
+    expect(keys).not.toContain("currentLp");
+    expect(getGameServiceOffer("league-of-legends", "placement-boost")!.fields.find((f) => f.key === "currentRank")?.required).toBe(true);
   });
   it("Placements can now be bought in Duo (+50%)", () => {
     expect(lol("placement-boost").modes?.map((m) => m.id)).toEqual(["solo", "duo"]);

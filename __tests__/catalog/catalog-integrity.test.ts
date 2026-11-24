@@ -88,7 +88,10 @@ describe.each(services)("%s", (_key, offer) => {
         serviceSlug: offer.serviceSlug,
         configuration,
         selectedMode: mode ?? undefined,
-        selectedOptions: enabledOptionsFor(checkout, mode),
+        // OTP Champ Only replaces Specific Champion and Role (client PDFs 2026-11-24).
+        selectedOptions: enabledOptionsFor(checkout, mode).filter(
+          (id) => !(id === "champions-roles" && enabledOptionsFor(checkout, mode).includes("otp-champion")),
+        ),
         // OTP Champ Only needs its champion.
         ...(enabledOptionsFor(checkout, mode).includes("otp-champion")
           ? { championsRoles: { roles: [], champions: [], otpChampion: champions.find((c) => c.name === "Jinx")!.id } }

@@ -55,7 +55,9 @@ export const CONFIG_SCHEMA = {
   start_sla_min: posInt,
   // Sealed bidding: the first bid of a round starts a window of this length.
   bid_window_sec: z.number().int().min(15).max(3600),
-  // Lowest accepted bid, as a share of the payout ceiling.
+  // Lowest accepted bid, as a share of the payout ceiling. Default 7550:
+  // bids go from the payout minus 24.5 % up to the payout, just above
+  // "claim now" (minus 25 %) (client 2026-11-24).
   min_bid_bps: z.number().int().min(1000).max(10_000),
   // "Claim now" skips bidding at the payout ceiling minus this share.
   claim_now_discount_bps: z.number().int().min(0).max(9000),
@@ -105,7 +107,7 @@ export const CONFIG_DEFAULTS: { [K in ConfigKey]: ConfigValue<K> } = {
   contact_sla_min: 5,
   start_sla_min: 60,
   bid_window_sec: 60,
-  min_bid_bps: 5000,
+  min_bid_bps: 7550,
   claim_now_discount_bps: 2500,
   preferred_booster_window_min: 30,
   release_grace_min: 10,

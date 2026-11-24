@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** What each setting does (shown above the editor). */
 const HELP: Record<string, string> = {
   bid_window_sec: "Length of a bidding window, started by the first bid (seconds).",
-  min_bid_bps: "Lowest accepted bid, as a share of the payout (10000 = 100%).",
+  min_bid_bps: "Lowest accepted bid, as a share of the payout (10000 = 100%; 7550 = payout minus 24.5%).",
   claim_now_discount_bps: "Claim now pays the payout minus this share (2500 = 25%).",
   preferred_booster_window_min: "Minutes a customer-chosen booster has the order alone.",
   max_concurrent_orders: "Active orders per booster (can be raised per booster).",
