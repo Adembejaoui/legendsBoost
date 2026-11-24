@@ -4,6 +4,8 @@ import { getOrderWorkspace, getInitialChatMessages } from "@/lib/orders/workspac
 import OrderWorkspace from "@/components/orders/workspace/OrderWorkspace";
 import type { RawServerMessage } from "@/lib/chat/message-sync";
 import { hasBoosterAccess } from "@/lib/boosters/status";
+import { stallTestToolsEnabled } from "@/lib/boosters/stall";
+import { StallTestPanel } from "@/components/orders/workspace/StallTestPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -33,5 +35,13 @@ export default async function OrderWorkspacePage({ params }: { params: Promise<{
     ? ((await getInitialChatMessages(data.conversationId)) as unknown as RawServerMessage[])
     : [];
 
-  return <OrderWorkspace data={data} initialMessages={initialMessages} />;
+  // Test tool for the stalled order automation: only with STALL_TEST_TOOLS=1, only the order's customer.
+  const stallTest = stallTestToolsEnabled() && data.viewer.role === "customer" && ["CLAIMED", "IN_PROGRESS"].includes(data.order.status);
+
+  return (
+    <>
+      <OrderWorkspace data={data} initialMessages={initialMessages} />
+      {stallTest ? <StallTestPanel orderId={orderId} /> : null}
+    </>
+  );
 }

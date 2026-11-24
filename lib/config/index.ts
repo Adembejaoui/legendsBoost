@@ -50,7 +50,7 @@ export const CONFIG_SCHEMA = {
   // Booster pool (Phase 3): active orders per booster (override per
   // booster on BoosterProfile.maxConcurrentOrders).
   max_concurrent_orders: posInt.max(20),
-  // SLA after a claim: warnings only (no automatic release, decision 2026-11-15).
+  // SLA after a claim: warnings (automatic release: see stall_* below).
   contact_sla_min: posInt,
   start_sla_min: posInt,
   // Sealed bidding: the first bid of a round starts a window of this length.
@@ -88,8 +88,18 @@ export const CONFIG_SCHEMA = {
     .array(z.object({ code: z.string().regex(/^[A-Z_]{2,40}$/), label: z.string().min(2).max(120), amount: z.number().int().min(0).max(1_000_000) }))
     .min(1)
     .max(50),
-  // Not enforced yet (Phase 6).
-  inactivity_release_hours: posInt,
+  // Stalled orders (2026-11-24), measured from the booster's last activity
+  // (message, game, rank update, session; a pause stops the clock):
+  // sound alert when the customer has had no message this long after the
+  // claim, email after stall_email_hours, final warning 1 h before
+  // inactivity_release_hours, then the order is taken back and fined
+  // (a share of the booster's payout; doubled on a 2nd release in 30 days,
+  // doubled and claims blocked on the 3rd).
+  stall_contact_alert_min: posInt.max(24 * 60),
+  stall_email_hours: posInt.max(24 * 7),
+  inactivity_release_hours: posInt.max(24 * 14),
+  stall_fine_not_started_bps: z.number().int().min(0).max(10_000),
+  stall_fine_in_progress_bps: z.number().int().min(0).max(10_000),
   // Completion with proof: the customer has this long to confirm or report a
   // problem before the order confirms itself (decision 2026-11-16).
   auto_confirm_hours: posInt.max(24 * 14),
@@ -140,7 +150,11 @@ export const CONFIG_DEFAULTS: { [K in ConfigKey]: ConfigValue<K> } = {
     { code: "TOXIC_BEHAVIOUR", label: "Toxic behaviour or chat penalties on the account", amount: 1000 },
     { code: "OTHER", label: "Other rule breach (see note)", amount: 0 },
   ],
-  inactivity_release_hours: 12,
+  stall_contact_alert_min: 45,
+  stall_email_hours: 2,
+  inactivity_release_hours: 24,
+  stall_fine_not_started_bps: 1000,
+  stall_fine_in_progress_bps: 2000,
   auto_confirm_hours: 72,
   earnings_hold_hours: 24,
   min_payout_minor: 2000,

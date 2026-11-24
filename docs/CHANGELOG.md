@@ -2,6 +2,19 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-24 · Stalled orders: automatic release and fine
+
+`lib/boosters/stall.ts`, run by the `sla-warnings` job (every 5 minutes, no new cron entry). Measured from the booster's last activity on the order: a message, a game they played, a rank or games update, a play session (an open one counts as now), the start, or the customer resuming. Paused orders are skipped (the resume restarts the clock).
+
+- **45 minutes** after the claim with no message to the customer (`stall_contact_alert_min`): in-app alert with sound, pop-up and desktop notification. Once per assignment.
+- **2 hours** without activity (`stall_email_hours`): email and notification to the booster. Once per quiet spell.
+- **23 hours**: final warning ("taken back in 1 hour"), email and notification with sound.
+- **24 hours** (`inactivity_release_hours`, was unused, default 12 → 24): the order is taken back. Never started → back to the pool; in progress → draft for admin review (pay for work done, new price). Only when the final warning went out at least 30 minutes before, so a job outage never releases without warning. Booster, customer and admins are notified; the booster gets an email.
+- **Fine, automatic:** a share of the booster's payout for that order: `stall_fine_not_started_bps` (10%) or `stall_fine_in_progress_bps` (20%), with an `AUTO_RELEASE` strike. Same ledger postings, appeal and payout deduction as admin fines.
+- **Repeats** (30 days, removed strikes do not count): the 2nd release doubles the fine; the 3rd doubles it and blocks new claims and bids (`boosterProfile.claimBlockedAt`; current orders are not affected) until an admin clicks "Lift block" on the booster's admin page (audited).
+- Every stage is marked with a conditional update before anything is sent, and the release is conditional on the assignment status, so job runs and last-second booster actions never double up.
+- The booster's Fines/Abandoned Orders page explains the rules with the current settings. Migration `20261124140000_stalled_orders` (additive: 3 assignment timestamps, 2 booster profile columns).
+
 ## 2026-11-24 · Customer cashback
 
 - **Earn:** when an order is completed the customer gets `cashback_rate_bps` (5%) of what they actually paid (cash, minus refunds so far), in the order currency, expiring after `cashback_expiry_days` (180). Checkout shows "You earn X cashback when this order is completed" to everyone.

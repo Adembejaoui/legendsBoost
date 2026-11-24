@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@/i18n/navigation";
 import { useToast } from "@/components/ui/toast";
-import { armSoundUnlock, playMessageSound, playPauseSound, playTipSound } from "@/components/realtime/new-order-alert";
+import { armSoundUnlock, playMessageSound, playPauseSound, playTipSound, showDesktopNotification } from "@/components/realtime/new-order-alert";
 import { useNotificationAlerts } from "@/components/realtime/useNotificationAlerts";
 import { NOTIFICATION_TITLES } from "@/lib/notifications/types";
 import { stripLocale } from "@/lib/i18n/alternates";
@@ -38,6 +38,20 @@ export function MessageSoundAlert({ userId }: { userId: string }) {
     if (n.title === NOTIFICATION_TITLES.ORDER_PAUSED_BY_CUSTOMER) {
       toastRef.current({ title: n.title, description: n.message, type: "warning", duration: 30_000, action: open });
       playPauseSound();
+      return;
+    }
+    // Stalled order alerts (2026-11-24): sound, pop-up and, in the background, a desktop notification.
+    const stall = [
+      NOTIFICATION_TITLES.STALL_NO_CONTACT,
+      NOTIFICATION_TITLES.STALL_WARNING,
+      NOTIFICATION_TITLES.STALL_FINAL_WARNING,
+      NOTIFICATION_TITLES.ORDER_AUTO_RELEASED,
+    ];
+    if (n.title && stall.includes(n.title)) {
+      const urgent = n.title !== NOTIFICATION_TITLES.STALL_WARNING;
+      toastRef.current({ title: n.title, description: n.message, type: "warning", duration: urgent ? 60_000 : 20_000, action: open });
+      playPauseSound();
+      showDesktopNotification({ title: n.title ?? "", body: n.message, url: n.orderId ? `/dashboard/${n.orderId}?view=chat` : undefined, tag: `lb-stall-${n.orderId ?? ""}` });
       return;
     }
     if (n.type !== "NEW_MESSAGE") return;

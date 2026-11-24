@@ -117,6 +117,9 @@ export async function verifyBoosterEligibility(userId: string, purpose: "work" |
       "Booster is not approved. Pending, rejected or suspended boosters cannot claim orders."
     );
   }
+  if (purpose === "claim" && user.boosterProfile.claimBlockedAt) {
+    throw new BoosterNotEligibleError("You cannot take new orders until our team reviews your account (orders taken back for inactivity).");
+  }
   if (purpose === "claim" && !canClaimNewOrders(status, user.boosterProfile.trialOrdersRemaining)) {
     throw new BoosterNotEligibleError(
       status === "ON_BREAK"
@@ -1188,4 +1191,130 @@ export async function abandonOrder(
 
   await closeSessions(result.order.id, "RELEASED");
   return result;
+}
+
+/**
+ * Stalled orders (2026-11-24): take an order back from a booster who has
+ * had no activity for `hours` (lib/boosters/stall.ts decides when).
+ *
+ *  - Never started (order CLAIMED): back to the pool, a new booster takes it.
+ *  - In progress: DRAFT for admin review (pay for work done, new price).
+ *  - The booster is fined a share of the payout (issueAutoReleaseFineTx),
+ *    with a strike; repeat offenders pay double and the 3rd release in 30
+ *    days blocks new claims.
+ *
+ * Conditional on the assignment still being in the status it was read in,
+ * so a booster acting at the last second (or a second job run) wins the race
+ * and nothing is released twice. Returns null when nothing was done.
+ */
+export async function autoReleaseStalledAssignment(assignmentId: string, opts: { hours: number; now?: Date }) {
+  const now = opts.now ?? new Date();
+  const result = await prisma.$transaction(async (tx) => {
+    const loaded = await loadAssignmentAndOrder(tx, assignmentId);
+    if (!loaded) return null;
+    const { assignment, order } = loaded;
+    if (!["ASSIGNED", "ACCEPTED", "IN_PROGRESS"].includes(assignment.status)) return null;
+    if (!["CLAIMED", "IN_PROGRESS"].includes(order.status)) return null; // paused, completed, cancelled...
+
+    const started = assignment.status === "IN_PROGRESS" || order.status === "IN_PROGRESS";
+    const toPool = !started && order.status === "CLAIMED" && hasVerifiedPayment(order);
+    validateOrderTransition(order.status, toPool ? "PENDING" : "DRAFT");
+
+    const ended = await tx.orderBoosterAssignment.updateMany({
+      where: { id: assignmentId, status: assignment.status },
+      data: { status: "RELEASED", endedAt: now, endReason: `AUTO_RELEASED: no activity for ${opts.hours} h`, activeOrderId: null },
+    });
+    if (ended.count === 0) return null;
+
+    const snapshot = await tx.orderPricingSnapshot.findUnique({ where: { orderId: order.id }, select: { boosterShareAmount: true, currency: true } });
+    const full = order as typeof order & { boosterPayoutAmount?: number | null; currency?: string | null };
+    const payout = assignment.payoutAmount ?? full.boosterPayoutAmount ?? snapshot?.boosterShareAmount ?? 0;
+    const currency = snapshot?.currency ?? full.currency ?? "EUR";
+
+    const { restoreBidMargin } = await import("@/lib/pool/service");
+    await restoreBidMargin(tx, order.id, assignmentId);
+
+    if (toPool) {
+      await transitionOrder(tx, { where: { id: order.id, status: "CLAIMED", ...VERIFIED_PAYMENT_WHERE }, to: "PENDING" });
+    } else {
+      await transitionOrder(tx, { where: { id: order.id, status: { in: ["CLAIMED", "IN_PROGRESS"] } }, to: "DRAFT" });
+    }
+
+    const { issueAutoReleaseFineTx } = await import("@/lib/boosters/discipline");
+    const penalty = await issueAutoReleaseFineTx(tx, {
+      boosterId: assignment.boosterId,
+      orderId: order.id,
+      started,
+      payout,
+      currency,
+      hours: opts.hours,
+      now,
+    });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "BOOSTER_AUTO_RELEASED",
+        message: `Taken back from the booster after ${opts.hours} hours without activity`,
+        metadata: {
+          assignmentId,
+          boosterId: assignment.boosterId,
+          previousStatus: order.status,
+          toPool,
+          fineId: penalty.fine?.id ?? null,
+          fineAmount: penalty.fine?.amount ?? 0,
+          offence: penalty.offence,
+          blocked: penalty.blocked,
+        },
+      },
+    });
+    if (!toPool) {
+      await tx.orderEvent.create({
+        data: { orderId: order.id, type: "ORDER_MOVED_TO_DRAFT", message: "Order moved to draft for admin review", metadata: { assignmentId, actorUserId: null } },
+      });
+    }
+    await enqueueOutbox(tx, [
+      {
+        type: "EMAIL_BOOSTER_STALL",
+        dedupeKey: `stall-released:${assignmentId}`,
+        payload: { orderId: order.id, boosterId: assignment.boosterId, kind: "released", hours: opts.hours, fineMinor: penalty.fine?.amount ?? 0, currency, blocked: penalty.blocked },
+      },
+    ]);
+    return { order, boosterId: assignment.boosterId as string, toPool, currency, penalty };
+  });
+  if (!result) return null;
+
+  const { order, boosterId, toPool, currency, penalty } = result;
+  await revokeOrderAccess({ userId: boosterId, orderId: order.id });
+  await adviseLoginChange(order.id, boosterId);
+  await closeSessions(order.id, "RELEASED");
+
+  const { formatMoney } = await import("@/lib/money");
+  const { createNotification } = await import("@/lib/notifications/service");
+  const { notifyStrike } = await import("@/lib/boosters/discipline");
+  const fine = penalty.fine ? formatMoney(penalty.fine.amount, currency) : "none";
+  const base = { orderId: order.id, hours: opts.hours, fine, toPool, blocked: penalty.blocked, repeat: penalty.multiplier > 1 ? penalty.offence : null };
+  const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+  const sends: [string, Record<string, unknown>][] = [
+    [boosterId, { ...base, audience: "booster" }],
+    [order.userId, { ...base, audience: "customer" }],
+    ...admins.map((a) => [a.id, { ...base, audience: "admin" }] as [string, Record<string, unknown>]),
+  ];
+  await Promise.all(
+    sends.map(([userId, meta]) =>
+      createNotification(userId, "ORDER_AUTO_RELEASED", order.id, meta, "system", { dedupeKey: `auto-release:${assignmentId}` }).catch((e) =>
+        logger.warn("Auto-release notification failed", { error: e instanceof Error ? e.message : "unknown" })
+      )
+    )
+  );
+  await notifyStrike(penalty.strike);
+
+  await broadcastToOrder({
+    orderId: order.id,
+    event: "order.status_changed",
+    payload: { orderId: order.id, customerId: order.userId, boosterId, previousStatus: order.status, newStatus: toPool ? "PENDING" : "DRAFT", changedAt: now.toISOString() },
+  });
+  if (toPool) await livePool("added");
+  await dispatchOutbox({ limit: 10 }).catch(() => {});
+  return { orderId: order.id, toPool, fine: penalty.fine, offence: penalty.offence, blocked: penalty.blocked };
 }

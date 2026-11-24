@@ -12,7 +12,7 @@ import { RIOT_PLATFORMS } from "@/lib/services/games/league-of-legends/routing";
 import { getConfig } from "@/lib/config";
 import { getFineSchedule, STRIKE_LABEL, strikeSummary } from "@/lib/boosters/discipline";
 import { formatMoney } from "@/lib/money";
-import { FineDecision, IssueFineForm, RemoveStrike } from "@/components/discipline/DisciplineControls";
+import { FineDecision, IssueFineForm, LiftClaimBlock, RemoveStrike } from "@/components/discipline/DisciplineControls";
 import {
   BoosterStatusActions,
   KycControls,
@@ -175,9 +175,22 @@ export default async function AdminBoosterPage({ params }: { params: Promise<{ u
         <KycControls userId={user.id} status={p.kycStatus} />
       </section>
 
+      {p.claimBlockedAt ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-400/40 bg-rose-500/10 p-4">
+          <div>
+            <h2 className="font-semibold text-rose-100">Cannot take new orders</h2>
+            <p className="text-sm text-rose-200/80">
+              Blocked automatically on {p.claimBlockedAt.toISOString().slice(0, 16).replace("T", " ")}: {p.claimBlockedReason ?? "orders taken back for inactivity"}.
+              Current orders are not affected.
+            </p>
+          </div>
+          <LiftClaimBlock userId={user.id} />
+        </section>
+      ) : null}
+
       <section className={card}>
         <h2 className="font-semibold">
-          Strikes <span className="text-sm font-normal text-zinc-400">· {strikes.last30Days} in the last 30 days (no automatic suspension)</span>
+          Strikes <span className="text-sm font-normal text-zinc-400">· {strikes.last30Days} in the last 30 days (3 orders taken back for inactivity in 30 days block new claims)</span>
         </h2>
         {strikes.strikes.length === 0 ? (
           <p className="text-sm text-zinc-500">No strikes.</p>

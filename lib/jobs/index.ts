@@ -16,6 +16,7 @@ import { runProgressReminders } from "@/lib/orders/progress-updates.service";
 import { acquireLease, releaseLease, type RawDb } from "./lease";
 import { refreshFxRates } from "@/lib/currency/rates";
 import { runAdminAlerts } from "@/lib/automation/admin-alerts";
+import { runStalledOrders } from "@/lib/boosters/stall";
 
 export interface JobDefinition {
   /** Lease length: longer than the job can ever take. */
@@ -43,13 +44,15 @@ export const JOBS: Record<string, JobDefinition> = {
   /**
    * Contact / start SLA warnings after a claim, inactivity and missing rank
    * updates (warnings only), plus the admin alerts: late or failed jobs,
-   * unclaimed orders, completions and tickets waiting (2026-11-24).
+   * unclaimed orders, completions and tickets waiting, and stalled orders:
+   * alert, email, final warning, then taken back with a fine (2026-11-24).
    */
   "sla-warnings": {
     leaseMs: 4 * 60_000,
     run: async () => ({
       ...(await runSlaWarnings()),
       ...(await runInactivityWarnings()),
+      ...(await runStalledOrders()),
       ...(await runProgressReminders()),
       ...(await runAdminAlerts()),
     }),

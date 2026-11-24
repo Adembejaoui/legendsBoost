@@ -69,6 +69,8 @@ export interface BoosterForPool {
   limit: number;
   activeCount: number;
   permissions: PermissionLike[];
+  /** Set after repeated automatic releases (lib/boosters/stall.ts). */
+  claimBlockedAt?: Date | null;
 }
 
 export async function loadBoosterForPool(boosterId: string, db: Db = prisma): Promise<BoosterForPool> {
@@ -89,11 +91,16 @@ export async function loadBoosterForPool(boosterId: string, db: Db = prisma): Pr
     limit,
     activeCount,
     permissions: (p.permissions ?? []) as PermissionLike[],
+    claimBlockedAt: p.claimBlockedAt ?? null,
   };
 }
 
+export const CLAIM_BLOCKED_MESSAGE =
+  "You cannot take new orders: several of your orders were taken back for inactivity. Our team will review your account; contact support.";
+
 /** Why this booster cannot take any new order right now (null = can). */
 export function boosterBlockReason(b: BoosterForPool): string | null {
+  if (b.claimBlockedAt) return CLAIM_BLOCKED_MESSAGE;
   if (!canClaimNewOrders(b.status, b.trialOrdersRemaining)) {
     if (b.status === "ON_BREAK") return "You are on a break. End your break to take new orders.";
     if (b.status === "TRIAL") return "Your trial orders are used up. An admin will review your trial before you can take more.";
@@ -449,11 +456,11 @@ export async function takeOrderTx(
 
   // Lock the booster row; TRIAL boosters use one trial order (never below 0).
   const trial = await tx.boosterProfile.updateMany({
-    where: { userId: boosterId, verificationStatus: "TRIAL", trialOrdersRemaining: { gt: 0 } },
+    where: { userId: boosterId, verificationStatus: "TRIAL", trialOrdersRemaining: { gt: 0 }, claimBlockedAt: null },
     data: { trialOrdersRemaining: { decrement: 1 } },
   });
   if (trial.count === 0) {
-    const active = await tx.boosterProfile.updateMany({ where: { userId: boosterId, verificationStatus: "APPROVED" }, data: { updatedAt: now } });
+    const active = await tx.boosterProfile.updateMany({ where: { userId: boosterId, verificationStatus: "APPROVED", claimBlockedAt: null }, data: { updatedAt: now } });
     if (active.count === 0) throw new BoosterNotEligibleError("Your booster account cannot take new orders right now.");
   }
   const held = await tx.orderBoosterAssignment.count({ where: { boosterId, status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] } } });

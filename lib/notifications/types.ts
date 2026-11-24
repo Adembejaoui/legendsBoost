@@ -49,7 +49,12 @@ export type NotificationEventType =
   | "SYSTEM_JOB_ALERT"
   | "ORDER_UNCLAIMED"
   | "COMPLETION_WAITING"
-  | "SUPPORT_TICKET_WAITING";
+  | "SUPPORT_TICKET_WAITING"
+  // Stalled orders (2026-11-24), stored under existing types.
+  | "STALL_NO_CONTACT"
+  | "STALL_WARNING"
+  | "STALL_FINAL_WARNING"
+  | "ORDER_AUTO_RELEASED";
 
 export interface NotificationEventMetadata {
   orderId?: string;
@@ -98,6 +103,10 @@ const NOTIFICATION_STORED_AS = {
   ORDER_UNCLAIMED: "SLA_WARNING",
   COMPLETION_WAITING: "COMPLETION_REVIEW",
   SUPPORT_TICKET_WAITING: "SUPPORT_TICKET_CREATED",
+  STALL_NO_CONTACT: "SLA_WARNING",
+  STALL_WARNING: "INACTIVITY_WARNING",
+  STALL_FINAL_WARNING: "INACTIVITY_WARNING",
+  ORDER_AUTO_RELEASED: "BOOSTER_REMOVED",
 } as const;
 
 /** Event types that exist as database NotificationType values. */
@@ -160,6 +169,10 @@ export const NOTIFICATION_TITLES: Record<NotificationEventType, string> = {
   ORDER_UNCLAIMED: "Order Waiting For A Booster",
   COMPLETION_WAITING: "Completion Still Waiting",
   SUPPORT_TICKET_WAITING: "Ticket Waiting For A Reply",
+  STALL_NO_CONTACT: "Message Your Customer Now",
+  STALL_WARNING: "Order Needs Activity",
+  STALL_FINAL_WARNING: "Order Taken Back In 1 Hour",
+  ORDER_AUTO_RELEASED: "Order Taken Back",
 };
 
 export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: NotificationEventMetadata) => string> = {
@@ -243,4 +256,22 @@ export const NOTIFICATION_MESSAGES: Record<NotificationEventType, (metadata?: No
     `The support ticket "${meta?.ticketSubject ?? ""}" has been waiting ${String(meta?.hours ?? "")} hours for a reply. Open Admin, Support.`,
   CHAT_FLAGGED: (meta) =>
     `A message on order #${meta?.orderId?.slice(-8).toUpperCase() ?? ""} contained ${String(meta?.kinds ?? "contact details")}; it was hidden.`,
+  STALL_NO_CONTACT: (meta) =>
+    `You took order #${ref(meta)} ${String(meta?.minutes ?? 45)} minutes ago and have not messaged the customer yet. Say hello in the order chat now.`,
+  STALL_WARNING: (meta) =>
+    `No messages, games or rank updates on order #${ref(meta)} for ${String(meta?.hours ?? 2)} hours. After ${String(meta?.releaseHours ?? 24)} hours without activity the order is taken back and you are fined.`,
+  STALL_FINAL_WARNING: (meta) =>
+    `Order #${ref(meta)} has had no activity for ${String(meta?.hours ?? 23)} hours. Message the customer or play now, or it will be taken back in 1 hour and you will be fined.`,
+  ORDER_AUTO_RELEASED: (meta) =>
+    meta?.audience === "booster"
+      ? `Order #${ref(meta)} was taken back after ${String(meta?.hours ?? 24)} hours without activity. Fine: ${String(meta?.fine ?? "none")}${meta?.repeat ? ` (doubled: ${String(meta.repeat)} orders taken back in 30 days)` : ""}. You can appeal it on Fines/Abandoned Orders.${meta?.blocked ? " You cannot take new orders until our team reviews your account." : ""}`
+      : meta?.audience === "customer"
+        ? meta?.toPool
+          ? `Your booster was inactive, so order #${ref(meta)} is back on the marketplace and a new booster will take it shortly.`
+          : `Your booster was inactive, so we took order #${ref(meta)} back. Our team will assign a new booster and keep your progress.`
+        : `Order #${ref(meta)} was taken back from its booster after ${String(meta?.hours ?? 24)} hours without activity (${meta?.toPool ? "back in the pool" : "moved to draft for review"}). Fine: ${String(meta?.fine ?? "none")}.${meta?.blocked ? " The booster can no longer take new orders: lift it on their admin page." : ""}`,
 };
+
+function ref(meta?: NotificationEventMetadata) {
+  return meta?.orderId?.slice(-8).toUpperCase() ?? "";
+}

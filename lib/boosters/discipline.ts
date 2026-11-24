@@ -15,7 +15,7 @@
  */
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
-import { getConfig } from "@/lib/config";
+import { getConfig, getConfigIn } from "@/lib/config";
 import { postLedger } from "@/lib/finance/ledger";
 import { writeAudit } from "@/lib/finance/audit";
 import { formatMoney } from "@/lib/money";
@@ -37,7 +37,102 @@ export const STRIKE_LABEL: Record<string, string> = {
   LATE_RELEASE: "Order dropped after the grace window",
   SLA_START: "Order not started in time",
   FINE: "Fine",
+  AUTO_RELEASE: "Order taken back for inactivity",
 };
+
+/* ------------------------------------------------------------------ */
+/* Automatic release fine (stalled orders, 2026-11-24)                 */
+/* ------------------------------------------------------------------ */
+
+export const AUTO_RELEASE_FINE_LABEL = {
+  AUTO_RELEASE_NOT_STARTED: "Order taken back: not started and no activity",
+  AUTO_RELEASE_IN_PROGRESS: "Order taken back: no activity while in progress",
+} as const;
+
+/**
+ * Fine for an order taken back automatically: a share of the booster's
+ * payout for that order (not started / in progress), doubled when the
+ * booster already had an automatic release in the last 30 days. The 3rd in
+ * 30 days also blocks new claims until an admin lifts it. Runs inside the
+ * release transaction: fine, ledger, strike and block commit together.
+ */
+export async function issueAutoReleaseFineTx(
+  tx: Tx,
+  p: { boosterId: string; orderId: string; started: boolean; payout: number; currency: string; hours: number; now?: Date }
+) {
+  const now = p.now ?? new Date();
+  const since = new Date(now.getTime() - STRIKE_WINDOW_DAYS * 86_400_000);
+  const [notStartedBps, inProgressBps, previous] = await Promise.all([
+    getConfigIn(tx, "stall_fine_not_started_bps"),
+    getConfigIn(tx, "stall_fine_in_progress_bps"),
+    tx.boosterStrike.count({ where: { boosterId: p.boosterId, code: "AUTO_RELEASE", removedAt: null, createdAt: { gte: since } } }),
+  ]);
+  const offence = previous + 1;
+  const multiplier = offence >= 2 ? 2 : 1;
+  const bps = p.started ? inProgressBps : notStartedBps;
+  const payout = Number.isSafeInteger(p.payout) && p.payout > 0 ? p.payout : 0;
+  // Never more than the payout itself.
+  const amount = Math.min(payout, Math.round((payout * bps) / 10_000) * multiplier);
+  const code = p.started ? "AUTO_RELEASE_IN_PROGRESS" : "AUTO_RELEASE_NOT_STARTED";
+  const label = AUTO_RELEASE_FINE_LABEL[code];
+  const note =
+    `No messages, games or rank updates for ${p.hours} hours. ${bps / 100}% of the order payout` +
+    (multiplier > 1 ? `, doubled (${offence} orders taken back in ${STRIKE_WINDOW_DAYS} days).` : ".");
+
+  let fine: { id: string; amount: number; currency: string } | null = null;
+  if (amount > 0) {
+    fine = await tx.boosterFine.create({
+      data: { boosterId: p.boosterId, orderId: p.orderId, code, amount, currency: p.currency, note, issuedById: "system" },
+      select: { id: true, amount: true, currency: true },
+    });
+    await postLedger(tx, [
+      {
+        type: "BOOSTER_FINE", account: "BOOSTER_PAYABLE", amount: -amount, currency: p.currency, idempotencyKey: `fine:${fine.id}:payable`,
+        boosterId: p.boosterId, orderId: p.orderId, description: `Fine: ${label}`,
+      },
+      {
+        type: "BOOSTER_FINE", account: "PLATFORM_REVENUE", amount, currency: p.currency, idempotencyKey: `fine:${fine.id}:platform`,
+        boosterId: p.boosterId, orderId: p.orderId, description: `Fine: ${label}`,
+      },
+    ]);
+  }
+  const strike = await addStrike(tx, { boosterId: p.boosterId, orderId: p.orderId, code: "AUTO_RELEASE", note: label, fineId: fine?.id ?? null });
+
+  let blocked = false;
+  if (offence >= 3) {
+    const reason = `${offence} orders taken back for inactivity in ${STRIKE_WINDOW_DAYS} days`;
+    const profile = await tx.boosterProfile.findUnique({ where: { userId: p.boosterId }, select: { id: true, claimBlockedAt: true } });
+    if (profile && !profile.claimBlockedAt) {
+      await tx.boosterProfile.update({ where: { id: profile.id }, data: { claimBlockedAt: now, claimBlockedReason: reason } });
+      await tx.boosterEvent.create({ data: { boosterProfileId: profile.id, type: "CLAIMS_BLOCKED", actorId: null, metadata: { reason, orderId: p.orderId } } });
+    }
+    blocked = true;
+  }
+  await writeAudit(tx, {
+    actorId: null,
+    action: "AUTO_RELEASE_FINE",
+    entityType: "boosterFine",
+    entityId: fine?.id ?? strike.id,
+    details: { orderId: p.orderId, boosterId: p.boosterId, amount, currency: p.currency, bps, multiplier, offence, blocked },
+  });
+  return { fine, strike, offence, multiplier, blocked };
+}
+
+/** Admin: let a booster take new orders again after an automatic block. */
+export async function liftClaimBlock(adminId: string, boosterId: string, note: string) {
+  await assertAdmin(adminId);
+  const n = note?.trim();
+  if (!n || n.length < 3) throw new DisciplineError("Give a reason for lifting the block.", 400);
+  return prisma.$transaction(async (tx) => {
+    const profile = await tx.boosterProfile.findUnique({ where: { userId: boosterId }, select: { id: true, claimBlockedAt: true, claimBlockedReason: true } });
+    if (!profile) throw new DisciplineError("Booster not found.", 404);
+    if (!profile.claimBlockedAt) throw new DisciplineError("This booster is not blocked.", 409);
+    await tx.boosterProfile.update({ where: { id: profile.id }, data: { claimBlockedAt: null, claimBlockedReason: null } });
+    await tx.boosterEvent.create({ data: { boosterProfileId: profile.id, type: "CLAIMS_UNBLOCKED", actorId: adminId, metadata: { note: n.slice(0, 500), was: profile.claimBlockedReason } } });
+    await writeAudit(tx, { actorId: adminId, action: "CLAIMS_UNBLOCKED", entityType: "boosterProfile", entityId: profile.id, details: { note: n } });
+    return { unblocked: true };
+  });
+}
 
 async function assertAdmin(userId: string) {
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });

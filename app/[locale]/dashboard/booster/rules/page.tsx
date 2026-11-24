@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { getDashboardContext } from "@/lib/dashboard/get-dashboard-context";
-import { getFineSchedule, STRIKE_LABEL, strikeSummary } from "@/lib/boosters/discipline";
+import { AUTO_RELEASE_FINE_LABEL, getFineSchedule, STRIKE_LABEL, strikeSummary } from "@/lib/boosters/discipline";
+import { stallSettings } from "@/lib/boosters/stall";
+import { getConfig } from "@/lib/config";
 import { formatMoney, toDecimalString } from "@/lib/money";
 import { AppealForm } from "@/components/discipline/DisciplineControls";
 
@@ -30,11 +32,15 @@ export default async function BoosterRulesPage() {
   if (!ctx) redirect("/login");
   if (ctx.user.role !== "BOOSTER") redirect("/dashboard");
 
-  const [schedule, strikes, fines] = await Promise.all([
+  const [schedule, strikes, fines, stall, notStartedBps, inProgressBps] = await Promise.all([
     getFineSchedule(),
     strikeSummary(ctx.user.id),
     prisma.boosterFine.findMany({ where: { boosterId: ctx.user.id }, orderBy: { createdAt: "desc" }, take: 50 }),
+    stallSettings(),
+    getConfig("stall_fine_not_started_bps"),
+    getConfig("stall_fine_in_progress_bps"),
   ]);
+  const fineLabel = (c: string) => schedule.find((r) => r.code === c)?.label ?? AUTO_RELEASE_FINE_LABEL[c as keyof typeof AUTO_RELEASE_FINE_LABEL] ?? c;
 
   return (
     <div className="space-y-6">
@@ -64,7 +70,7 @@ export default async function BoosterRulesPage() {
                   <tr key={f.id} className="border-t border-white/5 align-top">
                     <td className="px-3 py-2 font-mono text-zinc-200">#{f.orderId.slice(-8).toUpperCase()}</td>
                     <td className="space-y-1.5 px-3 py-2">
-                      <p className="font-medium text-zinc-100">{schedule.find((r) => r.code === f.code)?.label ?? f.code}</p>
+                      <p className="font-medium text-zinc-100">{fineLabel(f.code)}</p>
                       {f.note ? <p className="text-zinc-400">{f.note}</p> : null}
                       <p className="text-xs text-zinc-500">
                         {f.createdAt.toISOString().slice(0, 10)} ·{" "}
@@ -86,9 +92,26 @@ export default async function BoosterRulesPage() {
       </section>
 
       <section className={card}>
+        <h2 className="text-sm font-semibold text-white">Inactive orders</h2>
+        <p className="text-xs text-zinc-400">
+          Activity means a message to the customer, a game, a rank or games update or a play session. A paused order does not count.
+        </p>
+        <ul className="list-disc space-y-1 ps-5 text-sm text-zinc-300">
+          <li>{stall.contactMin} minutes after you take an order with no message to the customer: alert with sound.</li>
+          <li>{stall.emailHours} hours without activity: warning by email.</li>
+          <li>{stall.releaseHours - 1} hours without activity: final warning.</li>
+          <li>
+            {stall.releaseHours} hours without activity: the order is taken back and you are fined {notStartedBps / 100}% of its payout if you never started
+            it, {inProgressBps / 100}% if it was in progress.
+          </li>
+          <li>Second order taken back within 30 days: the fine is doubled. Third: doubled, and you cannot take new orders until our team reviews your account.</li>
+        </ul>
+      </section>
+
+      <section className={card}>
         <h2 className="text-sm font-semibold text-white">Fine schedule</h2>
         <p className="text-xs text-zinc-400">
-          Fines are issued by our team, never automatically, and are taken off your next payout. You can appeal each fine once.
+          Fines are issued by our team, except for inactive orders (below), and are taken off your next payout. You can appeal each fine once.
           Releasing an order within the first minutes (before starting) is free; later it gives a strike.
         </p>
         <ul className="divide-y divide-white/5 text-sm">

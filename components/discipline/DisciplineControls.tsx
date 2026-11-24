@@ -177,3 +177,24 @@ export function IssueFineForm({
     </div>
   );
 }
+
+/** Admin: let a booster take new orders again after an automatic claim block. */
+export function LiftClaimBlock({ userId }: { userId: string }) {
+  const { busy, error, run } = useAction();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          const note = window.prompt("Why lift the block? (kept in the audit log)");
+          if (note && note.trim().length >= 3) void run(() => send(`/api/admin/boosters/${userId}/claim-block`, "DELETE", { note: note.trim() }));
+        }}
+        className={`${btn} bg-emerald-500 text-black hover:bg-emerald-400`}
+      >
+        Lift block
+      </button>
+      {error ? <span className="text-xs text-rose-400">{error}</span> : null}
+    </span>
+  );
+}

@@ -41,7 +41,9 @@ export type OutboxMessage =
   /** "Your customer needs your attention" email to the booster (Poke booster). */
   | { type: "EMAIL_BOOSTER_POKE"; payload: { orderId: string; boosterId: string } }
   /** "The customer paused your order" email to the assigned booster. */
-  | { type: "EMAIL_ORDER_PAUSED"; payload: { orderId: string; boosterId: string } };
+  | { type: "EMAIL_ORDER_PAUSED"; payload: { orderId: string; boosterId: string } }
+  /** Stalled order: 2 h warning, final warning, "order taken back" (lib/boosters/stall.ts). */
+  | { type: "EMAIL_BOOSTER_STALL"; payload: import("@/lib/email/booster-stall").StallEmailPayload };
 
 export async function enqueueOutbox(
   tx: Prisma.TransactionClient,
@@ -86,6 +88,10 @@ const handlers: Record<OutboxMessage["type"], Handler> = {
   EMAIL_ORDER_PAUSED: (async (p: { orderId: string; boosterId: string }) => {
     const { sendOrderPausedEmail } = await import("@/lib/email/order-paused");
     await sendOrderPausedEmail(p.orderId, p.boosterId);
+  }) as Handler,
+  EMAIL_BOOSTER_STALL: (async (p: import("@/lib/email/booster-stall").StallEmailPayload) => {
+    const { sendBoosterStallEmail } = await import("@/lib/email/booster-stall");
+    await sendBoosterStallEmail(p);
   }) as Handler,
   POOL_SIGNAL: (async (p: Extract<OutboxMessage, { type: "POOL_SIGNAL" }>["payload"]) => {
     const { signalPool } = await import("@/lib/realtime/live");
