@@ -2,6 +2,22 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-25 · Landing cards, customer cashback in header, one orders page
+
+- **Landing page:** the League / TFT / VALORANT cards now open their game page (they had an arrow but no link).
+- **Customer header:** small cashback card (balance per currency, 0 in the site currency when none), links to the Cashback page. Customers only.
+- **Customer orders:** Overview, My Orders and Order History opened the same list; the menu now has one "My Orders". Tabs are Active (default), Completed, Cancelled, All. An empty Active tab says "No active orders" with a link to all orders instead of "no orders yet".
+
+## 2026-11-25 · Sales pages: Arena, Normal Games, Champion Mastery
+
+Client PDF "All Sales Page Changes".
+
+- **Renamed:** LoL Arena Boost, LoL Normal Games Boost, LoL Boost Champion Mastery (catalog, templates, 4 translations). Slugs unchanged, so existing orders keep working.
+- **New addresses:** `/lol-normal-games-boost` and `/lol-champion-mastery-boost`; `/normal-games` and `/champion-mastery` redirect permanently (`MOVED_SERVICE_PATHS`).
+- **Normal Games: games or wins.** New `countType` field shown as two buttons with hover help. Wins cost +50% on the per-game amount (`lib/pricing/count-type.ts`); orders without the field count as games. The order is now counted like Arena (booster posts 0/5 → 5/5).
+- **Available / claimed order cards:** Champion Mastery shows "Level 4 → Level 6" and the champion; Normal Games shows Games or Wins, the quantity, a win rule and the game modes; Arena already showed rank and wins.
+- **Opened order:** checkout values shown as the customer chose them (option labels, champion name, "Level 6", game modes) instead of stored codes.
+
 ## 2026-11-24 · Stalled orders: automatic release and fine
 
 `lib/boosters/stall.ts`, run by the `sla-warnings` job (every 5 minutes, no new cron entry). Measured from the booster's last activity on the order: a message, a game they played, a rank or games update, a play session (an open one counts as now), the start, or the customer resuming. Paused orders are skipped (the resume restarts the clock).

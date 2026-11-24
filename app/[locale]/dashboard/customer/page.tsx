@@ -16,7 +16,8 @@ const LIMIT = 10;
 
 function buildHref(tab: string, status: string | undefined, page: number) {
   const params = new URLSearchParams();
-  if (tab !== "all") params.set("tab", tab);
+  // Active is the default tab (client 2026-11-25), so it needs no parameter.
+  if (tab !== "active") params.set("tab", tab);
   if (status) params.set("status", status);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
@@ -85,7 +86,7 @@ export default async function CustomerDashboardPage({
 
   const tab = sp.tab && ["all", "active", "completed", "cancelled"].includes(sp.tab)
     ? (sp.tab as "all" | "active" | "completed" | "cancelled")
-    : "all";
+    : "active";
 
   const requestedPage = Math.max(1, parseInt(sp.page || "1", 10) || 1);
 
@@ -170,7 +171,7 @@ export default async function CustomerDashboardPage({
         <section className="mt-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Your orders</h2>
+              <h2 className="text-lg font-semibold text-white">My orders</h2>
               <p className="text-sm text-zinc-400">
                 {total === 0
                   ? "No orders yet"
@@ -181,10 +182,10 @@ export default async function CustomerDashboardPage({
               <div className="flex items-center gap-3">
                 <div className="flex gap-1">
                   {[
-                    { key: "all", label: "All", count: counts.all },
                     { key: "active", label: "Active", count: counts.active },
                     { key: "completed", label: "Completed", count: counts.completed },
                     { key: "cancelled", label: "Cancelled", count: counts.cancelled },
+                    { key: "all", label: "All", count: counts.all },
                   ].map((item) => {
                     const isActive = tab === item.key;
                     const href = buildHref(item.key, undefined, 1);
@@ -220,7 +221,7 @@ export default async function CustomerDashboardPage({
                 />
                 {statusFilter && (
                   <Link
-                    href={buildHref("all", undefined, 1)}
+                    href={buildHref("active", undefined, 1)}
                     className="rounded-lg px-3 py-2.5 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white"
                   >
                     Clear
@@ -250,7 +251,9 @@ export default async function CustomerDashboardPage({
               ))}
             </ul>
           ) : (
-            <CustomerEmptyState variant={statusFilter ? "filtered" : "default"} />
+            <CustomerEmptyState
+              variant={totalOrders === 0 ? "default" : statusFilter || tab !== "active" ? "filtered" : "no-active"}
+            />
           )}
 
           {totalPages > 1 && orders.length > 0 && (

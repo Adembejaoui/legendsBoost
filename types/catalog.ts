@@ -34,6 +34,8 @@ export interface ConfigOption {
   label: string
   value: string
   iconSrc?: string
+  /** Help text shown when hovering (or focusing) the option. */
+  description?: string
 }
 
 export interface VisibilityCondition {
@@ -61,6 +63,8 @@ export interface RankPickerField extends ConfigFieldBase {
 export interface SelectField extends ConfigFieldBase {
   type: 'select'
   options: ConfigOption[]
+  /** Dropdown (default) or side-by-side buttons for a few options. */
+  display?: 'dropdown' | 'toggle'
 }
 
 export interface MultiSelectField extends ConfigFieldBase {

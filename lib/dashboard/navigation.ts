@@ -47,9 +47,10 @@ export const iconMap: Record<string, any> = {
 
 export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
   CUSTOMER: [
-    { id: "customer-overview", label: "Overview", href: "/dashboard/customer", icon: "LayoutDashboard" },
+    // One page for current and past orders (client 2026-11-25): Overview,
+    // My Orders and Order History all opened the same list. Active by default;
+    // the Completed / Cancelled / All tabs are the history.
     { id: "customer-orders", label: "My Orders", href: "/dashboard/customer", icon: "Package" },
-    { id: "customer-history", label: "Order History", href: "/dashboard/customer?tab=completed", icon: "History" },
     { id: "customer-notifications", label: "Notifications", href: "/dashboard/notifications", icon: "Bell" },
     { id: "customer-cashback", label: "Cashback", href: "/dashboard/customer/cashback", icon: "Wallet" },
     { id: "customer-profile", label: "My Profile", href: "/dashboard/customer/profile", icon: "User" },

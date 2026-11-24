@@ -7,7 +7,7 @@ import { ServiceConfiguratorLayout } from '@/components/service-configurator/Ser
 import { ServicePageHeader } from '@/components/service-configurator/ServicePageHeader'
 import { ServiceNavigationTabs } from '@/components/service-configurator/ServiceNavigationTabs'
 import { RankPicker } from '@/components/service-configurator/RankSelectionCard'
-import { InlineSelectField, SelectField } from '@/components/service-configurator/SelectField'
+import { InlineSelectField, SelectField, ToggleSelectField } from '@/components/service-configurator/SelectField'
 import { NumberField } from '@/components/service-configurator/NumberField'
 import { CheckoutPanel } from '@/components/checkout/CheckoutPanel'
 import { ServiceFaq } from '@/components/service-configurator/ServiceFaq'
@@ -166,8 +166,9 @@ export function ServiceConfiguratorNew({ game, offer, template, rankSystems, cha
     if (field.type === 'rank-picker') continue // handled above
     if (inlineKeys.has(field.key)) continue // in the current-rank box
     if (field.type === 'select') {
+      const Select = field.display === 'toggle' ? ToggleSelectField : SelectField
       leftContent.push(
-        <SelectField
+        <Select
           key={field.key}
           label={(field as any).label}
           description={(field as any).description}

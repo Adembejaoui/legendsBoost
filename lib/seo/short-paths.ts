@@ -11,8 +11,8 @@ export const SHORT_SERVICE_PATHS: Record<string, string> = {
   "league-of-legends/win-boost": "/lol-net-win-boost",
   "league-of-legends/placement-boost": "/lol-placement-boost",
   "league-of-legends/arena-boost": "/lol-arena-boost",
-  "league-of-legends/champion-mastery": "/champion-mastery",
-  "league-of-legends/normal-matches": "/normal-games",
+  "league-of-legends/champion-mastery": "/lol-champion-mastery-boost",
+  "league-of-legends/normal-matches": "/lol-normal-games-boost",
 };
 
 /**
@@ -21,6 +21,9 @@ export const SHORT_SERVICE_PATHS: Record<string, string> = {
  */
 export const MOVED_SERVICE_PATHS: Record<string, string> = {
   "/lol-boosting": "/lol-net-win-boost",
+  // Client PDF 2026-11-25: pages renamed.
+  "/champion-mastery": "/lol-champion-mastery-boost",
+  "/normal-games": "/lol-normal-games-boost",
 };
 
 /** The address to link to for a service page (short when it has one). */

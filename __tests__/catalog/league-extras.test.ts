@@ -158,3 +158,78 @@ describe("Champion Mastery", () => {
     expect(labels("champion-mastery", "solo")).toEqual(["Priority Order +25%", "Stream Games +15%", "Appear Offline Free"]);
   });
 });
+
+describe("Normal Games, Arena and Mastery pages (client PDF 2026-11-25)", () => {
+  it("renamed pages, new addresses, old addresses redirect", async () => {
+    expect(getGameServiceOffer("league-of-legends", "normal-matches")!.title).toBe("LoL Normal Games Boost");
+    expect(getGameServiceOffer("league-of-legends", "champion-mastery")!.title).toBe("LoL Boost Champion Mastery");
+    expect(getGameServiceOffer("league-of-legends", "arena-boost")!.title).toBe("LoL Arena Boost");
+    const { MOVED_SERVICE_PATHS, servicePath } = await import("@/lib/seo/short-paths");
+    expect(servicePath("league-of-legends", "normal-matches")).toBe("/lol-normal-games-boost");
+    expect(servicePath("league-of-legends", "champion-mastery")).toBe("/lol-champion-mastery-boost");
+    expect(MOVED_SERVICE_PATHS["/normal-games"]).toBe("/lol-normal-games-boost");
+    expect(MOVED_SERVICE_PATHS["/champion-mastery"]).toBe("/lol-champion-mastery-boost");
+  });
+
+  it("Normal Games: games or wins, wins cost 50% more on the per-game amount", async () => {
+    const { calculateQuote } = await import("@/lib/pricing/engine");
+    const offer = getGameServiceOffer("league-of-legends", "normal-matches")!;
+    const checkout = lol("normal-matches");
+    const price = {
+      id: "p", version: 1, gameSlug: "league-of-legends", serviceSlug: "normal-matches", currency: "USD",
+      pricingModel: "PER_UNIT" as const, baseAmount: 0, stepAmounts: null, unitFieldKey: "matches", unitAmount: 300,
+      optionPricing: {}, modePricing: {},
+    };
+    const policy = { id: "pol", platformFeeBps: 2000, boosterShareBps: 8000 };
+    const total = (countType?: string) => {
+      const v = validateOrderInput(offer, checkout, {
+        gameSlug: "league-of-legends", serviceSlug: "normal-matches", selectedOptions: [],
+        configuration: { matches: 4, ...(countType ? { countType } : {}) },
+      });
+      if (!v.ok) throw new Error(v.errors.join("; "));
+      const r = calculateQuote(offer, checkout, price, policy, v.value);
+      if (!r.ok) throw new Error(r.reason);
+      return r.quote.subtotalAmount;
+    };
+    expect(total()).toBe(1200);
+    expect(total("games")).toBe(1200);
+    expect(total("wins")).toBe(1800);
+    expect(
+      validateOrderInput(offer, checkout, {
+        gameSlug: "league-of-legends", serviceSlug: "normal-matches", selectedOptions: [],
+        configuration: { matches: 4, countType: "losses" },
+      }).ok
+    ).toBe(false);
+  });
+
+  it("Normal Games orders are counted in games or wins; VALORANT Unrated is not", async () => {
+    const { orderGameCount, countLabel } = await import("@/lib/orders/game-count");
+    const wins = orderGameCount("league-of-legends", "normal-matches", { matches: 3, countType: "wins" })!;
+    expect(wins).toMatchObject({ kind: "normal-wins", total: 3, caption: "Normal wins ordered" });
+    expect(countLabel(wins.total, wins.unit)).toBe("3 normal wins");
+    expect(orderGameCount("league-of-legends", "normal-matches", { matches: 1 })).toMatchObject({ kind: "normal-games", unit: "normal games" });
+    expect(orderGameCount("valorant", "unrated-matches", { matches: 3 })).toBeNull();
+  });
+
+  it("cards show mastery levels and games or wins", async () => {
+    const { serviceRoute } = await import("@/lib/orders/game-count");
+    expect(serviceRoute("league-of-legends", "champion-mastery", { champion: JINX, currentLevel: 4, targetLevel: 6 })).toEqual({
+      start: { caption: "Current mastery", value: "Level 4" },
+      count: { caption: "Desired mastery", value: "Level 6" },
+    });
+    expect(serviceRoute("league-of-legends", "normal-matches", { countType: "wins" })?.start?.value).toBe("Wins");
+    expect(serviceRoute("league-of-legends", "rank-boost", {})).toBeNull();
+  });
+});
+
+describe("Opened order shows checkout values (client PDF 2026-11-25)", () => {
+  it("labels, champion names and mastery levels instead of stored codes", async () => {
+    const { formatFieldValue } = await import("@/lib/orders/workspace-data");
+    const field = (service: string, key: string) => getGameServiceOffer("league-of-legends", service)!.fields.find((f) => f.key === key)!;
+    expect(formatFieldValue(field("normal-matches", "countType"), "wins")).toBe("Wins");
+    expect(formatFieldValue(field("normal-matches", "gameModes"), ["aram", "draft-pick"])).toBe("ARAM, Draft Pick");
+    expect(formatFieldValue(field("champion-mastery", "champion"), JINX)).toBe("Jinx");
+    expect(formatFieldValue(field("champion-mastery", "targetLevel"), 6)).toBe("Level 6");
+    expect(formatFieldValue(field("arena-boost", "arenaWins"), 3)).toBe("3");
+  });
+});

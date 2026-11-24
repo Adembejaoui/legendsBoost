@@ -273,4 +273,19 @@ export const catalogFr: Record<string, string> = {
   "What happens when the wins are done?": "Que se passe-t-il une fois les victoires obtenues ?",
   "Your booster completes the order with screenshots, which you see on your order page. Our team checks them and marks the order Completed. If something is wrong, report a problem.":
     "Votre booster termine la commande avec des captures, visibles sur la page de votre commande. Notre équipe les vérifie et marque la commande Terminée. En cas de souci, signalez un problème.",
+  // Client PDF 2026-11-25: renamed services, Normal Games games/wins.
+  "LoL Arena Boost": "Boost Arena LoL",
+  "LoL Normal Games Boost": "Boost Parties Normales LoL",
+  "LoL Boost Champion Mastery": "Boost Maîtrise de Champion LoL",
+  "Normal (unranked) games or wins on League of Legends with optional game-mode preferences.": "Parties ou victoires normales (non classées) sur League of Legends, avec vos modes de jeu préférés en option.",
+  "Normal (unranked) games or wins played with optional game-mode preferences.": "Parties ou victoires normales (non classées), avec vos modes de jeu préférés en option.",
+  "Games or Wins": "Parties ou victoires",
+  "Pay per game played, or only for games won.": "Payez par partie jouée, ou seulement pour les parties gagnées.",
+  "Games": "Parties",
+  "Wins": "Victoires",
+  "Every normal game played counts, won or lost.": "Chaque partie normale jouée compte, gagnée ou perdue.",
+  "Only games won count. Costs 50% more per game.": "Seules les parties gagnées comptent. Coûte 50 % de plus par partie.",
+  "Number of games or wins": "Nombre de parties ou de victoires",
+  "How many normal games (or wins) should be played.": "Combien de parties normales (ou de victoires) à jouer.",
+  "games": "parties",
 };

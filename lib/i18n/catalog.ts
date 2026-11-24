@@ -36,7 +36,7 @@ export function rankLabel(ct: CatalogText, rankSystemId: string | undefined, sel
   return [tier ? ct(tier.name) : selection.tierId, division?.label].filter(Boolean).join(" ");
 }
 
-type Field = { label: string; description?: string; group?: string; unit?: string; optionLabel?: string; options?: { label: string; value: string }[] };
+type Field = { label: string; description?: string; group?: string; unit?: string; optionLabel?: string; options?: { label: string; value: string; description?: string }[] };
 
 /** A copy of an order-form field with its shown texts translated. */
 export function localizeField<F extends Field>(f: F, ct: CatalogText): F {
@@ -47,6 +47,6 @@ export function localizeField<F extends Field>(f: F, ct: CatalogText): F {
     ...(f.group !== undefined ? { group: ct(f.group) } : {}),
     ...(f.unit !== undefined ? { unit: ct(f.unit) } : {}),
     ...(f.optionLabel !== undefined ? { optionLabel: ct(f.optionLabel) } : {}),
-    ...(f.options ? { options: f.options.map((o) => ({ ...o, label: ct(o.label) })) } : {}),
+    ...(f.options ? { options: f.options.map((o) => ({ ...o, label: ct(o.label), ...(o.description !== undefined ? { description: ct(o.description) } : {}) })) } : {}),
   };
 }

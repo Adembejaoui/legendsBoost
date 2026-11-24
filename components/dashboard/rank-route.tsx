@@ -95,11 +95,14 @@ export function RankRoute({
   from,
   to,
   count,
+  start,
   className,
 }: {
   from: Rank | null;
   to?: Rank | null;
   count?: { caption: string; value: string } | null;
+  /** Left side when the order has no starting rank ("Counted in: Wins", "Level 4"). */
+  start?: { caption: string; value: string } | null;
   className?: string;
 }) {
   return (
@@ -109,7 +112,7 @@ export function RankRoute({
         className,
       )}
     >
-      <Side caption="From" rank={from} align="left" />
+      {!from && start ? <Side caption={start.caption} text={start.value} align="left" /> : <Side caption="From" rank={from} align="left" />}
       <svg
         viewBox="0 0 24 24"
         className="h-5 w-5 text-zinc-600"

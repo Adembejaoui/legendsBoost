@@ -12,6 +12,7 @@ import type { NormalizedOrderInput } from "./order-input";
 import type { PriceAdjustment, ServicePriceConfig } from "./price-config";
 import { unitsFor } from "./units";
 import { CURRENT_LP_DISCOUNT_BPS, CURRENT_LP_FIELD, LP_GAIN_ADJUSTMENT_BPS, LP_GAIN_FIELD } from "./lp-modifiers";
+import { COUNT_TYPE_ADJUST_BPS, COUNT_TYPE_FIELD } from "./count-type";
 
 export interface QuoteLine {
   code: string;
@@ -156,7 +157,16 @@ export function calculateQuote(
     const counted = unitsFor(price.unitFieldKey, input.configuration, offer.fields);
     if (!counted.ok) return { ok: false, reason: counted.reason };
     const units = counted.units;
-    lines.push({ code: `UNITS:${price.unitFieldKey}`, label: `${units} x unit price`, amount: units * price.unitAmount });
+    const unitsAmount = units * price.unitAmount;
+    lines.push({ code: `UNITS:${price.unitFieldKey}`, label: `${units} x unit price`, amount: unitsAmount });
+    // Normal Games: wins instead of games (lib/pricing/count-type.ts).
+    const countType = input.configuration[COUNT_TYPE_FIELD];
+    if (typeof countType === "string") {
+      const bps = COUNT_TYPE_ADJUST_BPS[countType];
+      if (bps === undefined) return { ok: false, reason: "Choose games or wins." };
+      const adj = bpsOfRounded(unitsAmount, bps);
+      if (adj !== 0) lines.push({ code: `COUNT:${countType}`, label: `Counted in ${countType} (+${bps / 100}%)`, amount: adj });
+    }
   }
 
   const serviceAmount = lines.reduce((a, l) => a + l.amount, 0);

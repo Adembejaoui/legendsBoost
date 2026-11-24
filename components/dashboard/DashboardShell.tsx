@@ -2,7 +2,7 @@
 
 import { Link, usePathname } from "@/i18n/navigation";
 import { useState } from "react";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { iconMap, getNavigation } from "@/lib/dashboard/navigation";
 import type { UserRole } from "@/lib/dashboard/navigation";
@@ -89,9 +89,37 @@ interface DashboardShellProps {
   user: DashboardUser;
   children: React.ReactNode;
   initialUnreadCount?: number;
+  /** Customers only: cashback balance per currency (minor units). */
+  cashback?: { amount: number; currency: string }[] | null;
 }
 
-export function DashboardShell({ role, user, children, initialUnreadCount = 0 }: DashboardShellProps) {
+function formatMinor(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount / 100);
+  } catch {
+    return `${(amount / 100).toFixed(2)} ${currency}`;
+  }
+}
+
+/** Small header card: the customer's cashback balance, links to the cashback page. */
+function CashbackBadge({ balances }: { balances: { amount: number; currency: string }[] }) {
+  const text = balances.map((b) => formatMinor(b.amount, b.currency)).join(" · ");
+  return (
+    <Link
+      href="/dashboard/customer/cashback"
+      title="Cashback balance: use it at checkout"
+      className="flex items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1.5 transition-colors hover:border-emerald-400/50 hover:bg-emerald-500/15"
+    >
+      <Wallet className="size-4 shrink-0 text-emerald-300" />
+      <span className="flex flex-col leading-tight">
+        <span className="hidden text-[10px] uppercase tracking-[0.12em] text-emerald-300/80 sm:block">Cashback</span>
+        <span className="text-sm font-semibold tabular-nums text-emerald-100">{text}</span>
+      </span>
+    </Link>
+  );
+}
+
+export function DashboardShell({ role, user, children, initialUnreadCount = 0, cashback = null }: DashboardShellProps) {
   const [open, setOpen] = useState(false);
   return (
     <ToastProvider>
@@ -120,6 +148,7 @@ export function DashboardShell({ role, user, children, initialUnreadCount = 0 }:
                   <span className="text-sm font-medium text-zinc-300">Dashboard</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  {role === "CUSTOMER" && cashback && cashback.length > 0 ? <CashbackBadge balances={cashback} /> : null}
                   <NotificationBell initialUnreadCount={initialUnreadCount} isAdmin={role === "ADMIN"} />
                   {user.image ? (
                     <img src={user.image} alt="" className="size-8 rounded-full object-cover" />

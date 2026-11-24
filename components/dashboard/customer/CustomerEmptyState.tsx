@@ -16,10 +16,18 @@ const EMPTY_STATE_CONFIG: Record<string, { icon: React.ComponentType<{ className
     ctaLabel: "Clear filter",
     ctaHref: "/dashboard/customer",
   },
+  // Active tab (the default) of a customer whose orders are all finished.
+  "no-active": {
+    icon: CheckCircle2,
+    title: "No active orders",
+    description: "Your finished orders are under Completed, Cancelled and All.",
+    ctaLabel: "See all orders",
+    ctaHref: "/dashboard/customer?tab=all",
+  },
 };
 
 interface CustomerEmptyStateProps {
-  variant?: "default" | "filtered";
+  variant?: "default" | "filtered" | "no-active";
 }
 
 export function CustomerEmptyState({ variant = "default" }: CustomerEmptyStateProps) {

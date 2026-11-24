@@ -3,6 +3,7 @@ import type { SessionUser } from "@/lib/auth/guards";
 import { getGame } from "@/lib/catalog/games";
 import { getServiceTemplate } from "@/lib/catalog/service-templates";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
+import type { ConfigField } from "@/types/catalog";
 import { getTier, getDivision, formatRankLabel } from "@/lib/catalog/rank-systems";
 import { getChampion } from "@/lib/catalog/champions";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
@@ -141,6 +142,19 @@ function catalogRankDTO(rankSystemId: string, value: unknown): WorkspaceRankDTO 
   };
 }
 
+/** A configuration value as shown at checkout (labels, not stored codes). */
+export function formatFieldValue(field: ConfigField, value: unknown, offerRankSystemId?: string): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (field.type === "select" && typeof value === "string") return field.options.find((o) => o.value === value)?.label ?? value;
+  if (field.type === "multi-select" && Array.isArray(value)) {
+    const labels = value.filter((v): v is string => typeof v === "string").map((v) => field.options.find((o) => o.value === v)?.label ?? v);
+    return labels.length ? labels.join(", ") : null;
+  }
+  if (field.type === "champion-picker" && typeof value === "string") return getChampion(value)?.name ?? value;
+  if (field.type === "number" && typeof value === "number" && field.optionLabel) return field.optionLabel.replace("{n}", String(value));
+  return formatConfigValue(value, field.type === "rank-picker" ? field.rankSystemId : offerRankSystemId);
+}
+
 function formatConfigValue(value: unknown, rankSystemId?: string): string | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "object" && value && "tierId" in value && rankSystemId) {
@@ -264,8 +278,11 @@ export async function getOrderWorkspace(
   // Order details: render configuration fields from the offer definition, so
   // labels are real and nothing is invented.
   const details: { label: string; value: string }[] = [];
+  // Values as the customer saw them at checkout (client PDF 2026-11-25):
+  // option labels, champion names, "Level 4". The server has its own row.
   for (const field of offer?.fields ?? []) {
-    const v = formatConfigValue(cfg[field.key], "rankSystemId" in field ? field.rankSystemId : offer?.rankSystemId);
+    if (field.key === "server") continue;
+    const v = formatFieldValue(field, cfg[field.key], offer?.rankSystemId);
     if (v) details.push({ label: field.label, value: v });
   }
   const notes = typeof cfg.notes === "string" ? cfg.notes : typeof cfg.additionalInfo === "string" ? cfg.additionalInfo : null;

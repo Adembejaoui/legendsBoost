@@ -133,7 +133,8 @@ export const gameServices: GameServiceOffer[] = [
   {
     gameSlug: 'league-of-legends',
     serviceSlug: 'arena-boost',
-    title: 'Arena Boost',
+    // Client PDF 2026-11-25: "LoL Arena Boost".
+    title: 'LoL Arena Boost',
     description: 'Arena mode wins (1st place finishes) on League of Legends, on your account or together with a pro.',
     rankSystemId: undefined,
     availability: 'available',
@@ -164,8 +165,9 @@ export const gameServices: GameServiceOffer[] = [
   {
     gameSlug: 'league-of-legends',
     serviceSlug: 'normal-matches',
-    title: 'Normal Matches',
-    description: 'Normal (unranked) matches on League of Legends with optional game-mode preferences.',
+    // Client PDF 2026-11-25: renamed, and the customer picks games or wins.
+    title: 'LoL Normal Games Boost',
+    description: 'Normal (unranked) games or wins on League of Legends with optional game-mode preferences.',
     rankSystemId: undefined,
     availability: 'available',
     order: 5,
@@ -175,16 +177,30 @@ export const gameServices: GameServiceOffer[] = [
     complianceStatus: 'pending-review',
     fields: [
       {
+        type: 'select',
+        key: 'countType',
+        label: 'Games or Wins',
+        description: 'Pay per game played, or only for games won.',
+        // Optional: older orders have no value and count as games.
+        required: false,
+        defaultValue: 'games',
+        display: 'toggle',
+        options: [
+          { label: 'Games', value: 'games', description: 'Every normal game played counts, won or lost.' },
+          { label: 'Wins', value: 'wins', description: 'Only games won count. Costs 50% more per game.' },
+        ],
+      },
+      {
         type: 'number',
         key: 'matches',
-        label: 'Number of matches',
-        description: 'How many normal matches should be played.',
+        label: 'Number of games or wins',
+        description: 'How many normal games (or wins) should be played.',
         required: true,
         defaultValue: 1,
         min: 1,
         max: 50,
         step: 1,
-        unit: 'matches',
+        unit: 'games',
       },
       {
         type: 'multi-select',
@@ -203,7 +219,8 @@ export const gameServices: GameServiceOffer[] = [
   {
     gameSlug: 'league-of-legends',
     serviceSlug: 'champion-mastery',
-    title: 'Champion Mastery',
+    // Client PDF 2026-11-25: "LoL Boost Champion Mastery".
+    title: 'LoL Boost Champion Mastery',
     description: 'Mastery progress on a specific League of Legends champion.',
     rankSystemId: undefined,
     availability: 'available',

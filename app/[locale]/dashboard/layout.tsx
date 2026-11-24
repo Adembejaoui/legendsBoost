@@ -14,6 +14,8 @@ import { AdminOrderAlert } from "@/components/realtime/AdminOrderAlert";
 import { MessageSoundAlert } from "@/components/realtime/MessageSoundAlert";
 import { hasBoosterAccess } from "@/lib/boosters/status";
 import { VerifyEmailBanner } from "@/components/account/VerifyEmailBanner";
+import { cashbackSummary } from "@/lib/cashback/service";
+import { getRequestCurrency } from "@/lib/currency/server";
 
 /** Events on the user's own channel that make dashboard pages refetch. */
 const USER_LIVE_EVENTS = ["notification.created", "notification.read", "notification.all_read", "live.refresh", "order.access_revoked"] as const;
@@ -33,10 +35,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ctx.user.role === "BOOSTER" && ctx.boosterProfile && !ctx.boosterProfile.welcomeModalSeen;
 
   const unreadCount = await getUnreadCount(ctx.user.id);
+  // Customers: cashback balance in the header (client 2026-11-25). Updates
+  // with LiveRefresh like the bell. No balance yet: 0 in the site currency.
+  let cashback: { amount: number; currency: string }[] | null = null;
+  if (ctx.user.role === "CUSTOMER") {
+    const { balances } = await cashbackSummary(ctx.user.id);
+    const live = balances.filter((b) => b.available > 0).map((b) => ({ amount: b.available, currency: b.currency }));
+    cashback = live.length ? live : [{ amount: 0, currency: await getRequestCurrency() }];
+  }
   const showOrderAlert = ctx.user.role === "BOOSTER" && hasBoosterAccess(ctx.boosterProfile?.verificationStatus);
 
   return (
-    <DashboardShell role={ctx.user.role} user={dashboardUser} initialUnreadCount={unreadCount}>
+    <DashboardShell role={ctx.user.role} user={dashboardUser} initialUnreadCount={unreadCount} cashback={cashback}>
       {/* Live: lists, counts and the notification bell update without a refresh. */}
       <LiveRefresh subscriptions={[{ channel: userChannel(ctx.user.id), events: USER_LIVE_EVENTS }]} />
       {/* Boosters: pop-up + sound for new orders on every page. */}

@@ -32,7 +32,7 @@ export const serviceTemplates: ServiceTemplate[] = [
   {
     id: 'arena-boost',
     slug: 'arena-boost',
-    title: 'Arena Boost',
+    title: 'LoL Arena Boost',
     description:
       'Arena mode wins. This service does not use a ranked ladder; its fields are defined by the Arena offer configuration.',
     icon: Star,
@@ -41,15 +41,15 @@ export const serviceTemplates: ServiceTemplate[] = [
   {
     id: 'normal-matches',
     slug: 'normal-matches',
-    title: 'Normal Matches',
-    description: 'Normal (unranked) matches played with optional game-mode preferences.',
+    title: 'LoL Normal Games Boost',
+    description: 'Normal (unranked) games or wins played with optional game-mode preferences.',
     icon: Gamepad2,
     category: 'Normal',
   },
   {
     id: 'champion-mastery',
     slug: 'champion-mastery',
-    title: 'Champion Mastery',
+    title: 'LoL Boost Champion Mastery',
     description:
       'Mastery progress on a specific champion. Champion options come from a configurable champion data source.',
     icon: Medal,

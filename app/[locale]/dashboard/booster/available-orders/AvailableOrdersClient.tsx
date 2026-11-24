@@ -15,7 +15,7 @@ import { asRecord, RankRoute, readRank } from "@/components/dashboard/rank-route
 import { formatMoney, toDecimalString } from "@/lib/money";
 import { vpnCountryName } from "@/lib/catalog/vpn-countries";
 import { LOL_ROLES } from "@/lib/catalog/champions";
-import { countLabel, orderGameCount } from "@/lib/orders/game-count";
+import { countLabel, orderGameCount, serviceRoute } from "@/lib/orders/game-count";
 import { useLiveRefresh } from "@/components/realtime/LiveRefresh";
 import { poolChannel } from "@/lib/realtime/channel-names";
 
@@ -252,6 +252,14 @@ function OrderCard({
   const currentLp = field("currentLp");
   const otp = otpId ? championsById.get(otpId) : undefined;
   const isLeague = order.gameSlug === "league-of-legends";
+  // What the customer bought at checkout (client PDF 2026-11-25): mastery
+  // champion and levels, Normal Games games or wins and game modes.
+  const route = serviceRoute(order.gameSlug, order.serviceSlug, config);
+  const masteryChampId = typeof config.champion === "string" ? config.champion : null;
+  const masteryChamp = masteryChampId ? championsById.get(masteryChampId) : undefined;
+  const gameModes = Array.isArray(config.gameModes)
+    ? config.gameModes.map((m) => selectLabel(order.gameSlug, order.serviceSlug, "gameModes", m)).filter((m): m is string => !!m)
+    : [];
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0b0f19]">
@@ -278,13 +286,21 @@ function OrderCard({
       </header>
 
       <div className="flex flex-1 flex-col p-5">
-        <RankRoute from={currentRank} to={targetRank} count={count} />
+        <RankRoute from={currentRank} to={targetRank} count={route?.count ?? count} start={route?.start} />
 
         <dl className="mt-4 divide-y divide-white/[0.06] border-y border-white/[0.06]">
           {server ? <DetailRow label="Server">{server}</DetailRow> : null}
           {queue ? <DetailRow label="Queue type">{queue}</DetailRow> : null}
           <DetailRow label="Mode">{mode}</DetailRow>
           {games?.kind === "arena-wins" ? <DetailRow label="Win rule">1st place only</DetailRow> : null}
+          {masteryChampId ? (
+            <DetailRow label="Champion">
+              {masteryChamp?.iconSrc ? <Image src={masteryChamp.iconSrc} alt="" width={20} height={20} className="size-5 rounded-full" /> : null}
+              <span className="truncate">{masteryChamp?.name ?? masteryChampId}</span>
+            </DetailRow>
+          ) : null}
+          {games?.kind === "normal-wins" ? <DetailRow label="Win rule">Only won games count</DetailRow> : null}
+          {gameModes.length > 0 ? <DetailRow label="Game modes">{gameModes.join(", ")}</DetailRow> : null}
           {lpGain ? <DetailRow label="LP gains">{lpGain}</DetailRow> : null}
           {currentLp ? <DetailRow label="Current LP">{currentLp}</DetailRow> : null}
           {roles.length > 2 ? (
