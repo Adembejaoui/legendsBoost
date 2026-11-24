@@ -20,7 +20,8 @@ export type LedgerAccountName =
   | "BOOSTER_PAYABLE"
   | "BOOSTER_PAYOUTS"
   | "STRIPE_FEES"
-  | "DISPUTE_LOSSES";
+  | "DISPUTE_LOSSES"
+  | "CUSTOMER_CREDIT";
 
 export type LedgerTransactionType =
   | "CUSTOMER_PAYMENT"
@@ -38,7 +39,13 @@ export type LedgerTransactionType =
   | "BOOSTER_FINE_REVERSAL"
   | "TIP_PAYMENT"
   | "TIP_COMMISSION"
-  | "TIP_BOOSTER_SHARE";
+  | "TIP_BOOSTER_SHARE"
+  | "CASHBACK_EARNED"
+  | "CASHBACK_SPENT"
+  | "CASHBACK_EXPIRED"
+  | "CASHBACK_REVERSED"
+  | "CASHBACK_RETURNED"
+  | "CASHBACK_ADJUSTED";
 
 export interface Posting {
   type: LedgerTransactionType;

@@ -53,6 +53,7 @@ export default async function AdminFinancePage() {
           <Link href="/dashboard/admin/finance/pricing" className="rounded-md bg-white/10 px-3 py-1.5">Pricing &amp; commission</Link>
           <Link href="/dashboard/admin/finance/transactions" className="rounded-md bg-white/10 px-3 py-1.5">Transactions</Link>
           <Link href="/dashboard/admin/finance/coupons" className="rounded-md bg-white/10 px-3 py-1.5">Discount codes</Link>
+          <Link href="/dashboard/admin/finance/cashback" className="rounded-md bg-white/10 px-3 py-1.5">Cashback</Link>
         </div>
       </div>
 

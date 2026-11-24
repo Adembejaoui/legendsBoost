@@ -19,6 +19,8 @@ export function withFixedQuote(actual: typeof PricingService): typeof PricingSer
         serviceTitle: request.serviceSlug,
         estimate: null,
         coupon: null,
+        cashback: null,
+        cashbackEarn: 0,
         input: {
           gameSlug: request.gameSlug,
           serviceSlug: request.serviceSlug,
@@ -32,6 +34,7 @@ export function withFixedQuote(actual: typeof PricingService): typeof PricingSer
           lines: [{ code: "BASE", label: "Base price", amount: 10000 }],
           subtotalAmount: 10000,
           discountAmount: 0,
+          cashbackAmount: 0,
           taxAmount: 0,
           totalAmount: 10000,
           commissionBaseAmount: 10000,

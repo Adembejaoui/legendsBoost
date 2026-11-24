@@ -16,6 +16,7 @@
  * Order.paymentVerifiedAt.
  */
 import prisma from "@/lib/prisma";
+import { confirmCashbackSpent } from "@/lib/cashback/service";
 import type Stripe from "stripe";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { constructWebhookEvent, fromStripeCurrency, getStripe, getWebhookSecret, liveModeAllowed, safeErrorMessage, StripeConfigError } from "@/lib/stripe/server";
@@ -311,6 +312,7 @@ async function applySessionPaid(tx: Tx, s: Stripe.Checkout.Session, eventId: str
       description: `${snap.boosterShareBps / 100}% booster share`,
     },
   ]);
+  await confirmCashbackSpent(tx, { orderId: order.id, paymentId: payment.id });
   await reserveBoosterShare(tx, order, snap);
   await tx.orderEvent.create({
     data: {

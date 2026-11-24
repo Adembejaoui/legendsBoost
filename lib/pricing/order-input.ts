@@ -55,6 +55,11 @@ export const orderRequestSchema = z
      * service's own price-list currency.
      */
     currency: z.enum(SITE_CURRENCIES).optional(),
+    /**
+     * Pay part of the order with the customer's cashback (2026-11-24). Only a
+     * yes/no: the server computes the amount from the balance.
+     */
+    useCashback: z.boolean().optional(),
     /** The total the customer was shown; must equal the server quote. */
     expectedTotal: z
       .object({ amount: z.number().int().min(0).max(MAX_AMOUNT), currency: z.string().length(3) })
@@ -75,6 +80,8 @@ export interface NormalizedOrderInput {
   couponCode?: string;
   /** Currency to charge; absent = the price list's own (keeps older request hashes stable). */
   currency?: string;
+  /** Pay with cashback; absent when not asked (keeps older request hashes stable). */
+  useCashback?: true;
 }
 
 type Result = { ok: true; value: NormalizedOrderInput } | { ok: false; errors: string[] };
@@ -252,6 +259,7 @@ export function validateOrderInput(
       championsRoles,
       ...(input.couponCode ? { couponCode: input.couponCode.trim().toUpperCase() } : {}),
       ...(input.currency ? { currency: input.currency } : {}),
+      ...(input.useCashback === true ? { useCashback: true as const } : {}),
     },
   };
 }

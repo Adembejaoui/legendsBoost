@@ -6,6 +6,7 @@
  * a schedule there.
  */
 import { logger } from "@/lib/logger";
+import { expireCashback } from "@/lib/cashback/service";
 import { dispatchOutbox } from "@/lib/payments/outbox";
 import { closeStaleCheckoutHolds } from "@/lib/payments/checkout.service";
 import { closeDueBidding } from "@/lib/pool/service";
@@ -31,7 +32,8 @@ export const JOBS: Record<string, JobDefinition> = {
   /** Close unpaid checkout holds past their TTL (paid-only orders). */
   "close-stale-holds": {
     leaseMs: 4 * 60_000,
-    run: async () => ({ closed: await closeStaleCheckoutHolds(null, new Date(), 100) }),
+    // Also closes expired customer cashback (2026-11-24).
+    run: async () => ({ closed: await closeStaleCheckoutHolds(null, new Date(), 100), ...(await expireCashback()) }),
   },
   /** Award orders whose bidding window ended (also done lazily on pool reads). */
   "close-bidding": {

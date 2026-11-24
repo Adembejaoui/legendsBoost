@@ -241,7 +241,11 @@
     "vpnSave": "حفظ الاختيار",
     "vpnCancel": "إلغاء",
     "vpnIn": "الدولة: {country}",
-    "lockedByOtp": "غير متاح مع OTP Champ Only."
+    "lockedByOtp": "غير متاح مع OTP Champ Only.",
+    "cashbackUse": "استخدم رصيد الاسترداد",
+    "cashbackAvailable": "{amount} متاح",
+    "cashbackLine": "استرداد نقدي",
+    "cashbackEarn": "تحصل على {amount} استردادًا نقديًا عند اكتمال هذا الطلب."
   },
   "ChampionsModal": {
     "aria": "الأبطال والأدوار",

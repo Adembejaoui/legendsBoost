@@ -24,9 +24,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
   try {
-    const { quote, serviceTitle, estimate, coupon } = await buildServerQuote(parsed.data, undefined, { customerId: user?.id });
+    // Cashback is the customer's own: only for a signed-in customer account.
+    const customerId = user && (user.role ?? "CUSTOMER") === "CUSTOMER" ? user.id : undefined;
+    const { quote, serviceTitle, estimate, coupon, cashback, cashbackEarn } = await buildServerQuote(parsed.data, undefined, { customerId });
     return NextResponse.json({
-      quote: { ...publicQuote(quote), estimate, coupon: coupon ? { code: coupon.code, applied: coupon.applied, reason: coupon.reason } : null },
+      quote: {
+        ...publicQuote(quote),
+        estimate,
+        coupon: coupon ? { code: coupon.code, applied: coupon.applied, reason: coupon.reason } : null,
+        cashback: cashback ? { available: cashback.available, applied: cashback.applied } : null,
+        cashbackEarn,
+      },
       serviceTitle,
     });
   } catch (e) {

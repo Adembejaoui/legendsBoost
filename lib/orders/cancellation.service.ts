@@ -16,6 +16,7 @@
  * so a concurrent payment confirmation can never be overwritten by a cancel.
  */
 import prisma from "@/lib/prisma";
+import { releaseCashbackForOrder } from "@/lib/cashback/service";
 import { Prisma } from "@/app/generated/prisma/client";
 import { createNotificationsForEvent } from "@/lib/notifications/service";
 import { broadcastToOrder } from "@/lib/realtime/broadcast";
@@ -118,6 +119,8 @@ export async function cancelOrderByCustomer(orderId: string, userId: string, rea
         },
         to: "CANCELLED",
       });
+      // Cashback reserved for this unpaid order comes back.
+      await releaseCashbackForOrder(tx, orderId);
     } catch (error) {
       if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2025") {
         throw new OrderCancellationError("This order changed in the meantime. Refresh and try again.", 409);

@@ -13,6 +13,7 @@
  * Nothing here marks an order paid: only a verified webhook does.
  */
 import prisma from "@/lib/prisma";
+import { releaseCashbackForOrder } from "@/lib/cashback/service";
 import type Stripe from "stripe";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { getAppUrl, getStripe, safeErrorMessage, StripeConfigError, toStripeCurrency } from "@/lib/stripe/server";
@@ -64,6 +65,8 @@ export async function closeCheckoutHold(tx: Tx, orderId: string, reason: string)
     to: "CANCELLED",
   });
   if (r.count === 0) return false;
+  // Cashback reserved for this checkout comes back.
+  await releaseCashbackForOrder(tx, orderId);
   const open = await tx.payment.findMany({
     where: { orderId, status: { in: ["CREATED", "OPEN"] } },
     select: { id: true, stripeCheckoutSessionId: true },

@@ -2,6 +2,19 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-24 · Customer cashback
+
+- **Earn:** when an order is completed the customer gets `cashback_rate_bps` (5%) of what they actually paid (cash, minus refunds so far), in the order currency, expiring after `cashback_expiry_days` (180). Checkout shows "You earn X cashback when this order is completed" to everyone.
+- **Spend:** signed-in customers with a balance see "Use my cashback (X available)" at checkout. The browser only sends yes/no; the server computes the amount: at most `cashback_max_order_bps` (50%) of the amount left after a discount code, and never more than the platform fee left (cashback is platform-funded, like codes: the booster share never changes). Saved on the price snapshot (`cashbackAmount`, part of `discountAmount`).
+- **Safe against double spending:** the credit is reserved inside the order transaction under a per-customer database lock and re-checked; a second checkout racing for the same credit is refused (409, "review the new total").
+- **Unpaid checkout:** closing it (expired, abandoned, failed, cancelled) gives the credit back with the same expiry (abandoning cannot extend credit). The reservation reaches the ledger only when the payment is confirmed.
+- **Refunds:** cashback earned on an order is taken back at its rate on the amount refunded or lost in a dispute (it may leave a debt the next credit pays first); cashback used on an order comes back in proportion to a refund (not a chargeback), lasting at least 30 days.
+- **Expiry:** the 15-minute `close-stale-holds` job also closes expired credit (no new cron entry).
+- **Customer page:** Dashboard → Cashback: available balance per currency, what expires soon, and the history (earned, used, given back, expired, adjusted).
+- **Admin page:** Finance → Cashback: amount owed per currency (ledger), earned / used / expired totals, recent activity, and a form to add or remove credit by customer email with a reason (audited; cannot remove more than the balance).
+- **Security and integrity:** `cashbackEntry` is append-only (database trigger, like the ledger), with CHECK rules on sign, currency, expiry and admin notes, row level security on, and a unique idempotency key per change. The balance is always computed from the history, never stored. New ledger account `CUSTOMER_CREDIT` and six `CASHBACK_*` transaction types keep the finance invariant (docs/FINANCIAL-LEDGER-DESIGN.md).
+- Settings: `cashback_enabled`, `cashback_rate_bps`, `cashback_max_order_bps`, `cashback_expiry_days`. Migration `20261124130000_cashback` (additive).
+
 ## 2026-11-24 · Admin alerts (automation)
 
 Four checks in `lib/automation/admin-alerts.ts`, run by the existing `sla-warnings` job (every 5 minutes on cron-job.org, no new cron entry). In-app notifications (bell, sound, list), each sent once (dedupe key, checked before inserting).

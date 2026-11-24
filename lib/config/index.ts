@@ -74,6 +74,12 @@ export const CONFIG_SCHEMA = {
   unclaimed_alert_min: posInt.max(24 * 60),
   completion_wait_alert_hours: posInt.max(24 * 7),
   ticket_reply_alert_hours: posInt.max(24 * 7),
+  // Customer cashback (2026-11-24): share of the paid amount credited when an
+  // order is completed, the most of an order it can pay, and how long it lasts.
+  cashback_enabled: z.boolean(),
+  cashback_rate_bps: z.number().int().min(0).max(2000),
+  cashback_max_order_bps: z.number().int().min(0).max(10_000),
+  cashback_expiry_days: posInt.max(3650),
   // Phase 7: payouts are locked this long after a payout method change.
   payout_method_cooldown_hours: z.number().int().min(0).max(24 * 30),
   // Phase 6: published fine schedule (admins issue fines; amounts are the
@@ -120,6 +126,10 @@ export const CONFIG_DEFAULTS: { [K in ConfigKey]: ConfigValue<K> } = {
   unclaimed_alert_min: 30,
   completion_wait_alert_hours: 4,
   ticket_reply_alert_hours: 12,
+  cashback_enabled: true,
+  cashback_rate_bps: 500,
+  cashback_max_order_bps: 5000,
+  cashback_expiry_days: 180,
   payout_method_cooldown_hours: 48,
   fine_schedule: [
     { code: "SLA_START", label: "Order not started in time", amount: 300 },

@@ -9,6 +9,7 @@
  * 45/55 split, with any rounding unit landing on the platform side.
  */
 import prisma from "@/lib/prisma";
+import { cashbackOnReversal } from "@/lib/cashback/service";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { cumulativeShare } from "@/lib/money";
 import { getStripe, safeErrorMessage, StripeConfigError } from "@/lib/stripe/server";
@@ -112,6 +113,16 @@ export async function postReversal(
     type: "BOOSTER_SHARE_REVERSAL",
     refundId: input.refundId,
     disputeId: input.disputeId,
+  });
+  // Cashback (2026-11-24): earned cashback taken back, used cashback given back (refunds).
+  await cashbackOnReversal(tx, {
+    kind: input.kind,
+    orderId: payment.orderId,
+    amount: input.amount,
+    before,
+    paidTotal: snapshot.totalAmount,
+    keyPrefix: input.keyPrefix,
+    refundId: input.refundId ?? null,
   });
   return { platform, booster };
 }

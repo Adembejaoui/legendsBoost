@@ -22,6 +22,7 @@
  * lib/orders/payment-gate.ts). Boosters cannot cancel orders; they abandon.
  */
 import prisma from "@/lib/prisma";
+import { earnCashbackOnCompletion } from "@/lib/cashback/service";
 import { logger } from "@/lib/logger";
 import { getConfigIn } from "@/lib/config";
 import {
@@ -583,6 +584,8 @@ export async function completeOrderInTx(
   // contributors -> PENDING_REVIEW for an admin allocation. No-op for
   // unpaid / legacy orders.
   await allocateOnCompletion(tx, p.orderId, p.assignmentId);
+  // Customer cashback (2026-11-24), once per order.
+  await earnCashbackOnCompletion(tx, p.orderId, completedAt);
   return { updated, completedAt };
 }
 

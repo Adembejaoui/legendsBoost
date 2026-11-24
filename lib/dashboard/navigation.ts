@@ -51,6 +51,7 @@ export const navigationByRole: Record<UserRole, DashboardNavItem[]> = {
     { id: "customer-orders", label: "My Orders", href: "/dashboard/customer", icon: "Package" },
     { id: "customer-history", label: "Order History", href: "/dashboard/customer?tab=completed", icon: "History" },
     { id: "customer-notifications", label: "Notifications", href: "/dashboard/notifications", icon: "Bell" },
+    { id: "customer-cashback", label: "Cashback", href: "/dashboard/customer/cashback", icon: "Wallet" },
     { id: "customer-profile", label: "My Profile", href: "/dashboard/customer/profile", icon: "User" },
     { id: "customer-browse", label: "Browse Games", href: "/games", icon: "Gamepad2" },
   ],

@@ -42,8 +42,9 @@
 | `BOOSTER_PAYOUTS` | Paid out manually (+) | total payouts |
 | `STRIPE_FEES` | Processing fees (+), platform cost | fees |
 | `DISPUTE_LOSSES` | Reserved for dispute fees (not yet populated) | — |
+| `CUSTOMER_CREDIT` | Cashback owed to customers (2026-11-24): + earned / given back / admin added, − spent / expired / taken back. Every posting has an opposite `PLATFORM_REVENUE` posting (cashback is platform-funded). | cashback liability |
 
-Invariant per paid order (tax 0): `CUSTOMER_PAYMENTS = PLATFORM_REVENUE + BOOSTER_POOL + Σ BOOSTER_PAYABLE(order)` until payout. Payouts move `BOOSTER_PAYABLE → BOOSTER_PAYOUTS`.
+Invariant per paid order (tax 0): `CUSTOMER_PAYMENTS = PLATFORM_REVENUE + BOOSTER_POOL + Σ BOOSTER_PAYABLE(order)` until payout. With cashback, globally: `CUSTOMER_PAYMENTS = PLATFORM_REVENUE + BOOSTER_POOL + BOOSTER_PAYABLE + BOOSTER_PAYOUTS + CUSTOMER_CREDIT` (cashback earned is a platform cost owed to the customer; cashback spent pays part of an order's platform fee). The per-customer history is `cashbackEntry` (append-only, `lib/cashback`); an unpaid checkout's reservation is not in the ledger until the payment is confirmed. Payouts move `BOOSTER_PAYABLE → BOOSTER_PAYOUTS`.
 
 ## 4. Postings per event (example: 100.00 EUR order)
 

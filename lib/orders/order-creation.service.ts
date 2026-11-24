@@ -11,6 +11,7 @@
  *     order; reusing a key for a different request is rejected (409).
  */
 import { createHash } from "node:crypto";
+import { CashbackError, reserveCashback } from "@/lib/cashback/service";
 import { RISK_DISCLOSURE_VERSION } from "./risk-disclosure";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
@@ -126,6 +127,7 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
           currency: quote.currency,
           subtotalAmount: quote.subtotalAmount,
           discountAmount: quote.discountAmount,
+          cashbackAmount: quote.cashbackAmount,
           taxAmount: quote.taxAmount,
           totalAmount: quote.totalAmount,
           commissionBaseAmount: quote.commissionBaseAmount,
@@ -140,6 +142,9 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
           ...(server.coupon?.applied ? { couponId: server.coupon.couponId, couponCode: server.coupon.code } : {}),
         },
       });
+      // Cashback (2026-11-24): reserved under the customer lock; refused if
+      // the balance dropped since the quote (the price would differ).
+      await reserveCashback(tx, { userId: customerId, orderId: created.id, currency: quote.currency, amount: quote.cashbackAmount });
       await tx.orderEvent.create({
         data: {
           orderId: created.id,
@@ -157,6 +162,7 @@ export async function createOrderForCustomer(customerId: string, request: OrderR
     });
     return { order, replayed: false };
   } catch (e) {
+    if (e instanceof CashbackError) throw new OrderCreationError(e.message, e.status);
     // Two identical submissions raced: return the one that won.
     if (isUniqueViolation(e)) {
       const winner = await prisma.order.findUnique({

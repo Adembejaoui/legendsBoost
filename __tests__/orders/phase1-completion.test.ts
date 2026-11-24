@@ -39,6 +39,12 @@ vi.mock("@/lib/pricing/service", async (orig) =>
   (await import("../support/fixed-quote-pricing")).withFixedQuote(await orig())
 );
 vi.mock("@/lib/finance/earnings", () => ({ allocateOnCompletion: vi.fn(async () => ({ outcome: "no_reservation" })) }));
+vi.mock("@/lib/cashback/service", () => ({
+  CashbackError: class CashbackError extends Error {},
+  reserveCashback: vi.fn(async () => {}),
+  releaseCashbackForOrder: vi.fn(async () => {}),
+  earnCashbackOnCompletion: vi.fn(async () => null),
+}));
 vi.mock("@/lib/payments/outbox", () => ({ dispatchOutbox: vi.fn(async () => ({ done: 0, failed: 0 })), enqueueOutbox: vi.fn(async () => {}) }));
 import { fake, TEST_GAME_PERMISSIONS } from "./support/fake-order-db";
 import { POST as createOrder } from "@/app/api/orders/route";

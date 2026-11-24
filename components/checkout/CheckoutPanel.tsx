@@ -57,6 +57,10 @@ type ServerQuote = {
   estimate?: { hours: number; label: string } | null
   discountAmount?: number
   coupon?: { code: string; applied: boolean; reason?: string } | null
+  /** Cashback (2026-11-24): part paid with it, the customer's balance, what this order earns. */
+  cashbackAmount?: number
+  cashback?: { available: number; applied: number } | null
+  cashbackEarn?: number
   /** Price of every extra of the selected mode (shown before it is switched on). */
   optionAmounts?: Record<string, number>
 }
@@ -99,6 +103,8 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
   // Discount code: the draft typed in the field, and the code sent to the server.
   const [couponDraft, setCouponDraft] = useState('')
   const [couponCode, setCouponCode] = useState<string | null>(null)
+  // Pay part of the order with cashback (the server decides the amount).
+  const [useCashback, setUseCashback] = useState(false)
   const [lastCouponError, setLastCouponError] = useState<string | null>(null)
   // No risk checkbox at checkout (client decision 2026-11-19).
   const [otpModalOpen, setOtpModalOpen] = useState(false)
@@ -265,6 +271,7 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
       }
     })(),
     ...(couponCode ? { couponCode } : {}),
+    ...(useCashback ? { useCashback: true } : {}),
     currency,
   }
   const payloadJson = JSON.stringify(payload)
@@ -601,6 +608,30 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
         ) : null}
 
         <div className="border-t border-white/10 pt-3" aria-live="polite">
+          {quote?.cashback && quote.cashback.available > 0 ? (
+            <label className="mb-2 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-emerald-200">{t('cashbackUse')}</span>
+                <span className="block text-[11px] text-emerald-300/70">
+                  {t('cashbackAvailable', { amount: formatMoney(quote.cashback.available, quote.currency) })}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={useCashback}
+                disabled={busy}
+                onChange={(e) => setUseCashback(e.target.checked)}
+                className="size-4 shrink-0 accent-emerald-400"
+              />
+            </label>
+          ) : null}
+          {quote?.cashbackAmount ? (
+            <div className="mb-1 flex justify-between text-xs">
+              <span className="text-emerald-300">{t('cashbackLine')}</span>
+              <span className="text-emerald-300">-{formatMoney(quote.cashbackAmount, quote.currency)}</span>
+            </div>
+          ) : null}
           {quote?.discountAmount && quote.coupon?.applied ? (
             <div className="mb-1 flex justify-between text-xs">
               <span className="text-emerald-300">{t('discount', { code: quote.coupon.code })}</span>
@@ -612,6 +643,9 @@ export function CheckoutPanel({ game, offer, values, rankSystems, onOrderCreated
             {quoteLoading ? <Loader2 className="size-5 animate-spin text-zinc-400" aria-label={t('calculatingAria')} /> : null}
             {quote ? formatMoney(quote.totalAmount, quote.currency) : '—'}
           </p>
+          {quote?.cashbackEarn ? (
+            <p className="mt-0.5 text-[11px] text-emerald-300/80">{t('cashbackEarn', { amount: formatMoney(quote.cashbackEarn, quote.currency) })}</p>
+          ) : null}
           {!quote || blockers.length || signInRequired || current?.kind === 'error' || !canOrder ? (
             <p className="mt-0.5 text-xs text-zinc-500">
               {!canOrder

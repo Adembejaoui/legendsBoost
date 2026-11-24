@@ -241,7 +241,11 @@
     "vpnSave": "Save selection",
     "vpnCancel": "Cancel",
     "vpnIn": "Country: {country}",
-    "lockedByOtp": "Not available with OTP Champ Only."
+    "lockedByOtp": "Not available with OTP Champ Only.",
+    "cashbackUse": "Use my cashback",
+    "cashbackAvailable": "{amount} available",
+    "cashbackLine": "Cashback",
+    "cashbackEarn": "You earn {amount} cashback when this order is completed."
   },
   "ChampionsModal": {
     "aria": "Champions and roles",

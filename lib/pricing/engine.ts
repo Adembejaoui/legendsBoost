@@ -4,6 +4,7 @@
  * DISABLED in this release (both return 0) until the business rules exist.
  */
 import type { GameServiceOffer, RankSelection } from "@/types/catalog";
+import { cashbackForOrder } from "@/lib/cashback/state";
 import type { GameCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem } from "@/lib/catalog/rank-systems";
 import { assertAmount, bpsOfRounded, MAX_AMOUNT, splitCommission, type CommissionSplit } from "@/lib/money";
@@ -22,7 +23,10 @@ export interface Quote {
   currency: string;
   lines: QuoteLine[];
   subtotalAmount: number;
+  /** Coupon + cashback (both platform-funded). */
   discountAmount: number;
+  /** Part of discountAmount paid with the customer's cashback. */
+  cashbackAmount: number;
   taxAmount: number;
   totalAmount: number;
   commissionBaseAmount: number;
@@ -96,7 +100,13 @@ export function calculateQuote(
     gainAdjustBps: LP_GAIN_ADJUSTMENT_BPS,
   },
   /** Coupon discount already validated by the caller (before the platform cap). */
-  couponDiscount = 0
+  couponDiscount = 0,
+  /**
+   * Cashback the customer asked to use (lib/cashback/state.ts): at most
+   * `maxOrderBps` of the amount left after the coupon, and never more than
+   * the platform fee left after the coupon (booster share untouched).
+   */
+  cashback: { available: number; maxOrderBps: number } | null = null
 ): QuoteResult {
   const lines: QuoteLine[] = [{ code: "BASE", label: "Base price", amount: price.baseAmount }];
 
@@ -179,7 +189,11 @@ export function calculateQuote(
   // Booster share is fixed on the price BEFORE any discount; the platform
   // fee absorbs the discount. Without a coupon this equals the plain split.
   const beforeDiscount = splitCommission(subtotalAmount, commissionPolicy);
-  const discountAmount = computeDiscount(couponDiscount, beforeDiscount.platformFeeAmount);
+  const couponAmount = computeDiscount(couponDiscount, beforeDiscount.platformFeeAmount);
+  const cashbackAmount = cashback
+    ? cashbackForOrder(cashback.available, subtotalAmount - couponAmount, cashback.maxOrderBps, beforeDiscount.platformFeeAmount - couponAmount)
+    : 0;
+  const discountAmount = couponAmount + cashbackAmount;
   const commissionBaseAmount = subtotalAmount - discountAmount;
   const taxAmount = computeTax();
   const commission = { ...beforeDiscount, platformFeeAmount: beforeDiscount.platformFeeAmount - discountAmount };
@@ -191,6 +205,7 @@ export function calculateQuote(
       lines,
       subtotalAmount,
       discountAmount,
+      cashbackAmount,
       taxAmount,
       totalAmount: commissionBaseAmount + taxAmount,
       commissionBaseAmount,

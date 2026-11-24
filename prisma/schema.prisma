@@ -77,6 +77,7 @@ model User {
   boosterAssignments    OrderBoosterAssignment[] @relation("boosterAssignments")
   assignedAssignments   OrderBoosterAssignment[] @relation("assignedAssignments")
   notifications         Notification[]
+  cashbackEntries       CashbackEntry[]
   sentOrderMessages     OrderMessage[]   @relation("sentOrderMessages")
   sentSupportMessages   SupportMessage[] @relation("sentSupportMessages")
   assignedSupportTickets SupportTicket[]  @relation("assignedSupportTickets")
@@ -253,6 +254,7 @@ model Order {
   conversation   OrderConversation?
   supportTickets SupportTicket[]
   notifications  Notification[]
+  cashbackEntries CashbackEntry[]
   riotAccount    OrderRiotAccount?
   accountCredential OrderAccountCredential?
   cancellationRequests OrderCancellationRequest[]
@@ -778,6 +780,8 @@ model OrderPricingSnapshot {
   boosterShareBps      Int              @map("boosterShareBps")
   platformFeeAmount    Int              @map("platformFeeAmount")
   boosterShareAmount   Int              @map("boosterShareAmount")
+  /// Part of discountAmount paid with the customer's cashback (0..discountAmount).
+  cashbackAmount       Int              @default(0) @map("cashbackAmount")
   commissionPolicyId   String           @map("commissionPolicyId")
   servicePriceId       String           @map("servicePriceId")
   servicePriceVersion  Int              @map("servicePriceVersion")
@@ -895,6 +899,8 @@ model PaymentEvent {
 /// Ledger accounts. Balances are the sum of signed amounts per account
 /// (per booster for BOOSTER_PAYABLE, per order for BOOSTER_POOL).
 enum LedgerAccount {
+  /// Cashback owed to customers (+ earned / returned, - spent / expired / reversed).
+  CUSTOMER_CREDIT
   /// Money received from customers (+) and returned to them (-).
   CUSTOMER_PAYMENTS
   /// Platform commission earned (+) and reversed (-).
@@ -932,6 +938,13 @@ enum FinancialTransactionType {
   TIP_PAYMENT
   TIP_COMMISSION
   TIP_BOOSTER_SHARE
+  /// Cashback (2026-11-24): each moves CUSTOMER_CREDIT and PLATFORM_REVENUE in opposite directions.
+  CASHBACK_EARNED
+  CASHBACK_SPENT
+  CASHBACK_EXPIRED
+  CASHBACK_REVERSED
+  CASHBACK_RETURNED
+  CASHBACK_ADJUSTED
 }
 
 /// Immutable ledger entry. Never updated or deleted (enforced by trigger);
@@ -1761,4 +1774,52 @@ model BlogImage {
   createdAt    DateTime @default(now()) @map("createdAt")
 
   @@map("blogImage")
+}
+
+/// Cashback entry kinds (2026-11-24). Sign: EARN, RELEASE, RETURN > 0;
+/// SPEND, EXPIRE, REVERSE < 0; ADJUST either (admin, with a note).
+enum CashbackEntryKind {
+  EARN
+  SPEND
+  RELEASE
+  EXPIRE
+  REVERSE
+  RETURN
+  ADJUST
+}
+
+/// Customer cashback history (2026-11-24). Append-only (database trigger):
+/// the balance is the sum of amounts per user and currency, never stored.
+/// Credit lots (positive entries) expire at expiresAt; spending uses the
+/// lots that expire first (lib/cashback/state.ts).
+model CashbackEntry {
+  id             String            @id @default(cuid())
+  userId         String            @map("userId")
+  currency       String
+  kind           CashbackEntryKind
+  /// Signed minor units.
+  amount         Int
+  /// Positive lots: when the unspent part expires (null = never). SPEND: the
+  /// latest expiry of the credit it used (given back on RELEASE).
+  expiresAt      DateTime?         @map("expiresAt")
+  /// EXPIRE: the lot it expires.
+  lotId          String?           @map("lotId")
+  orderId        String?           @map("orderId")
+  refundId       String?           @map("refundId")
+  /// EARN: the cashback rate used (basis points).
+  rateBps        Int?              @map("rateBps")
+  note           String?
+  createdById    String?           @map("createdById")
+  idempotencyKey String            @unique @map("idempotencyKey")
+  createdAt      DateTime          @default(now()) @map("createdAt")
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order          Order?            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  lot            CashbackEntry?    @relation("CashbackLot", fields: [lotId], references: [id], onDelete: Restrict)
+  expirations    CashbackEntry[]   @relation("CashbackLot")
+
+  @@index([userId, currency, createdAt])
+  @@index([orderId])
+  @@index([expiresAt])
+  @@map("cashbackEntry")
 }

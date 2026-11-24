@@ -13,6 +13,7 @@ import { getConfig } from "@/lib/config";
 import { estimateCompletion, type Estimate } from "./eta";
 import { evaluateCoupon } from "./coupons";
 import { conversionFactor, getFxRates, priceInCurrency } from "@/lib/currency/rates";
+import { availableCashback, cashbackSettings } from "@/lib/cashback/service";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -49,6 +50,16 @@ export interface ServerQuote {
   estimate: Estimate | null;
   /** Result of the requested discount code, if any. */
   coupon: CouponResult | null;
+  /** Signed-in customer: balance in the order currency and the part used (null otherwise). */
+  cashback: CashbackQuote | null;
+  /** Cashback this order earns when completed (0 when cashback is off). */
+  cashbackEarn: number;
+}
+
+export interface CashbackQuote {
+  available: number;
+  applied: number;
+  maxOrderBps: number;
 }
 
 export interface CouponResult {
@@ -137,6 +148,29 @@ export async function buildServerQuote(
     }
   }
 
+  // Cashback (2026-11-24): balance and use for signed-in customers only, in
+  // the order currency; what the order earns is shown to everyone.
+  let cashback: CashbackQuote | null = null;
+  const settings = await cashbackSettings();
+  if (opts.customerId && settings.enabled) {
+    {
+      const available = await availableCashback(opts.customerId, result.quote.currency, db as typeof prisma, opts.now);
+      cashback = { available, applied: 0, maxOrderBps: settings.maxOrderBps };
+      if (validated.value.useCashback && available > 0) {
+        const withCashback = calculateQuote(
+          eligibility.offer, eligibility.checkout, price, policy, validated.value, lp,
+          coupon?.applied ? result.quote.discountAmount : 0,
+          { available, maxOrderBps: settings.maxOrderBps }
+        );
+        if (!withCashback.ok) throw new PricingError(withCashback.reason, 403);
+        result = withCashback;
+        cashback.applied = result.quote.cashbackAmount;
+      }
+    }
+  }
+
+  const cashbackEarn = settings.enabled ? Math.floor((result.quote.totalAmount * settings.rateBps) / 10_000) : 0;
+
   if (request.expectedTotal) {
     const sameCurrency = request.expectedTotal.currency.toUpperCase() === result.quote.currency;
     if (!sameCurrency || request.expectedTotal.amount !== result.quote.totalAmount) {
@@ -157,6 +191,8 @@ export async function buildServerQuote(
     serviceTitle: eligibility.offer.title ?? request.serviceSlug,
     estimate,
     coupon,
+    cashback,
+    cashbackEarn,
   };
 }
 
@@ -166,7 +202,9 @@ export function publicQuote(q: Quote) {
     currency: q.currency,
     lines: q.lines,
     subtotalAmount: q.subtotalAmount,
-    discountAmount: q.discountAmount,
+    // Coupon and cashback shown as separate lines.
+    discountAmount: q.discountAmount - q.cashbackAmount,
+    cashbackAmount: q.cashbackAmount,
     taxAmount: q.taxAmount,
     totalAmount: q.totalAmount,
     optionAmounts: q.optionAmounts,
