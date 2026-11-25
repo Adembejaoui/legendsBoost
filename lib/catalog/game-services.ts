@@ -310,6 +310,8 @@ export const gameServices: GameServiceOffer[] = [
     orderCapability: 'live-order',
     complianceStatus: 'pending-review',
     fields: [
+      // The price of a win depends on the rank (matched to gameboost.com, 2026-11-25).
+      rankField('currentRank', 'Current rank', 'valorant-competitive', true, 'Your rank before the boost starts.'),
       {
         type: 'number',
         key: 'wins',

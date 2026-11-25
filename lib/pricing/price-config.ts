@@ -11,7 +11,7 @@ import { MAX_AMOUNT, normalizeCurrency } from "@/lib/money";
 import { getGameServiceOffer } from "@/lib/catalog/game-services";
 import { getCheckoutConfig } from "@/lib/config/checkout-options";
 import { getRankSystem } from "@/lib/catalog/rank-systems";
-import { unitKeyFields } from "./units";
+import { unitKeyFields, unitStepKeys } from "./units";
 
 const amount = z.number().int().min(0).max(MAX_AMOUNT);
 
@@ -131,7 +131,12 @@ export function validateServicePriceAgainstCatalog(input: ServicePriceInput): st
       errors.push("PER_UNIT pricing needs unitFieldKey to name a numeric field of this service.");
     }
     if (input.unitAmount === undefined || input.unitAmount <= 0) errors.push("PER_UNIT pricing needs a positive unitAmount.");
-    if (input.stepAmounts !== undefined) errors.push("Step prices are only for RANK_STEPS.");
+    // Optional unit price per current-rank tier or per mastery level (lib/pricing/units.ts).
+    if (input.stepAmounts !== undefined && input.unitFieldKey) {
+      const allowed = unitStepKeys(input.unitFieldKey, offer.fields, (id) => (getRankSystem(id)?.tiers ?? []).map((t) => t.id));
+      if (!allowed) errors.push("This service has no per-rank or per-level unit prices.");
+      else for (const k of Object.keys(input.stepAmounts)) if (!allowed.includes(k)) errors.push(`Unknown unit step: ${k}`);
+    }
   } else {
     if (input.baseAmount <= 0) errors.push("FIXED pricing needs a positive baseAmount.");
     if (input.stepAmounts !== undefined || input.unitFieldKey !== undefined || input.unitAmount !== undefined) {

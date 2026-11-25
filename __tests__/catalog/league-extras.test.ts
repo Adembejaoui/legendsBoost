@@ -153,7 +153,8 @@ describe("Champion Mastery", () => {
     expect(buildMarketPriceInput("league-of-legends", "champion-mastery")).toMatchObject({
       pricingModel: "PER_UNIT",
       unitFieldKey: "range:currentLevel:targetLevel",
-      unitAmount: 600,
+      unitAmount: 1045,
+      stepAmounts: { "1": 517, "4": 4120 },
     });
     expect(labels("champion-mastery", "solo")).toEqual(["Priority Order +25%", "Stream Games +15%", "Appear Offline Free"]);
   });

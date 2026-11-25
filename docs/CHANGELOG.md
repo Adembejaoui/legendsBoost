@@ -2,6 +2,13 @@
 
 Build-plan work log (see `docs/BUILD_PLAN_PHASES.md`). Newest first.
 
+## 2026-11-25 · Prices matched to gameboost.com; test data cleared
+
+- **Test data cleared** (one transaction, append-only triggers off only inside it): 38 orders and everything tied to them, notifications, outbox, 7 non-admin users. Kept admins, prices, commission, settings, blog, audit log.
+- **Prices** (`lib/pricing/market-prices.ts`, applied with `scripts/apply-market-prices.ts`, new versions + audit rows): measured on gameboost.com's checkout, list price before their automatic discount. Rank steps = their full tier / divisions (LoL, VALORANT, TFT); wins priced by current rank (LoL, VALORANT); Placements $2.10, Arena $2.69 a win, Normal Games $2.72 a game (wins +50%), Champion Mastery per level (Level 4 → 6 = $60.89). LoL extras: Stream +15%, Solo Only +20%, Hidden Duo +25%, Priority +20% on Placements and Mastery, Champions and Roles +10% on Arena.
+- **Per-rank / per-level unit prices:** PER_UNIT prices may carry `stepAmounts` keyed by the current-rank tier or by the starting level (`lib/pricing/units.ts`); missing keys use the unit price. Editable in Admin → Finance → Pricing.
+- **VALORANT Win Boost** now asks for the current rank (the price depends on it).
+
 ## 2026-11-25 · Landing cards, customer cashback in header, one orders page
 
 - **Landing page:** the League / TFT / VALORANT cards now open their game page (they had an arrow but no link).

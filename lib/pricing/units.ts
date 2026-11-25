@@ -37,3 +37,52 @@ export function unitsFor(unitFieldKey: string, configuration: Record<string, unk
   if (units === null || units < 1) return { ok: false, reason: `Enter a value for "${label(unitFieldKey)}" to calculate the price.` };
   return { ok: true, units };
 }
+
+/**
+ * Optional per-step unit prices for PER_UNIT services (client 2026-11-25,
+ * matched to market prices): the price of one unit depends on where the
+ * order starts.
+ *   - "wins" / "placementsRemaining" with a current-rank field: keyed by the
+ *     tier of the current rank ("gold" -> price of one win in Gold).
+ *   - "range:currentLevel:targetLevel": keyed by the level a step starts at
+ *     ("4" -> price of Level 4 -> 5).
+ * A key missing from the table falls back to the flat unitAmount.
+ */
+export function unitStepKeys(unitFieldKey: string, fields: ConfigField[], rankTierIds: (systemId: string) => string[]): string[] | null {
+  const range = parseRangeKey(unitFieldKey);
+  if (range) {
+    const from = fields.find((f) => f.key === range.from);
+    const to = fields.find((f) => f.key === range.to);
+    if (from?.type !== "number" || to?.type !== "number") return null;
+    const min = from.min ?? 1;
+    const max = (to.max ?? from.max ?? min) - 1;
+    const keys: string[] = [];
+    for (let l = min; l <= max; l++) keys.push(String(l));
+    return keys;
+  }
+  const current = fields.find((f) => f.key === "currentRank");
+  if (current?.type !== "rank-picker") return null;
+  return rankTierIds(current.rankSystemId);
+}
+
+/** Amount for the counted units, using per-step prices when present. */
+export function unitsAmount(
+  unitFieldKey: string,
+  units: number,
+  unitAmount: number,
+  stepAmounts: Record<string, number> | null,
+  configuration: Record<string, unknown>,
+): number {
+  if (!stepAmounts || Object.keys(stepAmounts).length === 0) return units * unitAmount;
+  const range = parseRangeKey(unitFieldKey);
+  if (range) {
+    const from = int(configuration[range.from]);
+    if (from === null) return units * unitAmount;
+    let total = 0;
+    for (let l = from; l < from + units; l++) total += stepAmounts[String(l)] ?? unitAmount;
+    return total;
+  }
+  const rank = configuration.currentRank;
+  const tierId = rank && typeof rank === "object" && "tierId" in rank ? String((rank as { tierId: unknown }).tierId) : null;
+  return units * (tierId && stepAmounts[tierId] !== undefined ? stepAmounts[tierId] : unitAmount);
+}

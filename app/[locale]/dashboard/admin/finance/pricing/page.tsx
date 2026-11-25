@@ -9,6 +9,7 @@ import { getOrderEligibility } from "@/lib/orders/order-eligibility";
 import { getActiveCommissionPolicy } from "@/lib/pricing/service";
 import { parseServicePriceRow, TEMPORARY_PRICE_NOTE_PREFIX } from "@/lib/pricing/price-config";
 import { toDecimalString } from "@/lib/money";
+import { unitStepKeys } from "@/lib/pricing/units";
 import { CommissionForm, ServicePriceForm, type PriceFormService } from "@/components/finance/PricingAdmin";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,24 @@ export default async function AdminPricingPage() {
       serviceSlug: o.serviceSlug,
       title: o.title ?? o.serviceSlug,
       rankTiers: o.rankSystemId && o.fields.some((f) => f.key === "targetRank") ? (getRankSystem(o.rankSystemId)?.tiers ?? []).map((t) => ({ id: t.id, name: t.name })) : null,
-      numberFields: o.fields.filter((f) => f.type === "number").map((f) => ({ key: f.key, label: f.label })),
+      numberFields: [
+        ...o.fields.filter((f) => f.type === "number").map((f) => ({ key: f.key, label: f.label })),
+        // Champion Mastery: price per level gained (lib/pricing/units.ts).
+        ...(o.fields.some((f) => f.key === "currentLevel") && o.fields.some((f) => f.key === "targetLevel")
+          ? [{ key: "range:currentLevel:targetLevel", label: "Levels gained" }]
+          : []),
+      ],
+      // Optional unit price per current-rank tier or per starting level.
+      unitSteps: Object.fromEntries(
+        [...o.fields.filter((f) => f.type === "number").map((f) => f.key), "range:currentLevel:targetLevel"].flatMap((key) => {
+          const ids = unitStepKeys(key, o.fields, (id) => (getRankSystem(id)?.tiers ?? []).map((t) => t.id));
+          if (!ids) return [];
+          const tiers = new Map(
+            o.fields.flatMap((f) => (f.type === "rank-picker" ? (getRankSystem(f.rankSystemId)?.tiers ?? []).map((t) => [t.id, t.name] as const) : []))
+          );
+          return [[key, ids.map((id) => ({ id, name: tiers.get(id) ?? `Level ${id} -> ${Number(id) + 1}` }))]];
+        })
+      ),
       options: (checkout?.options ?? []).filter((x) => x.enabled).map((x) => ({ id: x.id, label: x.label })),
       modes: (checkout?.modes ?? []).filter((m) => m.enabled).map((m) => ({ id: m.id, label: m.label })),
       active: price

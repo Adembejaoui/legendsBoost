@@ -18,6 +18,8 @@ export interface PriceFormService {
   title: string;
   rankTiers: { id: string; name: string }[] | null;
   numberFields: { key: string; label: string }[];
+  /** Unit field key -> optional per-tier / per-level unit prices. */
+  unitSteps: Record<string, { id: string; name: string }[]>;
   options: { id: string; label: string }[];
   modes: { id: string; label: string }[];
   active: {
@@ -78,6 +80,9 @@ export function ServicePriceForm({ service }: { service: PriceFormService }) {
       if (model === "PER_UNIT") {
         body.unitFieldKey = unitField;
         body.unitAmount = parseDecimalToMinor(unitAmount || "0", currency);
+        const allowed = new Set((service.unitSteps[unitField] ?? []).map((s) => s.id));
+        const perStep = Object.entries(steps).filter(([k, v]) => allowed.has(k) && v.trim());
+        if (perStep.length) body.stepAmounts = Object.fromEntries(perStep.map(([k, v]) => [k, parseDecimalToMinor(v, currency)]));
       }
       const res = await fetch("/api/admin/finance/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
@@ -125,6 +130,16 @@ export function ServicePriceForm({ service }: { service: PriceFormService }) {
           </label>
         ) : null}
       </div>
+      {model === "PER_UNIT" && service.unitSteps[unitField]?.length ? (
+        <div>
+          <p className="mb-1 text-xs text-zinc-400">Unit price by current rank / starting level (empty = the unit price above)</p>
+          <div className="grid gap-2 md:grid-cols-4">
+            {service.unitSteps[unitField].map((t) => (
+              <label key={t.id} className="text-xs text-zinc-400">{t.name}<input className={input} value={steps[t.id] ?? ""} placeholder="default" onChange={(e) => setSteps({ ...steps, [t.id]: e.target.value })} /></label>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {model === "RANK_STEPS" && service.rankTiers ? (
         <div>
           <p className="mb-1 text-xs text-zinc-400">Price per step starting in each tier (empty = that range is not purchasable)</p>

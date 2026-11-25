@@ -10,7 +10,7 @@ import { getRankSystem } from "@/lib/catalog/rank-systems";
 import { assertAmount, bpsOfRounded, MAX_AMOUNT, splitCommission, type CommissionSplit } from "@/lib/money";
 import type { NormalizedOrderInput } from "./order-input";
 import type { PriceAdjustment, ServicePriceConfig } from "./price-config";
-import { unitsFor } from "./units";
+import { unitsAmount, unitsFor } from "./units";
 import { CURRENT_LP_DISCOUNT_BPS, CURRENT_LP_FIELD, LP_GAIN_ADJUSTMENT_BPS, LP_GAIN_FIELD } from "./lp-modifiers";
 import { COUNT_TYPE_ADJUST_BPS, COUNT_TYPE_FIELD } from "./count-type";
 
@@ -157,14 +157,15 @@ export function calculateQuote(
     const counted = unitsFor(price.unitFieldKey, input.configuration, offer.fields);
     if (!counted.ok) return { ok: false, reason: counted.reason };
     const units = counted.units;
-    const unitsAmount = units * price.unitAmount;
-    lines.push({ code: `UNITS:${price.unitFieldKey}`, label: `${units} x unit price`, amount: unitsAmount });
+    // Per-rank / per-level unit prices when the price has them (lib/pricing/units.ts).
+    const unitsTotal = unitsAmount(price.unitFieldKey, units, price.unitAmount, price.stepAmounts, input.configuration);
+    lines.push({ code: `UNITS:${price.unitFieldKey}`, label: `${units} x unit price`, amount: unitsTotal });
     // Normal Games: wins instead of games (lib/pricing/count-type.ts).
     const countType = input.configuration[COUNT_TYPE_FIELD];
     if (typeof countType === "string") {
       const bps = COUNT_TYPE_ADJUST_BPS[countType];
       if (bps === undefined) return { ok: false, reason: "Choose games or wins." };
-      const adj = bpsOfRounded(unitsAmount, bps);
+      const adj = bpsOfRounded(unitsTotal, bps);
       if (adj !== 0) lines.push({ code: `COUNT:${countType}`, label: `Counted in ${countType} (+${bps / 100}%)`, amount: adj });
     }
   }
